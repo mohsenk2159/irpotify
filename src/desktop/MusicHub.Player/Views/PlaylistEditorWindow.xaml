@@ -1,0 +1,39 @@
+<Window x:Class="MusicHub.Player.Views.PlaylistEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New playlist"
+        Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource AppBackground}">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource PanelBackground}">
+        <StackPanel Margin="24">
+            <Grid MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="New playlist" FontSize="19" FontWeight="SemiBold" />
+                <Button Grid.Column="1" Content="✕" Style="{StaticResource IconButton}" Click="Cancel_Click" />
+            </Grid>
+
+            <TextBlock Text="NAME" Style="{StaticResource Label}" Margin="0,18,0,6" />
+            <TextBox x:Name="NameBox" MaxLength="300" />
+
+            <TextBlock Text="DESCRIPTION (OPTIONAL)" Style="{StaticResource Label}" Margin="0,16,0,6" />
+            <TextBox x:Name="DescriptionBox" Height="76" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" />
+
+            <CheckBox x:Name="PublicBox" Content="Visible to other users on this server" Margin="0,16,0,0" />
+
+            <Border x:Name="ErrorBanner" Style="{StaticResource ErrorBanner}" Visibility="Collapsed" Margin="0,16,0,0">
+                <TextBlock x:Name="ErrorText" Foreground="#FCA5A5" TextWrapping="Wrap" FontSize="12.5" />
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                <Button Content="Cancel" Style="{StaticResource GhostButton}" Click="Cancel_Click" />
+                <Button Content="Create" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Click="Create_Click" IsDefault="True" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

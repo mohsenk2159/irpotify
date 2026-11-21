@@ -1,0 +1,53 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Android
+.gradle/
+local.properties
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Runtime data and secrets
+storage/
+artifacts/
+*.log
+*.env
+dev.secrets.ps1
+.env
+.env.*
+# Keep the documented template; it must never contain real secrets.
+!.env.example
+
+# Test output
+TestResults/
+coverage/
+*.trx
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# Local agent tooling (not part of the product; never published)
+.opencode/
+.agents/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local toolchain downloads
+tools/

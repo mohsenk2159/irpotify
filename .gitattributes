@@ -1,0 +1,54 @@
+# Normalise line endings in the working tree without rewriting content.
+#
+# The repository is developed on Windows and deployed on Linux. Text files are stored with LF and
+# checked out with the platform default so PowerShell and shell scripts both run.
+* text=auto
+
+# Source
+*.cs    text diff=csharp
+*.csproj text
+*.props text
+*.targets text
+*.slnx  text
+*.xaml  text
+*.kt    text
+*.kts   text
+*.ts    text
+*.tsx   text
+*.js    text
+*.json  text
+*.jsonc text
+*.css   text
+*.html  text
+*.md    text
+*.yml   text
+*.yaml  text
+*.xml   text
+
+# Scripts: PowerShell needs CRLF on Windows, shells need LF. Let Git keep each platform's default
+# and never let a checkout silently convert a shebang script.
+*.ps1   text
+*.psm1  text
+*.sh    text eol=lf
+gradlew text eol=lf
+
+# Exact bytes: images and archives must never be converted.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.apk   binary
+*.aab   binary
+*.zip   binary
+*.jar   binary
+*.jks   binary
+*.keystore binary
+*.pfx   binary
+*.dll   binary
+*.exe   binary
+*.so    binary
+*.dylib binary
+*.woff  binary
+*.woff2 binary

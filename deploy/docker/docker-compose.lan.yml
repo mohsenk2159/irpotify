@@ -1,0 +1,22 @@
+# MusicHub Enterprise - LAN access overlay (version 1, local network only).
+#
+# Purpose: reach the admin dashboard from another device on the same LAN by IP address without a
+# public DNS name and without weakening TLS. Caddy keeps serving HTTPS for the public hostname;
+# this overlay additionally publishes the API on a private LAN address over HTTP.
+#
+# The address and the port are NOT written here. deploy/docker/install.ps1 detects this host's LAN
+# address, asks the operator which port to use, and records both in .env. That keeps the repository
+# free of one machine's addressing and lets two installs pick different ports.
+#
+# Usage (from the repository root, after deploy/docker/install.ps1 has written .env):
+#   docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.lan.yml \
+#       --env-file .env up -d
+#
+# Both variables are required: without them the mapping would be a guess. Never expose this port to
+# the internet - the API has no TLS listener of its own and expects a trustworthy transport in front
+# of it. Do not add 5432 here, and do not bind 0.0.0.0 on an untrusted network.
+
+services:
+  api:
+    ports:
+      - "${MUSICHUB_LAN_ADDRESS:?run deploy/docker/install.ps1 to detect the LAN address, or set MUSICHUB_LAN_ADDRESS in .env}:${MUSICHUB_LAN_PORT:?set MUSICHUB_LAN_PORT in .env to a free TCP port}:5080"

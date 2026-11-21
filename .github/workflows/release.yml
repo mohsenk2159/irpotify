@@ -1,0 +1,337 @@
+name: Release
+
+# Publishes a GitHub Release and the public container images.
+#
+# Trigger: push a tag like v1.0.0, or run manually with an existing tag.
+#   git tag -a v1.0.0 -m "MusicHub Enterprise 1.0.0"
+#   git push origin v1.0.0
+#
+# Produces:
+#   * ghcr.io/<owner>/musichub-api:<version>, :<major.minor>, :latest   (linux/amd64, linux/arm64)
+#   * ghcr.io/<owner>/musichub-worker:<version>, :<major.minor>, :latest (linux/amd64, linux/arm64)
+#   * a GitHub Release with the Android APK and the Windows player zip attached
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (for example v1.0.0)'
+        required: true
+        type: string
+      skip_android:
+        description: 'Skip the Android APK build (no signing secrets available)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  NODE_VERSION: '22'
+  REGISTRY: ghcr.io
+
+jobs:
+  # Fail fast: never publish an image or an artifact from a commit that does not pass the tests.
+  verify:
+    name: Verify before release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build
+        run: dotnet build MusicHub.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test MusicHub.slnx --no-build --configuration Release
+
+  images:
+    name: Build and push images
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: musichub-api
+            dockerfile: deploy/docker/Dockerfile.api
+          - image: musichub-worker
+            dockerfile: deploy/docker/Dockerfile.worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          # Strip the leading v: image tags do not carry it.
+          VERSION="${TAG#v}"
+          MAJOR_MINOR="$(echo "$VERSION" | cut -d. -f1-2)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG as $VERSION (also $MAJOR_MINOR and latest)"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ steps.version.outputs.major_minor }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # Multi-arch so the documented pull-and-run works on ARM hosts and Apple Silicon too.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.404-noble
+            DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.9-noble
+            WEB_NODE_IMAGE=node:22-alpine
+            REQUIRE_DASHBOARD=true
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: true
+          sbom: true
+
+  android:
+    name: Build Android APK
+    needs: verify
+    if: ${{ !inputs.skip_android }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The signing key never enters the repository: it is base64 in a repository secret and is
+      # written to the gitignored path build.gradle.kts already reads. Without the secret the build
+      # still runs and produces an unsigned APK, which is uploaded and clearly labelled.
+      - name: Restore signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PROPERTIES: ${{ secrets.ANDROID_KEYSTORE_PROPERTIES }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret; the APK will be unsigned."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p storage/android-keys
+          echo "$KEYSTORE_BASE64" | base64 -d > storage/android-keys/musichub-release.jks
+          printf '%s' "$KEYSTORE_PROPERTIES" > storage/android-keys/keystore.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble release
+        working-directory: src/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Rename artifact
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          mkdir -p out
+          APK=$(find src/android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$APK" ]; then echo "No release APK was produced." >&2; exit 1; fi
+          cp "$APK" "out/MusicHub-Android-$VERSION-release.apk"
+          ( cd out && sha256sum "MusicHub-Android-$VERSION-release.apk" > "MusicHub-Android-$VERSION-release.apk.sha256" )
+          ls -la out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: out/*
+          if-no-files-found: error
+
+  windows-player:
+    name: Build Windows player
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish self-contained win-x64
+        run: |
+          dotnet publish src/desktop/MusicHub.Player/MusicHub.Player.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output publish/player
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
+          $version = $version -replace '^v', ''
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path 'publish/player/*' -DestinationPath "out/MusicHubPlayer-win-x64-$version.zip" -Force
+          Get-FileHash "out/MusicHubPlayer-win-x64-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  MusicHubPlayer-win-x64-$version.zip" } |
+            Set-Content "out/MusicHubPlayer-win-x64-$version.zip.sha256"
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Upload player
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-player
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [images, android, windows-player]
+    # A skipped Android job must not block the release when it was deliberately skipped.
+    if: ${{ always() && needs.images.result == 'success' && needs.windows-player.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f -printf '%p %s bytes\n'
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          for f in *; do
+            if [ -f "$f" ] && [[ "$f" != *.sha256 ]]; then
+              sha256sum "$f" >> SHA256SUMS.txt
+            fi
+          done
+          cat SHA256SUMS.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: MusicHub Enterprise ${{ steps.version.outputs.version }}
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## MusicHub Enterprise ${{ steps.version.outputs.version }}
+
+            Self-hosted, multi-user music library and streaming platform.
+
+            ### Downloads
+
+            | Platform | File |
+            | --- | --- |
+            | Android | `MusicHub-Android-${{ steps.version.outputs.version }}-release.apk` |
+            | Windows | `MusicHubPlayer-win-x64-${{ steps.version.outputs.version }}.zip` |
+
+            Verify a download with the matching `.sha256` file, or with `SHA256SUMS.txt`.
+
+            ### Container images
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/musichub-api:${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository_owner }}/musichub-worker:${{ steps.version.outputs.version }}
+            ```
+
+            Supported architectures: `linux/amd64`, `linux/arm64`.
+
+            ### Run
+
+            ```bash
+            cp .env.example .env          # fill in the secrets
+            docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d
+            ```
+
+            See `deploy/docker/README.md` for the full runbook, and `docs/INSTALL_AND_RUN.md` for
+            the Windows and Android paths.
+
+            ### Upgrading
+
+            ```bash
+            docker compose --env-file .env -f deploy/docker/docker-compose.yml pull
+            docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d
+            ```
+          files: |
+            artifacts/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

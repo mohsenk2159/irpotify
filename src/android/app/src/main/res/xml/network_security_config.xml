@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      MusicHub is commonly self-hosted on a local network. Cleartext is therefore permitted at
+      the platform layer, but only for explicitly enabled profiles and only for loopback/private
+      hosts; LocalNetworkPolicy in the app enforces that rule before every request.
+      Trust anchors are the system CAs only. No debug-overrides and no user-added anchors are
+      trusted, and certificate pinning by third-party proxies is never bypassed.
+
+      B-071 (investigated, no change made): the blanket allow here looks like a hole, but Android
+      network-security-config <domain-config> entries cannot express IP ranges, so tightening
+      <base-config> to cleartextTrafficPermitted="false" would block http://192.168.x.x - the
+      primary self-hosted deployment - while still allowing every *.local name. The real control
+      is CleartextPolicyInterceptor (data/api/Network.kt), which rejects cleartext unless the user
+      enabled the LAN option AND the host is loopback/private. Every network path in the app
+      (Retrofit, DownloadWorker, ArtworkLoader, Media3's HttpDataSource) goes through a client
+      built by ApiFactory and therefore carries that interceptor.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

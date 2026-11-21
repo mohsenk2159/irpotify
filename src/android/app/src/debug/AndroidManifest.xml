@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          Debug-only probe Activity used by the instrumentation tests. It has to be declared in the
+          application APK (not the test APK) because ActivityScenario/Instrumentation launch it in
+          the target process; a manifest entry under androidTest resolves against
+          com.musichub.mobile.test and fails with "Intent in process com.musichub.mobile resolved to
+          different process".
+
+          It exists only in the debug variant, so it is never part of a release APK.
+        -->
+        <activity
+            android:name="com.musichub.mobile.ui.LocaleTestActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>

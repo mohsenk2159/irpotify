@@ -1,0 +1,65 @@
+# Build context filter for the repository root.
+#
+# BuildKit reads <Dockerfile-path>.dockerignore for the Dockerfiles in deploy/docker
+# (Dockerfile.api.dockerignore / Dockerfile.worker.dockerignore). This root copy exists because the
+# classic builder only looks here, and because a stray `docker build .` from the repository root
+# must not ship secrets or runtime data to the daemon either.
+#
+# Everything below MUST stay out of the context: build output is rebuilt inside the image, runtime
+# data holds the music library, and secrets must never be sent to the Docker daemon.
+
+# Version control and editor state
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.vscode
+.idea
+.opencode
+.agents
+*.user
+
+# Documentation, reports and test suites
+docs
+tests
+e2e
+README.md
+SECURITY.md
+LICENSE
+AGENTS.md
+opencode.jsonc
+
+# Build output (rebuilt inside the image, or produced by the pipeline before the build)
+**/bin
+**/obj
+**/out
+**/dist
+**/node_modules
+**/TestResults
+**/*.trx
+**/*.tsbuildinfo
+artifacts
+publish
+*.log
+
+# Runtime data, local toolchains and secrets - never sent to the daemon
+storage
+tools
+backups
+.env
+.env.*
+*.env
+dev.secrets.ps1
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.crt
+*.cer
+
+# Client projects are not part of the server images
+src/android
+src/desktop

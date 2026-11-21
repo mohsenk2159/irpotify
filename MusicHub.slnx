@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/desktop/">
+    <Project Path="src/desktop/MusicHub.Player/MusicHub.Player.csproj" />
+  </Folder>
+  <Folder Name="/src/server/">
+    <Project Path="src/server/MusicHub.Api/MusicHub.Api.csproj" />
+    <Project Path="src/server/MusicHub.Application/MusicHub.Application.csproj" />
+    <Project Path="src/server/MusicHub.Domain/MusicHub.Domain.csproj" />
+    <Project Path="src/server/MusicHub.Infrastructure/MusicHub.Infrastructure.csproj" />
+    <Project Path="src/server/MusicHub.Install/MusicHub.Install.csproj" />
+    <Project Path="src/server/MusicHub.Worker/MusicHub.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/server/">
+    <Project Path="tests/server/MusicHub.Tests/MusicHub.Tests.csproj" />
+  </Folder>
+</Solution>

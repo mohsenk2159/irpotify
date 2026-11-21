@@ -1,0 +1,51 @@
+# Build-context filter for deploy/docker/Dockerfile.worker (BuildKit looks up
+# <dockerfile-path>.dockerignore). With the classic builder, copy this file to the repository
+# root as `.dockerignore` - the build context is the repository root either way.
+#
+# Kept in step with Dockerfile.api.dockerignore by hand; both images build from the same context.
+
+# Version control and editor state
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.vscode
+.idea
+.opencode
+.agents
+*.user
+
+# Documentation, reports and test suites
+docs
+tests
+e2e
+README.md
+AGENTS.md
+opencode.jsonc
+
+# Build output (rebuilt inside the image)
+**/bin
+**/obj
+**/out
+**/dist
+**/node_modules
+**/TestResults
+**/*.trx
+**/*.tsbuildinfo
+artifacts
+publish
+*.log
+
+# Runtime data, local toolchains and secrets - never sent to the daemon
+storage
+tools
+.env
+.env.*
+*.env
+dev.secrets.ps1
+
+# Targets that are not part of the worker image
+src/android
+src/desktop
+src/web

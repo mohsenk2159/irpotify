@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Applied through android:theme in AndroidManifest.xml. It MUST stay a NoActionBar
+      theme: the UI is entirely Compose, and a platform ActionBar would render a second
+      title bar on top of the Compose content (the manifest previously declared no theme
+      at all, so the platform default added an ActionBar and the search field and the Home
+      header were drawn underneath it).
+    -->
+    <style name="Theme.MusicHub" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FDFCFF</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

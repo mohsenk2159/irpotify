@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Shared View id used by the instrumentation tests (LocaleTestActivity assigns it to a TextView
+      so the resolved string resource can be asserted through a real Activity lifecycle).
+    -->
+    <item name="locale_probe_text" type="id" />
+</resources>

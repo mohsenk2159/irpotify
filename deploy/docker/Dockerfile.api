@@ -1,0 +1,134 @@
+# syntax=docker/dockerfile:1.7
+#
+# MusicHub Enterprise - API image (ASP.NET Core API + admin dashboard + ffmpeg/ffprobe).
+#
+# Build context MUST be the repository root:
+#   docker build -f deploy/docker/Dockerfile.api -t musichub/api:local .
+#
+# The dashboard IS compiled here, by the `web` stage, and copied into wwwroot before
+# `dotnet publish`. That is deliberate: the published image is what users pull from GHCR, and a
+# pull-and-run image must serve the UI without the operator pre-seeding anything on the host.
+# `dotnet publish` ships whatever wwwroot exists, and the API serves it through
+# UseDefaultFiles/UseStaticFiles (the "/" endpoint falls back to a JSON banner only when index.html
+# is genuinely absent).
+#
+# Set --build-arg REQUIRE_DASHBOARD=true to fail the build when the web stage produced nothing.
+# To extract the bundle to the host instead (development), use the export target:
+#   docker build -f deploy/docker/Dockerfile.api --target web-export \
+#       --output type=local,dest=src/server/MusicHub.Api/wwwroot .
+#
+# Never bake secrets into this image: every credential is supplied at run time through the
+# environment (see ../../.env.example and deploy/docker/README.md).
+
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.404-noble
+ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.9-noble
+ARG WEB_NODE_IMAGE=node:22-alpine
+
+# ---------------------------------------------------------------------------------------------
+# Dashboard build. Compiled first because the API stage copies its output into wwwroot, so a pulled
+# image ships a working UI rather than an API with an empty dashboard.
+# ---------------------------------------------------------------------------------------------
+FROM ${WEB_NODE_IMAGE} AS web
+WORKDIR /web
+# Dependency manifests first so the npm layer is cached independently of source edits.
+COPY src/web/admin/package.json src/web/admin/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY src/web/admin/ ./
+RUN npm run build
+
+# Scratch layer whose entire filesystem is the built dashboard, for `--output type=local`.
+FROM scratch AS web-export
+COPY --from=web /web/dist/ /
+
+# ---------------------------------------------------------------------------------------------
+# Build and publish the API.
+# ---------------------------------------------------------------------------------------------
+FROM ${DOTNET_SDK_IMAGE} AS build
+ARG BUILD_CONFIGURATION=Release
+# Fail the build when the caller expects a dashboard but wwwroot is missing.
+ARG REQUIRE_DASHBOARD=false
+ENV DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+WORKDIR /src
+# Restore from project files only, so the restore layer survives source edits.
+COPY src/server/MusicHub.Api/MusicHub.Api.csproj src/server/MusicHub.Api/
+COPY src/server/MusicHub.Application/MusicHub.Application.csproj src/server/MusicHub.Application/
+COPY src/server/MusicHub.Domain/MusicHub.Domain.csproj src/server/MusicHub.Domain/
+COPY src/server/MusicHub.Infrastructure/MusicHub.Infrastructure.csproj src/server/MusicHub.Infrastructure/
+RUN dotnet restore src/server/MusicHub.Api/MusicHub.Api.csproj
+
+# Full server sources, including any wwwroot the pipeline pre-seeded.
+COPY src/server/ src/server/
+
+# Bake the dashboard in from the `web` stage so `docker pull` + `docker run` yields a working UI.
+# The published image must be complete on its own; requiring the operator to pre-seed wwwroot on the
+# host would make the documented "pull and run" command produce an API with an empty dashboard.
+# `--from=web` replaces whatever wwwroot the context carried, so a stale host bundle cannot leak in.
+COPY --from=web /web/dist/ src/server/MusicHub.Api/wwwroot/
+
+RUN if [ "${REQUIRE_DASHBOARD}" = "true" ] && [ ! -f src/server/MusicHub.Api/wwwroot/index.html ]; then \
+        echo "ERROR: REQUIRE_DASHBOARD=true but src/server/MusicHub.Api/wwwroot/index.html is missing." >&2; \
+        echo "The web stage did not produce dist/. Check the npm build output above." >&2; \
+        exit 1; \
+    fi
+
+RUN dotnet publish src/server/MusicHub.Api/MusicHub.Api.csproj \
+        -c ${BUILD_CONFIGURATION} \
+        -o /app/publish \
+        --no-restore \
+        -p:UseAppHost=false \
+        -p:DebugType=None \
+        -p:DebugSymbols=false
+
+# ---------------------------------------------------------------------------------------------
+# Runtime image.
+# ---------------------------------------------------------------------------------------------
+FROM ${DOTNET_ASPNET_IMAGE} AS runtime
+ARG APP_UID=1654
+ARG APP_GID=1654
+
+# The API analyses every upload in-process (AudioProbeService: ffprobe metadata + ffmpeg artwork
+# extraction), so both binaries must be present; /api/health reports ffprobe availability.
+# curl exists only for the container HEALTHCHECK.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# MUSICHUB_DATA_ROOT is the persistent root (music, artwork, quarantine, DataProtection key ring)
+# and is always a volume. Upload bodies larger than FormOptions.MemoryBufferThreshold spill to
+# temp files, so TMPDIR points at the data volume instead of a tmpfs sized for 2 GiB uploads.
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_URLS=http://+:5080 \
+    DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    MUSICHUB_DATA_ROOT=/var/lib/musichub \
+    MUSICHUB_FFPROBE_PATH=/usr/bin/ffprobe \
+    MUSICHUB_FFMPEG_PATH=/usr/bin/ffmpeg \
+    TMPDIR=/var/lib/musichub/tmp \
+    HOME=/var/lib/musichub
+
+# Pre-create the mount point with the unprivileged owner. Docker copies the ownership of an image
+# directory into a fresh named volume, which is what makes the non-root container able to write.
+RUN install -d -o ${APP_UID} -g ${APP_GID} -m 0750 \
+        /var/lib/musichub \
+        /var/lib/musichub/music \
+        /var/lib/musichub/artwork \
+        /var/lib/musichub/quarantine \
+        /var/lib/musichub/keys \
+        /var/lib/musichub/tmp
+
+WORKDIR /app
+# Application binaries stay root-owned and read-only to the runtime user.
+COPY --from=build /app/publish ./
+
+EXPOSE 5080
+
+# /healthz is the liveness endpoint mapped by Program.cs (no dependency checks).
+# Database readiness is exposed by /api/health, which returns 503 when PostgreSQL is unreachable.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=5 \
+    CMD curl --fail --silent --show-error --max-time 4 http://127.0.0.1:5080/healthz || exit 1
+
+USER ${APP_UID}:${APP_GID}
+
+ENTRYPOINT ["dotnet", "MusicHub.Api.dll"]

@@ -1,0 +1,85 @@
+# syntax=docker/dockerfile:1.7
+#
+# MusicHub Enterprise - background worker image (Telegram polling, publishing, maintenance).
+#
+# Build context MUST be the repository root:
+#   docker build -f deploy/docker/Dockerfile.worker -t musichub/worker:local .
+#
+# The worker has no HTTP listener. It must never publish a port and it is attached only to the
+# private backend network (see docker-compose.yml). It shares the API data volume because the
+# DataProtection key ring lives at $MUSICHUB_DATA_ROOT/keys/dataprotection and is used to
+# decrypt the stored Telegram bot token.
+
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.404-noble
+ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.9-noble
+
+# ---------------------------------------------------------------------------------------------
+# Build and publish the worker.
+# ---------------------------------------------------------------------------------------------
+FROM ${DOTNET_SDK_IMAGE} AS build
+ARG BUILD_CONFIGURATION=Release
+ENV DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+WORKDIR /src
+
+COPY src/server/MusicHub.Worker/MusicHub.Worker.csproj src/server/MusicHub.Worker/
+COPY src/server/MusicHub.Application/MusicHub.Application.csproj src/server/MusicHub.Application/
+COPY src/server/MusicHub.Domain/MusicHub.Domain.csproj src/server/MusicHub.Domain/
+COPY src/server/MusicHub.Infrastructure/MusicHub.Infrastructure.csproj src/server/MusicHub.Infrastructure/
+RUN dotnet restore src/server/MusicHub.Worker/MusicHub.Worker.csproj
+
+COPY src/server/ src/server/
+RUN dotnet publish src/server/MusicHub.Worker/MusicHub.Worker.csproj \
+        -c ${BUILD_CONFIGURATION} \
+        -o /app/publish \
+        --no-restore \
+        -p:UseAppHost=false \
+        -p:DebugType=None \
+        -p:DebugSymbols=false
+
+# ---------------------------------------------------------------------------------------------
+# Runtime image.
+# ---------------------------------------------------------------------------------------------
+FROM ${DOTNET_ASPNET_IMAGE} AS runtime
+ARG APP_UID=1654
+ARG APP_GID=1654
+
+# ffmpeg/ffprobe: integrity scans and artwork/metadata work performed by the maintenance and
+# Telegram pipelines. procps: `pgrep` for the liveness HEALTHCHECK.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg procps \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV DOTNET_ENVIRONMENT=Production \
+    ASPNETCORE_ENVIRONMENT=Production \
+    DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    MUSICHUB_DATA_ROOT=/var/lib/musichub \
+    MUSICHUB_FFPROBE_PATH=/usr/bin/ffprobe \
+    MUSICHUB_FFMPEG_PATH=/usr/bin/ffmpeg \
+    TMPDIR=/var/lib/musichub/tmp \
+    HOME=/var/lib/musichub
+
+# Same mount point, owner and permissions as the API image: either container may initialize the
+# shared named volume, and both must be able to write to it as a non-root user.
+RUN install -d -o ${APP_UID} -g ${APP_GID} -m 0750 \
+        /var/lib/musichub \
+        /var/lib/musichub/music \
+        /var/lib/musichub/artwork \
+        /var/lib/musichub/quarantine \
+        /var/lib/musichub/keys \
+        /var/lib/musichub/tmp
+
+WORKDIR /app
+COPY --from=build /app/publish ./
+
+# The worker exposes no socket. Liveness = the host process still runs; the authoritative health
+# signal is the AppSettings 'worker.heartbeat' row written by MaintenanceWorker, checked by
+# deploy/scripts/healthcheck.ps1 and the dashboard.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD pgrep -f "MusicHub.Worker.dll" > /dev/null || exit 1
+
+USER ${APP_UID}:${APP_GID}
+
+ENTRYPOINT ["dotnet", "MusicHub.Worker.dll"]

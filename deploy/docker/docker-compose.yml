@@ -1,0 +1,248 @@
+# MusicHub Enterprise - production container topology.
+#
+#   postgres  (private)  <- api (private + edge) <- caddy (edge) <- :80/:443
+#                         <- worker (private)
+#
+# Usage (from the repository root):
+#   docker compose --env-file .env -f deploy/docker/docker-compose.yml config   # static check
+#   docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
+#
+# Rules enforced here:
+#   * The API port 5080 is never published; only Caddy is reachable from outside.
+#   * The worker publishes no port and is attached to the private backend network only.
+#   * PostgreSQL publishes no port and is reachable only through the backend network.
+#   * All application data (music, artwork, quarantine, DataProtection keys) lives on the
+#     musichub_data volume, never in the image or a container layer.
+#   * API and worker run as the unprivileged APP_UID from their images (1654), without Linux
+#     capabilities, with a read-only root filesystem and with no-new-privileges.
+
+name: musichub
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17.11-bookworm}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-musichub}
+      POSTGRES_USER: ${POSTGRES_USER:-musichub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env - generate it with a cryptographically secure random generator}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
+      TZ: ${MUSICHUB_TIMEZONE:-UTC}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    # No ports: the database is never reachable from the host or the internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    stop_grace_period: 60s
+    shm_size: 256mb
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "${MUSICHUB_POSTGRES_CPUS:-2.0}"
+          memory: ${MUSICHUB_POSTGRES_MEMORY:-2g}
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+      args:
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.404-noble}
+        DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0.9-noble}
+        WEB_NODE_IMAGE: ${WEB_NODE_IMAGE:-node:22-alpine}
+        REQUIRE_DASHBOARD: ${MUSICHUB_REQUIRE_DASHBOARD:-false}
+    image: musichub/api:${MUSICHUB_IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:5080
+      # X-Forwarded-For/Proto are trusted only from the proxies named here, not from every peer.
+      # ASPNETCORE_FORWARDEDHEADERS_ENABLED would make ASP.NET Core clear its known-proxy list and
+      # believe any source, so a container (or anything that can reach :5080) could forge the client
+      # IP and escape the per-IP rate limit. Only Caddy and the optional tunnel sidecars sit on the
+      # `edge` network, and only they may assert the client identity.
+      ForwardedHeaders__KnownNetworks: ${MUSICHUB_TRUSTED_PROXY_NETWORKS:-172.28.0.0/24}
+      ForwardedHeaders__KnownProxies: ${MUSICHUB_TRUSTED_PROXY_ADDRESSES:-}
+      ForwardedHeaders__ForwardLimit: ${MUSICHUB_TRUSTED_PROXY_HOPS:-1}
+      MUSICHUB_CONNECTION_STRING: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-musichub};Username=${POSTGRES_USER:-musichub};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}"
+      MUSICHUB_DATA_ROOT: /var/lib/musichub
+      # Required: the API refuses to start without a >= 32 character secret.
+      MUSICHUB_JWT_SECRET: ${MUSICHUB_JWT_SECRET:?MUSICHUB_JWT_SECRET must be set in .env (>= 32 characters)}
+      # Needed only for the one-time /api/setup/initialize call. Leave empty to keep bootstrap
+      # disabled, and clear it again after the administrator account exists.
+      MUSICHUB_BOOTSTRAP_TOKEN: ${MUSICHUB_BOOTSTRAP_TOKEN:-}
+      # Absolute public origin used in Android/desktop pairing payloads.
+      MUSICHUB_PUBLIC_URL: ${MUSICHUB_PUBLIC_URL:?MUSICHUB_PUBLIC_URL must be set in .env, e.g. https://music.example.com}
+      MUSICHUB_FFPROBE_PATH: /usr/bin/ffprobe
+      MUSICHUB_FFMPEG_PATH: /usr/bin/ffmpeg
+      MUSICHUB_REQUIRE_MALWARE_SCAN: ${MUSICHUB_REQUIRE_MALWARE_SCAN:-false}
+      MUSICHUB_CLAMAV_HOST: ${MUSICHUB_CLAMAV_HOST:-}
+      # Applies pending EF Core migrations on startup (single API instance only).
+      Database__MigrateOnStartup: ${MUSICHUB_MIGRATE_ON_STARTUP:-true}
+      TZ: ${MUSICHUB_TIMEZONE:-UTC}
+    volumes:
+      # Music, artwork, quarantine and the shared DataProtection key ring.
+      - data:/var/lib/musichub
+    expose:
+      - "5080"
+    networks:
+      - backend
+      - edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Healthcheck is defined in Dockerfile.api (GET /healthz via curl).
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    init: true
+    # Long enough for ASP.NET Core to drain in-flight requests and running imports on SIGTERM.
+    stop_grace_period: 45s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "${MUSICHUB_API_CPUS:-2.0}"
+          memory: ${MUSICHUB_API_MEMORY:-2g}
+          # Must repeat pids_limit above: Compose rejects a service that sets pids_limit together
+          # with deploy.resources.limits and does not state limits.pids (B-060). Keeping the
+          # top-level pids_limit is deliberate - it is applied by `docker compose up` regardless of
+          # deploy-block support, and InstallerSecurityTests asserts the two values stay equal.
+          pids: 512
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.worker
+      args:
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0.404-noble}
+        DOTNET_ASPNET_IMAGE: ${DOTNET_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0.9-noble}
+    image: musichub/worker:${MUSICHUB_IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      MUSICHUB_CONNECTION_STRING: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-musichub};Username=${POSTGRES_USER:-musichub};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}"
+      MUSICHUB_DATA_ROOT: /var/lib/musichub
+      MUSICHUB_FFPROBE_PATH: /usr/bin/ffprobe
+      MUSICHUB_FFMPEG_PATH: /usr/bin/ffmpeg
+      MUSICHUB_REQUIRE_MALWARE_SCAN: ${MUSICHUB_REQUIRE_MALWARE_SCAN:-false}
+      MUSICHUB_CLAMAV_HOST: ${MUSICHUB_CLAMAV_HOST:-}
+      Telegram__WorkerEnabled: ${MUSICHUB_TELEGRAM_WORKER_ENABLED:-true}
+      TZ: ${MUSICHUB_TIMEZONE:-UTC}
+      # No MUSICHUB_JWT_SECRET: the worker never issues or validates user tokens. It does need the
+      # DataProtection key ring, which it reads from the shared data volume.
+    volumes:
+      - data:/var/lib/musichub
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # The API applies migrations before it starts listening, so a healthy API means the schema
+      # is current before the worker touches it.
+      api:
+        condition: service_healthy
+    # Healthcheck is defined in Dockerfile.worker (process liveness via pgrep).
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    init: true
+    stop_grace_period: 60s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "${MUSICHUB_WORKER_CPUS:-2.0}"
+          memory: ${MUSICHUB_WORKER_MEMORY:-2g}
+          # Must equal pids_limit above; see the note on the api service (B-060).
+          pids: 512
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.11.9-alpine}
+    restart: unless-stopped
+    environment:
+      MUSICHUB_PUBLIC_HOSTNAME: ${MUSICHUB_PUBLIC_HOSTNAME:?MUSICHUB_PUBLIC_HOSTNAME must be set in .env, e.g. music.example.com}
+      MUSICHUB_ACME_EMAIL: ${MUSICHUB_ACME_EMAIL:?MUSICHUB_ACME_EMAIL must be set in .env for ACME account registration}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC); remove if the network blocks UDP/443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # ACME account + certificates (must persist)
+      - caddy_config:/config  # autosaved configuration
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_started
+    # The official Caddy image runs as root: binding :80/:443 requires privileges, and a non-root
+    # UID cannot own a freshly created named volume without manual chown. Privileges are reduced
+    # to the single capability needed to bind the low ports; see README for the non-root variant.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    stop_grace_period: 30s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "${MUSICHUB_CADDY_CPUS:-1.0}"
+          memory: ${MUSICHUB_CADDY_MEMORY:-256m}
+
+networks:
+  # Public-facing hop: only Caddy and the API are attached. Not published unless caddy maps ports.
+  # The subnet is pinned so ForwardedHeaders__KnownNetworks (see the api service) names a network
+  # that actually exists. Without this, Docker picks an arbitrary 172.x range and the trusted
+  # proxy list would be a guess.
+  edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${MUSICHUB_EDGE_SUBNET:-172.28.0.0/24}
+  # Private hop: PostgreSQL is reachable here and nowhere else. This network is intentionally not
+  # `internal: true` because the worker needs outbound HTTPS to api.telegram.org.
+  backend:
+    driver: bridge
+
+volumes:
+  # Explicit names so backup/restore commands in README.md are deterministic.
+  pgdata:
+    name: musichub_pgdata
+  data:
+    name: musichub_data
+  caddy_data:
+    name: musichub_caddy_data
+  caddy_config:
+    name: musichub_caddy_config

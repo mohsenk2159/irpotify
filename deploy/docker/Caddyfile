@@ -1,0 +1,55 @@
+# MusicHub Enterprise - Caddy edge configuration (automatic HTTPS).
+#
+# Environment (provided by docker-compose.yml):
+#   MUSICHUB_PUBLIC_HOSTNAME  public DNS name, e.g. music.example.com
+#   MUSICHUB_ACME_EMAIL       ACME account contact address
+#
+# TLS policy: automatic Let's Encrypt / ZeroSSL certificates, HTTP->HTTPS redirect handled by
+# Caddy, no `tls internal`, no `skip_verify`, no `insecure_skip_verify`, no `auto_https off`.
+# Nothing in this file weakens certificate validation.
+
+{
+	email {$MUSICHUB_ACME_EMAIL}
+
+	# The admin API (default :2019) is not needed at runtime and is not exposed. Reload the edge
+	# with `docker compose ... up -d caddy` (certificates persist on the caddy_data volume).
+	admin off
+
+	servers {
+		# Outer bound on request headers at the public edge.
+		max_header_size 64KB
+	}
+
+	# For a staging dry run, uncomment the next line (never keep it in production):
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$MUSICHUB_PUBLIC_HOSTNAME} {
+	encode zstd gzip
+
+	# Uploads are capped by Kestrel at min(Storage.MaxUploadBytes, 4 GiB) - default 2 GiB - and the
+	# API returns 413 for anything larger. This edge limit only stops absurd bodies before they
+	# reach the application; it must stay >= the application limit.
+	request_body {
+		max_size 4GB
+	}
+
+	header {
+		# Do not advertise the proxy; the API already sets CSP/HSTS/X-Frame-Options itself.
+		-Server
+	}
+
+	reverse_proxy api:5080 {
+		# Client IP and scheme for rate limiting, redirects and pairing payloads. Caddy derives
+		# these from the real connection and ignores client-supplied X-Forwarded-* values because
+		# no trusted_proxies are configured for this hop.
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
+
+		# SignalR (/hubs/library) upgrades and audio Range streaming work without buffering;
+		# Caddy has no default response write timeout, so long tracks are not cut off.
+	}
+
+	# Access logging is deliberately not enabled: stream, pairing and download URLs can carry
+	# bearer material in query strings and must not be written to disk.
+}

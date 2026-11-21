@@ -1,0 +1,289 @@
+import { http } from './client';
+import { ApiError, messageFromPayload, type ProblemDetails } from './http';
+import { getAccessToken } from './session';
+import type {
+  AdminMetrics,
+  AlbumDetail,
+  AlbumSummary,
+  AlbumWrite,
+  ArtistDetail,
+  ArtistSummary,
+  AuditEntry,
+  AuthSession,
+  BackupRecord,
+  DashboardStats,
+  FolderNode,
+  GenreSummary,
+  HealthResponse,
+  LoginHistoryEntry,
+  Paged,
+  PlaylistDetail,
+  PlaylistSummary,
+  PlaylistWrite,
+  RoleName,
+  SessionInfo,
+  SetupResult,
+  SetupStatus,
+  StreamToken,
+  SystemEvent,
+  SystemSettings,
+  TelegramConfigWrite,
+  TelegramImport,
+  TelegramPublication,
+  TelegramSummary,
+  TelegramTestIngestResult,
+  TelegramTestResult,
+  TelegramUpdate,
+  Track,
+  TrackDetail,
+  TrackQuery,
+  TrackUpdate,
+  UploadFileResult,
+  UploadHistoryEntry,
+  UploadResponse,
+  User,
+  UserCreate,
+  UserSummary,
+  UserUpdate,
+  VersionInfo,
+} from './types';
+
+/* ------------------------------------------------------------------ */
+/* Setup & auth                                                        */
+/* ------------------------------------------------------------------ */
+
+export const api = {
+  setup: {
+    status: () => http.request<SetupStatus>('/api/setup/status', { auth: false }),
+    initialize: (payload: { bootstrapToken: string; email: string; password: string; displayName: string }) =>
+      http.request<SetupResult>('/api/setup/initialize', { method: 'POST', json: payload, auth: false }),
+  },
+  auth: {
+    login: (payload: { email: string; password: string; deviceName: string }) =>
+      http.request<AuthSession>('/api/auth/login', { method: 'POST', json: payload, auth: false }),
+    refresh: (refreshToken: string) =>
+      http.request<AuthSession>('/api/auth/refresh', { method: 'POST', json: { refreshToken }, auth: false }),
+    logout: (refreshToken: string | null) =>
+      http.request<void>('/api/auth/logout', { method: 'POST', json: { refreshToken }, auth: false }),
+    logoutAll: () => http.request<void>('/api/auth/logout-all', { method: 'POST' }),
+    me: () => http.request<User>('/api/auth/me'),
+    sessions: () => http.request<SessionInfo[]>('/api/auth/sessions'),
+    revokeSession: (id: string) => http.request<void>(`/api/auth/sessions/${id}`, { method: 'DELETE' }),
+  },
+  users: {
+    list: () => http.request<UserSummary[]>('/api/users'),
+    create: (payload: UserCreate) => http.request<{ id: string }>('/api/users', { method: 'POST', json: payload }),
+    update: (id: string, payload: UserUpdate) => http.request<void>(`/api/users/${id}`, { method: 'PATCH', json: payload }),
+    resetPassword: (id: string, newPassword: string) =>
+      http.request<void>(`/api/users/${id}/reset-password`, { method: 'POST', json: { newPassword } }),
+    loginHistory: (id: string) => http.request<LoginHistoryEntry[]>(`/api/users/${id}/login-history`),
+  },
+  tracks: {
+    list: (query: TrackQuery) => http.request<Paged<Track>>('/api/tracks', { query: { ...query } }),
+    get: (id: string) => http.request<TrackDetail>(`/api/tracks/${id}`),
+    update: (id: string, payload: TrackUpdate) => http.request<Track>(`/api/tracks/${id}`, { method: 'PATCH', json: payload }),
+    remove: (id: string) => http.request<void>(`/api/tracks/${id}`, { method: 'DELETE' }),
+    restore: (id: string) => http.request<Track>(`/api/tracks/${id}/restore`, { method: 'POST' }),
+    favorite: (id: string, favorite: boolean) =>
+      favorite
+        ? http.request<void>(`/api/favorites/${id}`, { method: 'POST' })
+        : http.request<void>(`/api/favorites/${id}`, { method: 'DELETE' }),
+    streamToken: (id: string) => http.request<StreamToken>(`/api/tracks/${id}/stream-token`, { method: 'POST' }),
+  },
+  albums: {
+    list: (query: { q?: string; page?: number; pageSize?: number }) =>
+      http.request<Paged<AlbumSummary>>('/api/albums', { query }),
+    get: (id: string) => http.request<AlbumDetail>(`/api/albums/${id}`),
+    create: (payload: AlbumWrite) => http.request<{ id: string; title: string }>('/api/albums', { method: 'POST', json: payload }),
+    update: (id: string, payload: AlbumWrite) => http.request<void>(`/api/albums/${id}`, { method: 'PATCH', json: payload }),
+    remove: (id: string) => http.request<void>(`/api/albums/${id}`, { method: 'DELETE' }),
+    addTrack: (id: string, trackId: string, position?: number) =>
+      http.request<void>(`/api/albums/${id}/tracks`, { method: 'POST', json: { trackId, position } }),
+    removeTrack: (id: string, trackId: string) =>
+      http.request<void>(`/api/albums/${id}/tracks/${trackId}`, { method: 'DELETE' }),
+  },
+  artists: {
+    list: (query: { q?: string; page?: number; pageSize?: number }) =>
+      http.request<Paged<ArtistSummary>>('/api/artists', { query }),
+    get: (id: string) => http.request<ArtistDetail>(`/api/artists/${id}`),
+    create: (payload: { name: string; biography?: string | null }) =>
+      http.request<{ id: string; name: string }>('/api/artists', { method: 'POST', json: payload }),
+    update: (id: string, payload: { name?: string; biography?: string | null }) =>
+      http.request<void>(`/api/artists/${id}`, { method: 'PATCH', json: payload }),
+  },
+  folders: {
+    list: () => http.request<FolderNode[]>('/api/folders'),
+    create: (payload: { name: string; parentId?: string | null; description?: string | null }) =>
+      http.request<{ id: string; name: string; parentId: string | null }>('/api/folders', { method: 'POST', json: payload }),
+    update: (id: string, payload: { name?: string; parentId?: string | null; description?: string | null }) =>
+      http.request<void>(`/api/folders/${id}`, { method: 'PATCH', json: payload }),
+    remove: (id: string) => http.request<void>(`/api/folders/${id}`, { method: 'DELETE' }),
+    addTracks: (id: string, trackIds: string[]) =>
+      http.request<void>(`/api/folders/${id}/tracks`, { method: 'POST', json: { trackIds } }),
+    removeTrack: (id: string, trackId: string) =>
+      http.request<void>(`/api/folders/${id}/tracks/${trackId}`, { method: 'DELETE' }),
+  },
+  genres: {
+    list: () => http.request<GenreSummary[]>('/api/genres'),
+    create: (name: string) => http.request<{ id: string; name: string }>('/api/genres', { method: 'POST', json: { name } }),
+  },
+  playlists: {
+    list: () => http.request<PlaylistSummary[]>('/api/playlists'),
+    get: (id: string) => http.request<PlaylistDetail>(`/api/playlists/${id}`),
+    create: (payload: PlaylistWrite) =>
+      http.request<{ id: string; name: string }>('/api/playlists', { method: 'POST', json: payload }),
+    update: (id: string, payload: PlaylistWrite) =>
+      http.request<void>(`/api/playlists/${id}`, { method: 'PATCH', json: payload }),
+    remove: (id: string) => http.request<void>(`/api/playlists/${id}`, { method: 'DELETE' }),
+    addTrack: (id: string, trackId: string) =>
+      http.request<void>(`/api/playlists/${id}/tracks`, { method: 'POST', json: { trackId } }),
+    removeTrack: (id: string, trackId: string) =>
+      http.request<void>(`/api/playlists/${id}/tracks/${trackId}`, { method: 'DELETE' }),
+    reorder: (id: string, trackIds: string[]) =>
+      http.request<void>(`/api/playlists/${id}/reorder`, { method: 'PUT', json: { trackIds } }),
+  },
+  dashboard: {
+    stats: () => http.request<DashboardStats>('/api/dashboard/stats'),
+    metrics: () => http.request<AdminMetrics>('/api/admin/metrics'),
+    audit: (query: { page?: number; pageSize?: number; action?: string; actorUserId?: string }) =>
+      http.request<Paged<AuditEntry>>('/api/admin/audit', { query }),
+    systemEvents: (limit: number) => http.request<SystemEvent[]>('/api/admin/system-events', { query: { limit } }),
+    settings: () => http.request<SystemSettings>('/api/admin/settings'),
+    updateSettings: (values: Record<string, string>) =>
+      http.request<void>('/api/admin/settings', { method: 'PUT', json: values }),
+    backups: () => http.request<BackupRecord[]>('/api/admin/backups'),
+  },
+  telegram: {
+    get: () => http.request<TelegramSummary>('/api/admin/telegram'),
+    update: (payload: TelegramConfigWrite) =>
+      http.request<TelegramSummary>('/api/admin/telegram', { method: 'PUT', json: payload }),
+    test: () => http.request<TelegramTestResult>('/api/admin/telegram/test', { method: 'POST' }),
+    testIngest: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return http.request<TelegramTestIngestResult>('/api/admin/telegram/test-ingest', {
+        method: 'POST',
+        formData,
+      });
+    },
+    imports: (query: { page?: number; pageSize?: number }) =>
+      http.request<Paged<TelegramImport>>('/api/admin/telegram/imports', { query }),
+    publications: (query: { status?: string; page?: number; pageSize?: number }) =>
+      http.request<Paged<TelegramPublication>>('/api/admin/telegram/publications', { query }),
+    retryPublication: (id: string) =>
+      http.request<void>(`/api/admin/telegram/publications/${id}/retry`, { method: 'POST' }),
+    updates: (take: number) => http.request<TelegramUpdate[]>('/api/admin/telegram/updates', { query: { take } }),
+    setEnabled: (enabled: boolean) =>
+      http.request<{ enabled: boolean }>('/api/admin/telegram/enable', { method: 'POST', query: { enabled } }),
+  },
+  uploads: {
+    history: (query: { page?: number; pageSize?: number }) =>
+      http.request<Paged<UploadHistoryEntry>>('/api/uploads/history', { query }),
+  },
+  system: {
+    health: () => http.request<HealthResponse>('/api/health', { auth: false }),
+    version: () => http.request<VersionInfo>('/api/version', { auth: false }),
+  },
+};
+
+export type { UploadFileResult };
+
+/* ------------------------------------------------------------------ */
+/* Upload with progress (XHR; fetch cannot report upload progress)      */
+/* ------------------------------------------------------------------ */
+
+interface UploadOptions {
+  folderId?: string | null;
+  albumId?: string | null;
+  onProgress?: (percent: number) => void;
+  signal?: AbortSignal;
+}
+
+function parseXhrError(xhr: XMLHttpRequest): ApiError {
+  const contentType = xhr.getResponseHeader('content-type') ?? '';
+  let payload: unknown = null;
+  if (contentType.includes('json')) {
+    try {
+      payload = JSON.parse(xhr.responseText) as unknown;
+    } catch {
+      payload = null;
+    }
+  } else if (xhr.responseText) {
+    payload = xhr.responseText;
+  }
+  const problem =
+    typeof payload === 'object' && payload !== null ? (payload as ProblemDetails) : null;
+  return new ApiError(xhr.status, messageFromPayload(payload, xhr.status), problem);
+}
+
+function sendUpload(formData: FormData, options: UploadOptions): Promise<UploadResponse> {
+  return new Promise<UploadResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/uploads');
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Accept', 'application/json');
+
+    const abortHandler = () => xhr.abort();
+    options.signal?.addEventListener('abort', abortHandler);
+
+    const cleanup = () => options.signal?.removeEventListener('abort', abortHandler);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      options.onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    xhr.onerror = () => {
+      cleanup();
+      reject(new ApiError(0, 'The upload could not reach the server.', null, { isNetworkError: true }));
+    };
+    xhr.onabort = () => {
+      cleanup();
+      reject(new DOMException('The upload was aborted.', 'AbortError'));
+    };
+    xhr.onload = () => {
+      cleanup();
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(xhr.responseText) as unknown;
+      } catch {
+        payload = null;
+      }
+      const results = (payload as { results?: UploadFileResult[] } | null)?.results;
+      if (Array.isArray(results)) {
+        resolve({ results });
+        return;
+      }
+      reject(parseXhrError(xhr));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+export async function uploadTracks(files: File[], options: UploadOptions = {}): Promise<UploadResponse> {
+  const formData = new FormData();
+  for (const file of files) formData.append('files', file, file.name);
+  if (options.folderId) formData.append('folderId', options.folderId);
+  if (options.albumId) formData.append('albumId', options.albumId);
+
+  try {
+    return await sendUpload(formData, options);
+  } catch (error) {
+    // A 401 can happen when the access token expired between page load and upload.
+    // Refresh once through the single-flight client and retry a single time.
+    if (error instanceof ApiError && error.status === 401 && !options.signal?.aborted) {
+      const refreshed = await http.refreshAccessToken();
+      if (refreshed) {
+        options.onProgress?.(0);
+        return sendUpload(formData, options);
+      }
+    }
+    throw error;
+  }
+}
+
+export function isRole(value: string): value is RoleName {
+  return value === 'Administrator' || value === 'Contributor' || value === 'Listener';
+}

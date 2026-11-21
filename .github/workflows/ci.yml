@@ -1,0 +1,188 @@
+name: CI
+
+# Build and test every push and pull request. This is the gate that keeps the release workflows
+# from ever publishing a broken commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run: only the newest commit matters.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  NODE_VERSION: '22'
+
+jobs:
+  server:
+    name: Server build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore MusicHub.slnx
+
+      - name: Build
+        run: dotnet build MusicHub.slnx --no-restore --configuration Release
+
+      # Integration tests use Testcontainers-free in-memory or file-backed fixtures, so no database
+      # service is required here. If that changes, add a `services: postgres:` block.
+      - name: Test
+        run: dotnet test MusicHub.slnx --no-build --configuration Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  dashboard:
+    name: Dashboard build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/web/admin/package-lock.json
+
+      - name: Install
+        working-directory: src/web/admin
+        run: npm ci
+
+      - name: Typecheck and build
+        working-directory: src/web/admin
+        run: npm run build
+
+      - name: Test
+        working-directory: src/web/admin
+        run: npm run test -- --run
+
+  android:
+    name: Android assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # A CI build has no release keystore (it lives in the gitignored storage/android-keys), so the
+      # release variant is left unsigned by build.gradle.kts. That is intentional: the signed APK is
+      # produced by the release workflow with the keystore supplied from repository secrets.
+      - name: Assemble debug
+        working-directory: src/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: src/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+  windows-player:
+    name: Windows player build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build player
+        run: dotnet build src/desktop/MusicHub.Player/MusicHub.Player.csproj --configuration Release
+
+  compose:
+    name: Compose and installer validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate compose (base)
+        run: |
+          cp .env.example .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci_only_placeholder_value/' .env
+          sed -i 's/^MUSICHUB_JWT_SECRET=.*/MUSICHUB_JWT_SECRET=ci_only_placeholder_value_at_least_32_chars/' .env
+          sed -i 's/^MUSICHUB_BOOTSTRAP_TOKEN=.*/MUSICHUB_BOOTSTRAP_TOKEN=ci_only_placeholder_value/' .env
+          docker compose --env-file .env -f deploy/docker/docker-compose.yml config --quiet
+          echo "base compose config OK"
+
+      - name: Validate compose (LAN overlay)
+        run: |
+          export MUSICHUB_LAN_ADDRESS=192.168.1.10
+          export MUSICHUB_LAN_PORT=8090
+          docker compose --env-file .env -f deploy/docker/docker-compose.yml \
+            -f deploy/docker/docker-compose.lan.yml config --quiet
+          echo "LAN overlay compose config OK"
+
+      - name: The LAN overlay must fail without its variables
+        run: |
+          if docker compose --env-file .env -f deploy/docker/docker-compose.yml \
+               -f deploy/docker/docker-compose.lan.yml config --quiet 2>/dev/null; then
+            echo "ERROR: the LAN overlay accepted a missing MUSICHUB_LAN_ADDRESS." >&2
+            exit 1
+          fi
+          echo "LAN overlay correctly refuses to start without an address"
+
+      - name: Validate Caddyfile
+        run: |
+          docker run --rm -e MUSICHUB_PUBLIC_HOSTNAME=music.example.com \
+            -e MUSICHUB_ACME_EMAIL=admin@example.com \
+            -v "$PWD/deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Check PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $failed = 0
+          Get-ChildItem deploy -Recurse -Filter *.ps1 | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed++
+              Write-Host "FAIL $($_.FullName)"
+              $errors | ForEach-Object { Write-Host "  line $($_.Extent.StartLineNumber): $($_.Message)" }
+            }
+          }
+          if ($failed -gt 0) { exit 1 }
+          Write-Host "All deploy PowerShell scripts parse."

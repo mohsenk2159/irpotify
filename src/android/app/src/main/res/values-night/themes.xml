@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark counterpart so the launch window matches the Compose dark surface instead of
+         flashing the light background before the first frame is drawn. -->
+    <style name="Theme.MusicHub" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#101014</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>
