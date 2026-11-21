@@ -2985,3 +2985,105 @@ Next actions:
 - Record W-044 as DONE in `docs/WORK_QUEUE.md` and point the release readiness section at this report.
 - The package still needs to be published as a **release asset** (not a commit) before operators can
   download it; `artifacts/` is gitignored by design.
+---
+
+## R-026 - CI never ran until the repository was published; six defects found and fixed
+
+Task ID: W-044 follow-up (publication gate)
+Objective: Make the first real GitHub Actions run pass, and make the repository publishable, without
+weakening any test.
+Status: VERIFIED for the local build and the full suite; IMPLEMENTED_NOT_TESTED for the Linux CI
+behaviour, which can only be proven by the next run.
+
+### What was wrong
+
+The workflows had never executed. The repository had no remote before this session, so
+`.github/workflows/ci.yml` was aspirational. The first push produced run `44947537047`, which failed
+in two jobs:
+
+- `Server build and test` -> step `Restore` -> `error NETSDK1100: To build a project targeting
+  Windows on this operating system, set the EnableWindowsTargeting property to true.`
+- `Android assemble` -> `./gradlew: Permission denied` -> exit code 126.
+
+Reading the workflow against the code then exposed two defects that would have failed the very next
+run, plus one that made a green build meaningless:
+
+- The CI comment stated "Integration tests use Testcontainers-free in-memory or file-backed
+  fixtures, so no database service is required". That was false. `ApiFactory` hardcoded
+  `Host=127.0.0.1;Port=5433` and called `ResetDatabase()`, which opens a real Npgsql connection to
+  drop and recreate `musichub_test`. There is no in-memory path. The same constructor also pointed
+  `MUSICHUB_FFPROBE_PATH` at a Windows `ffprobe.exe` that cannot exist on a Linux runner.
+- `release.yml` had the same missing-database defect in its `verify` job, which gates image
+  publishing and the GitHub Release, so no release could ever have been published.
+- No `global.json` existed, and the failing run's own log proves the consequence: the error came
+  from `/usr/share/dotnet/sdk/11.0.100/...`, so SDK 11.0.100 was compiling a `net10.0` solution.
+
+### Fixes
+
+1. `Directory.Build.props` (new): `EnableWindowsTargeting=true`, scoped to
+   `Condition="'$(OS)' != 'Windows_NT'"` so a Windows build is unchanged.
+2. `src/android/gradlew`: `git update-index --chmod=+x` -> mode `100755`. The content was already
+   correct (8,733-byte blob, `#!/bin/sh`, `i/lf w/lf`), so only the mode was wrong.
+3. `ApiFactory`: `AdminConnection` became a property - `MUSICHUB_TEST_ADMIN_CONNECTION`, then the CI
+   default on 5432, then the developer cluster on 5433. `HostOf`/`PortOf` read it through
+   `NpgsqlConnectionStringBuilder`, removing the second hardcoded literal. ffprobe/ffmpeg
+   environment variables are set only when the checkout file exists, so the API's PATH fallback
+   works on CI.
+4. `ci.yml` and `release.yml`: added a `postgres:17` service with a `pg_isready` health check, an
+   `apt-get install ffmpeg` step, an explicit `Wait for PostgreSQL` step, and `CI: 'true'` plus
+   `MUSICHUB_TEST_ADMIN_CONNECTION` on the Test step. The false comment was deleted.
+5. `global.json` (new): pins SDK `10.0.100` with `rollForward: latestFeature`.
+6. Deprecated action majors moved v4 -> v5 (`checkout`, `setup-dotnet`, `setup-node`,
+   `setup-java`, `upload-artifact`, `download-artifact`, `setup-gradle`). Because
+   `app/build.gradle.kts` pins `buildToolsVersion = "36.0.0"` and `compileSdk = 35`, both workflows
+   now install those exact revisions via `sdkmanager` instead of trusting the runner image.
+
+### Commands executed (exact)
+
+```powershell
+# Stop the running dev stack so the app DLLs are not locked (MSB3027/MSB3021 otherwise).
+Stop-ScheduledTask -TaskName 'MusicHub Dev Supervisor'
+Stop-Process -Id 13940, 13788 -Force
+
+dotnet build MusicHub.slnx --nologo -v m
+dotnet test  MusicHub.slnx --nologo -v q
+```
+
+### Test results (command + observed result)
+
+`dotnet build MusicHub.slnx` -> `Build succeeded. 0 Warning(s), 0 Error(s)`, 8 projects emitted
+including `MusicHub.Player -> ...\net10.0-windows\MusicHub.Player.dll`.
+
+`dotnet test MusicHub.slnx` ->
+`Passed! - Failed: 0, Passed: 372, Skipped: 0, Total: 372, Duration: 7 m 56 s`, exit 0.
+This is the same 372/372 as before the `ApiFactory` change, so the portability refactor did not
+alter test behaviour - it only changed where the connection string comes from.
+
+`git ls-files -s src/android/gradlew` -> `100755`; `git diff --cached --summary` ->
+`mode change 100644 => 100755`.
+
+Both workflow files were re-parsed with a real YAML loader (`yaml.safe_load`) after every edit.
+
+### Discovered bugs
+
+B-092 (High), B-093 (High), B-094 (High), B-095 (Medium), B-096 (Low) - all recorded in
+`docs/BUG_TRACKER.md` with the observed CI log lines.
+
+### Unresolved issues
+
+The Linux CI outcome is not proven yet. `Directory.Build.props`, `global.json`, the gradlew mode and
+the postgres service are all reasoned from the SDK and runner behaviour, not observed on a Linux
+host, so they must be confirmed by the next Actions run rather than claimed now.
+
+### Security implications
+
+No secrets were added. The CI database credentials (`musichub`/`musichub`) exist only inside an
+ephemeral service container on the runner and are not reachable from outside it; they are
+placeholders of the same class as the ones already used by the test fixtures. No repository secret
+was read or written. `storage/`, `artifacts/` and `tools/` remain ignored and were re-verified absent
+from the pushed tree.
+
+### Next actions
+
+- Push these fixes and watch the next Actions run; only a green run closes B-092 through B-096.
+- Then create the `v1.0.0` Release and attach the three artifacts plus their `.sha256` sidecars.

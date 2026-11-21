@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    The Windows player targets `net10.0-windows` and uses WPF. Building that project on a
+    non-Windows host requires the SDK to fetch the Windows targeting packs, which it only does
+    when EnableWindowsTargeting is set. Without it, `dotnet build MusicHub.slnx` fails on Linux
+    and macOS with NETSDK1100 ("To build a project targeting Windows on this operating system,
+    set the EnableWindowsTargeting property to true").
+
+    This is scoped to non-Windows hosts so a Windows developer build is completely unchanged,
+    and it only enables compilation - a WPF app still cannot *run* anywhere but Windows.
+  -->
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+</Project>

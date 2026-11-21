@@ -28,14 +28,38 @@ jobs:
     name: Server build and test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # The integration suite talks to a real PostgreSQL server: ApiFactory creates and drops a
+    # throwaway `musichub_test` database through it, and every request goes through real Npgsql.
+    # There is no in-memory substitute here, so CI provides the same server the developer has.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: musichub
+          POSTGRES_PASSWORD: musichub
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U musichub -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # ffprobe is a Windows binary in a developer checkout, so the runner gets a native one and
+      # ApiFactory leaves MUSICHUB_FFPROBE_PATH unset to let the PATH lookup find it.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Restore
         run: dotnet restore MusicHub.slnx
@@ -43,14 +67,27 @@ jobs:
       - name: Build
         run: dotnet build MusicHub.slnx --no-restore --configuration Release
 
-      # Integration tests use Testcontainers-free in-memory or file-backed fixtures, so no database
-      # service is required here. If that changes, add a `services: postgres:` block.
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U musichub -d postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready" >&2
+          exit 1
+
       - name: Test
+        env:
+          CI: 'true'
+          MUSICHUB_TEST_ADMIN_CONNECTION: 'Host=127.0.0.1;Port=5432;Database=postgres;Username=musichub;Password=musichub;Pooling=false'
         run: dotnet test MusicHub.slnx --no-build --configuration Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: server-test-results
           path: TestResults/*.trx
@@ -62,10 +99,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -89,16 +126,29 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
+
+      # app/build.gradle.kts pins buildToolsVersion = "36.0.0" and compileSdk = 35. The runner image
+      # does not necessarily carry those exact revisions, and a missing one fails the build rather
+      # than being substituted, so install precisely what the project declares. Idempotent.
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;36.0.0" "platform-tools"
 
       # A CI build has no release keystore (it lives in the gitignored storage/android-keys), so the
       # release variant is left unsigned by build.gradle.kts. That is intentional: the signed APK is
@@ -108,7 +158,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-debug-apk
           path: src/android/app/build/outputs/apk/debug/*.apk
@@ -120,10 +170,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -136,7 +186,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate compose (base)
         run: |

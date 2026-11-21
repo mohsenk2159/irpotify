@@ -44,19 +44,57 @@ jobs:
     name: Verify before release
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Same requirement as the CI workflow: the integration suite drives a real PostgreSQL server
+    # through ApiFactory, which creates and drops a throwaway `musichub_test` database.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: musichub
+          POSTGRES_PASSWORD: musichub
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U musichub -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # A developer checkout has a Windows ffprobe.exe under tools\ffmpeg; the runner gets a native
+      # one and ApiFactory leaves MUSICHUB_FFPROBE_PATH unset so the PATH lookup finds it.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Build
         run: dotnet build MusicHub.slnx --configuration Release
 
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U musichub -d postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready" >&2
+          exit 1
+
       - name: Test
+        env:
+          CI: 'true'
+          MUSICHUB_TEST_ADMIN_CONNECTION: 'Host=127.0.0.1;Port=5432;Database=postgres;Username=musichub;Password=musichub;Pooling=false'
         run: dotnet test MusicHub.slnx --no-build --configuration Release
 
   images:
@@ -77,7 +115,7 @@ jobs:
             dockerfile: deploy/docker/Dockerfile.worker
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Resolve version
         id: version
@@ -146,16 +184,28 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
+
+      # Same pinning as the CI workflow: app/build.gradle.kts declares buildToolsVersion 36.0.0 and
+      # compileSdk 35, and a missing exact revision fails the build instead of substituting.
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;36.0.0" "platform-tools"
 
       # The signing key never enters the repository: it is base64 in a repository secret and is
       # written to the gitignored path build.gradle.kts already reads. Without the secret the build
@@ -192,7 +242,7 @@ jobs:
           ls -la out
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-apk
           path: out/*
@@ -205,10 +255,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -233,7 +283,7 @@ jobs:
           Get-ChildItem out | Format-Table Name, Length
 
       - name: Upload player
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: windows-player
           path: out/*
@@ -250,7 +300,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -266,7 +316,7 @@ jobs:
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true

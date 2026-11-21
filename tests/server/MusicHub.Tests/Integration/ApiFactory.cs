@@ -20,9 +20,23 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public const string BootstrapToken = "test-bootstrap-token-0123456789abcdef";
 
     private const string TestDatabase = "musichub_test";
-    private const string AdminConnection = "Host=127.0.0.1;Port=5433;Database=postgres;Username=musichub;Password=musichub;Pooling=false";
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static bool _initialized;
+
+    /// <summary>
+    /// Connection to the server that hosts the throwaway test database. Overridable so the suite can
+    /// run against a CI service container instead of a developer's local cluster:
+    /// <c>MUSICHUB_TEST_ADMIN_CONNECTION</c> wins, then the CI default on 5432, then the local
+    /// development cluster on 5433.
+    /// </summary>
+    private static string AdminConnection =>
+        Environment.GetEnvironmentVariable("MUSICHUB_TEST_ADMIN_CONNECTION")
+        ?? (IsCi
+            ? "Host=127.0.0.1;Port=5432;Database=postgres;Username=musichub;Password=musichub;Pooling=false"
+            : "Host=127.0.0.1;Port=5433;Database=postgres;Username=musichub;Password=musichub;Pooling=false");
+
+    private static bool IsCi =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 
     public string DataRoot { get; }
 
@@ -35,7 +49,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var repoRoot = FindRepoRoot();
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
         Environment.SetEnvironmentVariable("MUSICHUB_CONNECTION_STRING",
-            $"Host=127.0.0.1;Port=5433;Database={TestDatabase};Username=musichub;Password=musichub;Pooling=false");
+            $"Host={HostOf(AdminConnection)};Port={PortOf(AdminConnection)};Database={TestDatabase};Username=musichub;Password=musichub;Pooling=false");
         Environment.SetEnvironmentVariable("MUSICHUB_JWT_SECRET",
             "integration-test-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz");
         Environment.SetEnvironmentVariable("MUSICHUB_DATA_ROOT", DataRoot);
@@ -44,11 +58,25 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // The whole suite shares one client IP; the production sign-in limiter would throttle it.
         Environment.SetEnvironmentVariable("RateLimiting__LoginPermitLimit", "500");
         Environment.SetEnvironmentVariable("RateLimiting__PasswordPermitLimit", "500");
-        Environment.SetEnvironmentVariable("MUSICHUB_FFPROBE_PATH",
-            Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg-9.0.2-essentials_build", "bin", "ffprobe.exe"));
-        Environment.SetEnvironmentVariable("MUSICHUB_FFMPEG_PATH",
-            Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg-9.0.2-essentials_build", "bin", "ffmpeg.exe"));
+
+        // ffprobe is a Windows binary in a developer checkout (tools\ffmpeg\...\ffprobe.exe). On CI
+        // the runner installs a native ffprobe on PATH, and the API already falls back to the bare
+        // command name when the variable is unset - so only point it at the checkout when that file
+        // really exists, otherwise leave it alone and let the PATH lookup do the work.
+        var ffprobe = Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg-9.0.2-essentials_build", "bin", "ffprobe.exe");
+        var ffmpeg = Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg-9.0.2-essentials_build", "bin", "ffmpeg.exe");
+        if (File.Exists(ffprobe))
+        {
+            Environment.SetEnvironmentVariable("MUSICHUB_FFPROBE_PATH", ffprobe);
+            Environment.SetEnvironmentVariable("MUSICHUB_FFMPEG_PATH", ffmpeg);
+        }
     }
+
+    private static string HostOf(string connectionString) =>
+        new NpgsqlConnectionStringBuilder(connectionString).Host ?? "127.0.0.1";
+
+    private static int PortOf(string connectionString) =>
+        new NpgsqlConnectionStringBuilder(connectionString).Port;
 
     public async Task<HttpClient> CreateAdminClientAsync()
     {
