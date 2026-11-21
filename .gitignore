@@ -19,16 +19,23 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Runtime data and secrets
-storage/
-artifacts/
+# Runtime data and secrets.
+#
+# The leading slash anchors `storage/` and `artifacts/` to the repository root. Without it,
+# `storage/` also matched any directory named `storage` or `Storage` at any depth, and because
+# Git's ignore matching is case-insensitive on Windows and macOS it silently swallowed
+# `src/server/MusicHub.Infrastructure/Storage/` - real source code, which then never entered the
+# repository and broke the Linux build (B-097). The remaining patterns stay unanchored on purpose:
+# a secret or a log file must be ignored wherever it appears.
+/storage/
+/artifacts/
 *.log
 *.env
 dev.secrets.ps1
 .env
 .env.*
 # Keep the documented template; it must never contain real secrets.
-!.env.example
+!/.env.example
 
 # Test output
 TestResults/
