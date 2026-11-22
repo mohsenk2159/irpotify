@@ -20,6 +20,15 @@ INSTALL_DIR="/opt/irpotify"
 REPO_URL="https://github.com/mohsenk2159/irpotify.git"
 CLI_BIN="/usr/local/bin/irpotify"
 
+# Docker Compose wrapper that automatically passes the correct compose files and .env
+dc() {
+    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml")
+    if grep -q "MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null; then
+        compose_args+=(-f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
+    fi
+    docker compose "${compose_args[@]}" "$@"
+}
+
 # ------------------------------------------------------------------------------
 # Banner
 # ------------------------------------------------------------------------------
@@ -210,11 +219,7 @@ setup_irpotify() {
     chmod 600 .env
 
     echo -e "${BLUE}==>${NC} Building and starting containers (this may take 2-3 minutes)..."
-    if [ "$use_domain" = true ]; then
-        docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
-    else
-        docker compose --env-file .env -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.lan.yml up -d --build
-    fi
+    dc up -d --build
 
     # Create the helper CLI script
     create_cli_command
@@ -253,12 +258,51 @@ create_cli_command() {
 INSTALL_DIR="/opt/irpotify"
 CLI_SCRIPT="$INSTALL_DIR/install.sh"
 
-if [ -f "$CLI_SCRIPT" ]; then
-    bash "$CLI_SCRIPT" --menu "$@"
-else
+if [ ! -f "$CLI_SCRIPT" ]; then
     echo "irpotify installation not found in $INSTALL_DIR!"
     exit 1
 fi
+
+dc() {
+    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml")
+    if grep -q "MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null; then
+        compose_args+=(-f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
+    fi
+    docker compose "${compose_args[@]}" "$@"
+}
+
+case "$1" in
+    status|ps)
+        cd "$INSTALL_DIR" && dc ps
+        ;;
+    logs)
+        shift
+        cd "$INSTALL_DIR" && dc logs -f --tail="${1:-100}"
+        ;;
+    restart)
+        cd "$INSTALL_DIR" && dc restart
+        ;;
+    start)
+        cd "$INSTALL_DIR" && dc up -d
+        ;;
+    stop)
+        cd "$INSTALL_DIR" && dc down
+        ;;
+    update)
+        cd "$INSTALL_DIR"
+        git fetch --all && git reset --hard origin/main
+        dc up -d --build
+        ;;
+    credentials|token)
+        grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null || true
+        ;;
+    --menu|"")
+        bash "$CLI_SCRIPT" --menu
+        ;;
+    *)
+        cd "$INSTALL_DIR" && dc "$@"
+        ;;
+esac
 EOF
     chmod +x "$CLI_BIN"
 }
@@ -269,6 +313,7 @@ EOF
 show_menu() {
     check_root
     cd "$INSTALL_DIR" || exit 1
+    create_cli_command
 
     while true; do
         print_banner
@@ -293,33 +338,29 @@ show_menu() {
         case "$op" in
             1)
                 echo -e "${BLUE}Running container status:${NC}"
-                docker compose ps
+                dc ps
                 echo ""
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
             2)
                 echo -e "${BLUE}Streaming logs (Press Ctrl+C to exit):${NC}"
-                docker compose logs -f --tail=100
+                dc logs -f --tail=100
                 ;;
             3)
                 echo -e "${YELLOW}Restarting services...${NC}"
-                docker compose restart
+                dc restart
                 echo -e "${GREEN}✓ Services restarted.${NC}"
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
             4)
                 echo -e "${YELLOW}Stopping services...${NC}"
-                docker compose down
+                dc down
                 echo -e "${GREEN}✓ Services stopped.${NC}"
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
             5)
                 echo -e "${GREEN}Starting services...${NC}"
-                if grep -q "MUSICHUB_LAN_PORT" .env 2>/dev/null; then
-                    docker compose --env-file .env -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.lan.yml up -d
-                else
-                    docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d
-                fi
+                dc up -d
                 echo -e "${GREEN}✓ Services started successfully.${NC}"
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
@@ -328,11 +369,8 @@ show_menu() {
                 git fetch --all
                 git reset --hard origin/main
                 echo -e "${BLUE}Rebuilding and restarting containers...${NC}"
-                if grep -q "MUSICHUB_LAN_PORT" .env 2>/dev/null; then
-                    docker compose --env-file .env -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.lan.yml up -d --build
-                else
-                    docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
-                fi
+                dc up -d --build
+                create_cli_command
                 echo -e "${GREEN}✓ Server updated successfully!${NC}"
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
@@ -347,7 +385,7 @@ show_menu() {
             8)
                 read -r -p "Are you sure you want to completely uninstall irpotify? (y/N): " confirm </dev/tty
                 if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                    docker compose down -v || true
+                    dc down -v || true
                     rm -f "$CLI_BIN"
                     echo -e "${YELLOW}Do you also want to delete all music files and database in $INSTALL_DIR? (y/N): ${NC}"
                     read -r -p "" purge </dev/tty
@@ -378,6 +416,10 @@ show_menu() {
 if [ "$1" == "--menu" ]; then
     show_menu
 elif [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.env" ]; then
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        ( cd "$INSTALL_DIR" && git fetch --all >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1 ) || true
+    fi
+    create_cli_command
     show_menu
 else
     setup_irpotify
