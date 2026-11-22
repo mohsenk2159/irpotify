@@ -82,6 +82,11 @@ sudo irpotify update      # Pull latest GitHub updates and rebuild
 sudo irpotify credentials # Display bootstrap token and URLs
 ```
 
+> [!IMPORTANT]
+> **Using irpotify on a Local Home / Office Network (LAN):**  
+> By default, the automated installer detects and configures the host's public IP address. If you are hosting irpotify on a local computer, home lab, or virtual machine (without a public domain) and want other devices on your local Wi-Fi / network to connect, make sure to connect using your host's **Local Private IP** (for example: `http://192.168.1.50:5080` instead of the public IP).  
+> You can find your local IP anytime by running `hostname -I` or `ip a` on Linux, or `ipconfig` on Windows.
+
 ---
 
 ### 2. Manual Docker Compose Setup
@@ -105,6 +110,7 @@ docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
 
 1. Download [**irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) on your Android device and install it.
 2. Open the app and connect using your server's IP/Domain or scan the QR code from the Web Dashboard.
+   * *Local Wi-Fi Note:* If your server and phone are on the same Wi-Fi network without a domain, enter the server's local LAN IP (e.g. `http://192.168.1.xxx:5080`).
 3. Enjoy your library, create custom local playlists, and listen to music seamlessly!
 
 ---
