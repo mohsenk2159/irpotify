@@ -343,6 +343,113 @@ public class ReviewFindingsTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Primary_administrator_cannot_be_deleted_demoted_or_deactivated()
+    {
+        using var admin = await factory.CreateAdminClientAsync();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MusicHubDbContext>();
+        var primaryAdminId = await db.UserRoles
+            .Where(r => r.Role.Name == RoleNames.Administrator)
+            .OrderBy(r => r.User.CreatedAt)
+            .Select(r => r.UserId)
+            .FirstAsync();
+
+        // An administrator creates another administrator to attempt deleting the primary admin
+        var secondAdminEmail = Unique("secondadmin");
+        var secondAdminId = await CreateUserAsync(admin, secondAdminEmail, RoleNames.Administrator);
+        using var secondAdmin = await LoginAsync(secondAdminEmail);
+
+        var response = await secondAdmin.DeleteAsync($"/api/users/{primaryAdminId}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("primary administrator", body.RootElement.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+
+        // Also, the primary admin cannot be demoted or deactivated
+        var demote = await secondAdmin.PatchAsJsonAsync($"/api/users/{primaryAdminId}", new { role = RoleNames.Listener });
+        Assert.Equal(HttpStatusCode.BadRequest, demote.StatusCode);
+
+        var deactivate = await secondAdmin.PatchAsJsonAsync($"/api/users/{primaryAdminId}", new { isActive = false });
+        Assert.Equal(HttpStatusCode.BadRequest, deactivate.StatusCode);
+
+        // Cleanup second admin
+        var cleanup = await admin.DeleteAsync($"/api/users/{secondAdminId}");
+        Assert.Equal(HttpStatusCode.NoContent, cleanup.StatusCode);
+    }
+
+    [Fact]
+    public async Task Administrator_cannot_delete_their_own_account()
+    {
+        using var admin = await factory.CreateAdminClientAsync();
+        var me = await admin.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        var adminId = me.GetProperty("id").GetGuid();
+
+        var response = await admin.DeleteAsync($"/api/users/{adminId}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("own account", body.RootElement.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Deleting_user_leaves_uploaded_tracks_intact_with_null_creator()
+    {
+        using var admin = await factory.CreateAdminClientAsync();
+        var uploaderEmail = Unique("uploader");
+        var uploaderId = await CreateUserAsync(admin, uploaderEmail, RoleNames.Administrator);
+        using var uploader = await LoginAsync(uploaderEmail);
+
+        // The uploader uploads a track
+        var trackId = await UploadTrackAsync(uploader);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MusicHubDbContext>();
+            var trackBefore = await db.Tracks.AsNoTracking().SingleAsync(x => x.Id == trackId);
+            Assert.Equal(uploaderId, trackBefore.CreatedByUserId);
+        }
+
+        // Admin deletes the uploader
+        var deleteResponse = await admin.DeleteAsync($"/api/users/{uploaderId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        // Verify the user is gone from db
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MusicHubDbContext>();
+            Assert.False(await db.Users.AnyAsync(x => x.Id == uploaderId));
+
+            // CRITICAL: The track MUST still exist in the database and be active!
+            var trackAfter = await db.Tracks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == trackId);
+            Assert.NotNull(trackAfter);
+            Assert.False(trackAfter.IsDeleted);
+            Assert.Null(trackAfter.CreatedByUserId);
+        }
+
+        // Verify the track is still accessible through the API
+        var trackApi = await admin.GetAsync($"/api/tracks/{trackId}");
+        Assert.Equal(HttpStatusCode.OK, trackApi.StatusCode);
+    }
+
+    [Fact]
+    public async Task Users_list_marks_isPrimaryAdmin_flag()
+    {
+        using var admin = await factory.CreateAdminClientAsync();
+        var listenerEmail = Unique("listener-flag");
+        var listenerId = await CreateUserAsync(admin, listenerEmail, RoleNames.Listener);
+
+        var listResponse = await admin.GetFromJsonAsync<JsonElement[]>("/api/users");
+        Assert.NotNull(listResponse);
+
+        var primaryAdminEntry = listResponse.Single(x => x.GetProperty("isPrimaryAdmin").GetBoolean());
+        Assert.Contains(RoleNames.Administrator, primaryAdminEntry.GetProperty("roles").EnumerateArray().Select(r => r.GetString()));
+
+        var listenerEntry = listResponse.Single(x => x.GetProperty("id").GetGuid() == listenerId);
+        Assert.False(listenerEntry.GetProperty("isPrimaryAdmin").GetBoolean());
+
+        // Cleanup
+        await admin.DeleteAsync($"/api/users/{listenerId}");
+    }
+
     // CR-003: reporting the same track repeatedly keeps working and stays one row.
     [Fact]
     public async Task Repeated_playback_reports_for_one_track_stay_at_one_history_row()

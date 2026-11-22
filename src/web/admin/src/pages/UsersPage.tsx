@@ -5,7 +5,7 @@ import { api } from '../api/endpoints';
 import type { RoleName, UserSummary } from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
-import { Modal, useToast } from '../ui/Modal';
+import { ConfirmDialog, Modal, useToast } from '../ui/Modal';
 import {
   Badge,
   Button,
@@ -118,6 +118,7 @@ export function UsersPage() {
   const [renewTarget, setRenewTarget] = useState<UserSummary | null>(null);
   const [renewDate, setRenewDate] = useState<string>('');
   const [renewError, setRenewError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserSummary | null>(null);
 
   // QR Code fast pairing modal state
   const [qrUser, setQrUser] = useState<UserSummary | null>(null);
@@ -298,6 +299,16 @@ export function UsersPage() {
     onError: (error) => setResetError(errorMessage(error, t('common.error'))),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.users.delete(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      setDeleteTarget(null);
+      notify(t('users.deleted'), 'success');
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
   const openEdit = (target: UserSummary) => {
     setEditing(target);
     setEditForm({
@@ -418,6 +429,11 @@ export function UsersPage() {
                   <tr key={target.id}>
                     <td>
                       <span>{target.displayName}</span>
+                      {target.isPrimaryAdmin ? (
+                        <span className="inline-badge">
+                          <Badge tone="warning">{t('users.primaryAdmin')}</Badge>
+                        </span>
+                      ) : null}
                       {isSelf(target) ? (
                         <span className="inline-badge">
                           <Badge tone="info">{t('users.you')}</Badge>
@@ -498,6 +514,13 @@ export function UsersPage() {
                         />
                         <IconButton icon="sessions" label={t('users.historyTitle')} onClick={() => setHistoryFor(target)} />
                         <IconButton icon="qr" label={t('users.qrCode')} onClick={() => void openQrModal(target)} />
+                        {!target.isPrimaryAdmin && !isSelf(target) ? (
+                          <IconButton
+                            icon="trash"
+                            label={t('users.delete')}
+                            onClick={() => setDeleteTarget(target)}
+                          />
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -904,6 +927,20 @@ export function UsersPage() {
           </div>
         ) : null}
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget ? t('users.deleteTitle', { name: deleteTarget.displayName || deleteTarget.email }) : ''}
+        body={t('users.deleteBody')}
+        confirmLabel={t('users.deleteConfirm')}
+        busy={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.id);
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
     </div>
   );

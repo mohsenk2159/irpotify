@@ -80,6 +80,7 @@ export const api = {
     list: () => http.request<UserSummary[]>('/api/users'),
     create: (payload: UserCreate) => http.request<{ id: string }>('/api/users', { method: 'POST', json: payload }),
     update: (id: string, payload: UserUpdate) => http.request<void>(`/api/users/${id}`, { method: 'PATCH', json: payload }),
+    delete: (id: string) => http.request<void>(`/api/users/${id}`, { method: 'DELETE' }),
     resetPassword: (id: string, newPassword: string) =>
       http.request<void>(`/api/users/${id}/reset-password`, { method: 'POST', json: { newPassword } }),
     loginHistory: (id: string) => http.request<LoginHistoryEntry[]>(`/api/users/${id}/login-history`),

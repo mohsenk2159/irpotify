@@ -130,6 +130,12 @@ public static class UserEndpoints
     {
         app.MapGet("/api/users", [Authorize(Policy = "Admin")] async (MusicHubDbContext db, CancellationToken ct) =>
         {
+            var primaryAdminId = await db.UserRoles
+                .Where(r => r.Role.Name == RoleNames.Administrator)
+                .OrderBy(r => r.User.CreatedAt)
+                .Select(r => r.UserId)
+                .FirstOrDefaultAsync(ct);
+
             var users = await db.Users.AsNoTracking().OrderBy(x => x.Email)
                 .Select(x => new
                 {
@@ -167,7 +173,8 @@ public static class UserEndpoints
                 x.CreatedAt,
                 x.LastLoginAt,
                 x.roles,
-                storageUsedBytes = usage.TryGetValue(x.Id, out var used) ? used : 0
+                storageUsedBytes = usage.TryGetValue(x.Id, out var used) ? used : 0,
+                isPrimaryAdmin = x.Id == primaryAdminId
             }));
         });
 
@@ -246,18 +253,30 @@ public static class UserEndpoints
                 user.ListenQuotaSeconds = listenQuotaSeconds;
             }
             if (request.ResetListenUsage == true) user.ListenSecondsUsed = 0;
+            var primaryAdminId = await db.UserRoles
+                .Where(r => r.Role.Name == RoleNames.Administrator)
+                .OrderBy(r => r.User.CreatedAt)
+                .Select(r => r.UserId)
+                .FirstOrDefaultAsync(ct);
+
             var roleChanged = false;
             if (!string.IsNullOrWhiteSpace(request.Role) && RoleNames.All.Contains(request.Role))
             {
                 var currentRole = user.UserRoles.Select(x => x.Role.Name).FirstOrDefault();
                 if (!string.Equals(currentRole, request.Role, StringComparison.Ordinal))
                 {
+                    // The primary administrator role may never be altered.
+                    var isTargetAdministrator = string.Equals(currentRole, RoleNames.Administrator, StringComparison.Ordinal);
+                    var wouldRemoveAdministrator = isTargetAdministrator && !string.Equals(request.Role, RoleNames.Administrator, StringComparison.Ordinal);
+                    if (user.Id == primaryAdminId && wouldRemoveAdministrator)
+                    {
+                        return Results.BadRequest(new { error = "The primary administrator role cannot be changed." });
+                    }
+
                     // An administrator may not remove the last administrator: doing so leaves the
                     // instance with no recovery path outside direct database access. The dashboard
                     // only hides the control for the current user, and UI hiding is not
                     // authorization (CR-005).
-                    var isTargetAdministrator = string.Equals(currentRole, RoleNames.Administrator, StringComparison.Ordinal);
-                    var wouldRemoveAdministrator = isTargetAdministrator && !string.Equals(request.Role, RoleNames.Administrator, StringComparison.Ordinal);
                     if (wouldRemoveAdministrator)
                     {
                         var remaining = await db.UserRoles.CountAsync(x => x.Role.Name == RoleNames.Administrator && x.UserId != user.Id, ct);
@@ -289,6 +308,12 @@ public static class UserEndpoints
             }
             else if (request.IsActive is false)
             {
+                // The primary administrator account can never be deactivated.
+                if (user.Id == primaryAdminId)
+                {
+                    return Results.BadRequest(new { error = "The primary administrator account cannot be deactivated." });
+                }
+
                 // Same dead end as demotion, reached a different way: deactivating the last active
                 // administrator leaves nobody who can sign in to reactivate anyone, and the only
                 // remaining route is the offline install CLI. The demotion guard above does not
@@ -355,6 +380,102 @@ public static class UserEndpoints
         {
             var history = await db.LoginHistory.AsNoTracking().Where(x => x.UserId == id).OrderByDescending(x => x.CreatedAt).Take(100).ToListAsync(ct);
             return Results.Ok(history);
+        });
+
+        app.MapDelete("/api/users/{id:guid}", [Authorize(Policy = "Admin")] async (Guid id, System.Security.Claims.ClaimsPrincipal principal, MusicHubDbContext db, HttpContext http, CancellationToken ct) =>
+        {
+            var user = await db.Users.Include(x => x.UserRoles).ThenInclude(x => x.Role).SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (user is null) return Results.NotFound();
+
+            var callerUserId = principal.GetUserId();
+            if (user.Id == callerUserId)
+            {
+                return Results.BadRequest(new { error = "You cannot delete your own account." });
+            }
+
+            var primaryAdminId = await db.UserRoles
+                .Where(r => r.Role.Name == RoleNames.Administrator)
+                .OrderBy(r => r.User.CreatedAt)
+                .Select(r => r.UserId)
+                .FirstOrDefaultAsync(ct);
+
+            if (user.Id == primaryAdminId)
+            {
+                return Results.BadRequest(new { error = "The primary administrator account cannot be deleted." });
+            }
+
+            var isTargetAdmin = user.UserRoles.Any(x => string.Equals(x.Role.Name, RoleNames.Administrator, StringComparison.Ordinal));
+            if (isTargetAdmin)
+            {
+                var remainingAdmins = await db.UserRoles.CountAsync(x => x.Role.Name == RoleNames.Administrator && x.UserId != user.Id, ct);
+                if (remainingAdmins == 0)
+                {
+                    return Results.Conflict(new { error = "At least one administrator is required." });
+                }
+            }
+
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+            // Strictly preserve all uploaded tracks, audio files, and folders:
+            // Disassociate them from the user by setting CreatedByUserId to null.
+            await db.Tracks.Where(x => x.CreatedByUserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedByUserId, (Guid?)null), ct);
+
+            await db.Folders.Where(x => x.CreatedByUserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedByUserId, (Guid?)null), ct);
+
+            await db.PlaylistTracks.Where(x => x.AddedByUserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.AddedByUserId, (Guid?)null), ct);
+
+            await db.DuplicateReports.Where(x => x.UserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.UserId, (Guid?)null), ct);
+
+            await db.TelegramConfigurations.Where(x => x.UpdatedByUserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.UpdatedByUserId, (Guid?)null), ct);
+
+            await db.LoginHistory.Where(x => x.UserId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.UserId, (Guid?)null), ct);
+
+            // Clean up personal upload sessions and jobs
+            var sessionIds = await db.UploadSessions.Where(x => x.UserId == user.Id).Select(x => x.Id).ToListAsync(ct);
+            if (sessionIds.Count > 0)
+            {
+                await db.UploadJobs.Where(x => sessionIds.Contains(x.UploadSessionId)).ExecuteDeleteAsync(ct);
+                await db.UploadSessions.Where(x => sessionIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
+            }
+
+            // Clean up personal playlists owned by this user
+            var ownedPlaylistIds = await db.Playlists.Where(x => x.OwnerUserId == user.Id).Select(x => x.Id).ToListAsync(ct);
+            if (ownedPlaylistIds.Count > 0)
+            {
+                await db.PlaylistTracks.Where(x => ownedPlaylistIds.Contains(x.PlaylistId)).ExecuteDeleteAsync(ct);
+                await db.Playlists.Where(x => ownedPlaylistIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
+            }
+
+            // Delete personal preferences, listening records, tokens, sessions, devices
+            await db.Favorites.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.PlaybackEvents.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.ListeningHistory.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.Devices.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.UserSessions.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.RefreshTokens.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.PairingSessions.Where(x => x.UserId == user.Id).ExecuteDeleteAsync(ct);
+            await db.Invitations.Where(x => x.CreatedByUserId == user.Id).ExecuteDeleteAsync(ct);
+
+            // Remove roles and user
+            db.UserRoles.RemoveRange(user.UserRoles);
+            db.Users.Remove(user);
+
+            AuditWriter.Add(db, principal, "user.delete", "User", user.Id.ToString(), System.Text.Json.JsonSerializer.Serialize(new
+            {
+                email = user.Email,
+                displayName = user.DisplayName
+            }), RequestHelpers.Ip(http));
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return Results.NoContent();
         });
     }
 

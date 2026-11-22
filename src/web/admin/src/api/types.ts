@@ -227,6 +227,7 @@ export interface UserSummary {
   createdAt: string;
   lastLoginAt: string | null;
   roles: RoleName[];
+  isPrimaryAdmin?: boolean;
 }
 
 export interface UserCreate {
