@@ -88,8 +88,8 @@ public class TelegramBotStorageTests(ApiFactory factory)
         using var api = new FakeTelegramApi();
         try
         {
-            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            var target = Path.Combine(windows, "MusicHubBotProbe");
+            var systemRoot = DangerousSystemRoot();
+            var target = Path.Combine(systemRoot, "MusicHubBotProbe");
 
             api.PendingUpdates = Command(6121, $"/storage {target}", AdminUserId, AdminChatId);
             await ConfigureAsync(api);
@@ -279,6 +279,14 @@ public class TelegramBotStorageTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<MusicHubDbContext>();
         var protector = scope.ServiceProvider.GetRequiredService<TelegramSecretProtector>();
 
+        // The poll offset lives in AppSettings, which is shared by the whole suite, so a class that
+        // polled earlier can leave a value above this class's update ids. The fake API withholds any
+        // update below the requested offset, so the poll would return nothing and the assertions
+        // below would fail on an empty call list. Zero it here, exactly as TelegramAlbumTests does:
+        // every update id in this class (6100..6199) is then >= the offset by construction.
+        var offset = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == TelegramBotStatusService.OffsetSettingKey);
+        if (offset is not null) db.AppSettings.Remove(offset);
+
         db.TelegramConfigurations.RemoveRange(await db.TelegramConfigurations.ToListAsync());
         db.TelegramConfigurations.Add(new TelegramConfiguration
         {
@@ -313,5 +321,21 @@ public class TelegramBotStorageTests(ApiFactory factory)
             .ToListAsync();
         db.AppSettings.RemoveRange(settings);
         await db.SaveChangesAsync();
+    }
+
+    private static string DangerousSystemRoot()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrWhiteSpace(windows)) return windows;
+        }
+
+        foreach (var root in new[] { "/etc", "/usr", "/var" })
+        {
+            if (Directory.Exists(root)) return root;
+        }
+
+        return "/etc";
     }
 }

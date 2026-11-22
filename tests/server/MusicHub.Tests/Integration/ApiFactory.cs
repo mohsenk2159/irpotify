@@ -24,12 +24,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private static bool _initialized;
 
     /// <summary>
-    /// Connection to the server that hosts the throwaway test database. Overridable so the suite can
+    /// Connection to the server that hosts the throwaway test databases. Overridable so the suite can
     /// run against a CI service container instead of a developer's local cluster:
     /// <c>MUSICHUB_TEST_ADMIN_CONNECTION</c> wins, then the CI default on 5432, then the local
     /// development cluster on 5433.
     /// </summary>
-    private static string AdminConnection =>
+    /// <remarks>
+    /// Public because <see cref="RelocationDatabase"/> creates its own private database from the same
+    /// server. It used to repeat this string literally, which meant it kept dialling 5433 on a runner
+    /// where the server is on 5432 - every one of its tests failed with "Failed to connect".
+    /// </remarks>
+    public static string AdminConnection =>
         Environment.GetEnvironmentVariable("MUSICHUB_TEST_ADMIN_CONNECTION")
         ?? (IsCi
             ? "Host=127.0.0.1;Port=5432;Database=postgres;Username=musichub;Password=musichub;Pooling=false"
@@ -58,6 +63,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // The whole suite shares one client IP; the production sign-in limiter would throttle it.
         Environment.SetEnvironmentVariable("RateLimiting__LoginPermitLimit", "500");
         Environment.SetEnvironmentVariable("RateLimiting__PasswordPermitLimit", "500");
+        // Uploads and the global per-IP window need the same headroom. The suite runs every upload
+        // through one administrator account, and on a fast machine the whole run finishes inside a
+        // single one-minute window - on CI it took 33 s against 8 minutes locally - so a fixed
+        // production ceiling turns into 429s that fail tests for reasons unrelated to what they
+        // assert. Production defaults (20/min per account, 600/min per IP) are untouched.
+        Environment.SetEnvironmentVariable("RateLimiting__UploadPermitLimit", "5000");
+        Environment.SetEnvironmentVariable("RateLimiting__GlobalPermitLimit", "100000");
 
         // ffprobe is a Windows binary in a developer checkout (tools\ffmpeg\...\ffprobe.exe). On CI
         // the runner installs a native ffprobe on PATH, and the API already falls back to the bare

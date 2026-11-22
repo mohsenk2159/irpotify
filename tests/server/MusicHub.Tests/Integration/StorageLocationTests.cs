@@ -134,8 +134,8 @@ public class StorageLocationTests(ApiFactory factory)
         Assert.False(traversal.GetProperty("valid").GetBoolean());
         Assert.False(Check(traversal, "path.no.traversal"));
 
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var system = await ValidateAsync(admin, Path.Combine(windows, "MusicHubLibrary"));
+        var systemRoot = DangerousSystemRoot();
+        var system = await ValidateAsync(admin, Path.Combine(systemRoot, "MusicHubLibrary"));
         Assert.False(system.GetProperty("valid").GetBoolean());
         Assert.False(Check(system, "path.not.system"));
 
@@ -150,7 +150,7 @@ public class StorageLocationTests(ApiFactory factory)
         Assert.False(Check(inside, "path.outside.application"));
 
         // A rejected folder is never created: the check that failed exists to prevent exactly that.
-        Assert.False(Directory.Exists(Path.Combine(windows, "MusicHubLibrary")));
+        Assert.False(Directory.Exists(Path.Combine(systemRoot, "MusicHubLibrary")));
         Assert.False(Directory.Exists(applicationDirectory));
     }
 
@@ -228,17 +228,39 @@ public class StorageLocationTests(ApiFactory factory)
     public async Task A_move_to_a_dangerous_folder_is_refused_before_anything_is_queued()
     {
         using var admin = await factory.CreateAdminClientAsync();
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var systemRoot = DangerousSystemRoot();
+        var candidate = Path.Combine(systemRoot, "MusicHubLibrary");
 
         var response = await admin.PostAsJsonAsync("/api/admin/storage/relocate",
-            new { path = Path.Combine(windows, "MusicHubLibrary"), confirmation = "relocate" });
+            new { path = candidate, confirmation = "relocate" });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var checks = json.RootElement.GetProperty("checks").EnumerateArray()
             .Single(x => x.GetProperty("id").GetString() == "path.not.system");
         Assert.False(checks.GetProperty("ok").GetBoolean());
-        Assert.False(Directory.Exists(Path.Combine(windows, "MusicHubLibrary")));
+        Assert.False(Directory.Exists(candidate));
+    }
+
+    /// <summary>
+    /// A system folder that exists on the host running the suite. The test used to read
+    /// <c>SpecialFolder.Windows</c> unconditionally, which is empty off Windows, so the candidate
+    /// became "/MusicHubLibrary" and the refusal came from a different check (B-100).
+    /// </summary>
+    private static string DangerousSystemRoot()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrWhiteSpace(windows)) return windows;
+        }
+
+        foreach (var root in new[] { "/etc", "/usr", "/var" })
+        {
+            if (Directory.Exists(root)) return root;
+        }
+
+        throw new InvalidOperationException("No protected system folder exists on this host to test against.");
     }
 
     private static async Task<JsonElement> ValidateAsync(HttpClient client, string path)

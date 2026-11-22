@@ -496,6 +496,9 @@ public class TelegramBotRouterTests(ApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<MusicHubDbContext>();
         var protector = scope.ServiceProvider.GetRequiredService<TelegramSecretProtector>();
 
+        var offset = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == TelegramBotStatusService.OffsetSettingKey);
+        if (offset is not null) db.AppSettings.Remove(offset);
+
         db.TelegramConfigurations.RemoveRange(await db.TelegramConfigurations.ToListAsync());
         db.TelegramConfigurations.Add(new TelegramConfiguration
         {

@@ -68,18 +68,28 @@ public static class StorageLocationValidator
         checks.Add(new StorageCheck("path.not.drive.root", !isDriveRoot,
             @"Choose a folder inside the drive, not the drive itself (D:\ is refused, D:\MusicHub is fine)."));
 
-        var systemDirectories = new[]
+        var systemDirectories = new List<string>
         {
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
             Environment.GetFolderPath(Environment.SpecialFolder.System)
         };
+
+        if (!OperatingSystem.IsWindows())
+        {
+            systemDirectories.AddRange(new[]
+            {
+                "/etc", "/bin", "/sbin", "/usr", "/var", "/lib", "/lib64",
+                "/sys", "/proc", "/dev", "/boot", "/root"
+            });
+        }
+
         var inSystemDirectory = systemDirectories
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Any(x => IsUnder(full, x));
+            .Any(x => string.Equals(full, Path.GetFullPath(x), StringComparison.OrdinalIgnoreCase) || IsUnder(full, x));
         checks.Add(new StorageCheck("path.not.system", !inSystemDirectory,
-            "The Windows, System and Program Files folders cannot hold the library."));
+            "The Windows, Linux, System and Program Files folders cannot hold the library."));
 
         var underApplication = IsUnder(full, AppContext.BaseDirectory);
         checks.Add(new StorageCheck("path.outside.application", !underApplication,

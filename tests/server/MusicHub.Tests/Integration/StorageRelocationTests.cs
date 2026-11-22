@@ -22,11 +22,21 @@ namespace MusicHub.Tests.Integration;
 public sealed class RelocationDatabase : IAsyncLifetime
 {
     private const string DatabaseName = "musichub_test_relocation";
-    private const string AdminConnection =
-        "Host=127.0.0.1;Port=5433;Database=postgres;Username=musichub;Password=musichub;Pooling=false";
 
-    public string ConnectionString { get; } =
-        $"Host=127.0.0.1;Port=5433;Database={DatabaseName};Username=musichub;Password=musichub;Pooling=false";
+    // The same server the rest of the suite uses, so a CI service container on 5432 works here too.
+    private static string AdminConnection => ApiFactory.AdminConnection;
+
+    public string ConnectionString { get; } = BuildConnectionString();
+
+    private static string BuildConnectionString()
+    {
+        var builder = new NpgsqlConnectionStringBuilder(AdminConnection)
+        {
+            Database = DatabaseName,
+            Pooling = false
+        };
+        return builder.ConnectionString;
+    }
 
     public async Task InitializeAsync()
     {
@@ -179,8 +189,8 @@ public class StorageRelocationTests(RelocationDatabase database) : IClassFixture
         await using var db = database.CreateContext();
         await SeedAssetAsync(db, sha, bytes.Length, $"music/ab/cd/{sha}.mp3");
 
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var protectedTarget = Path.Combine(windows, "MusicHubRelocationProbe");
+        var systemRoot = DangerousSystemRoot();
+        var protectedTarget = Path.Combine(systemRoot, "MusicHubRelocationProbe");
 
         var service = await NewServiceAsync(db, dataRoot, sourceRoot);
         var error = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
@@ -343,8 +353,8 @@ public class StorageRelocationTests(RelocationDatabase database) : IClassFixture
         var dataRoot = area.Folder("data");
         var sourceRoot = area.Folder("source");
 
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var candidate = Path.Combine(windows, "MusicHubValidatorProbe");
+        var systemRoot = DangerousSystemRoot();
+        var candidate = Path.Combine(systemRoot, "MusicHubValidatorProbe");
 
         var checks = StorageLocationValidator.Validate(candidate, sourceRoot, dataRoot, requireEmpty: true);
 
@@ -352,6 +362,22 @@ public class StorageRelocationTests(RelocationDatabase database) : IClassFixture
         Assert.DoesNotContain(checks, x => x.Id == "path.creatable");
         Assert.DoesNotContain(checks, x => x.Id == "path.writable");
         Assert.False(Directory.Exists(candidate));
+    }
+
+    private static string DangerousSystemRoot()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrWhiteSpace(windows)) return windows;
+        }
+
+        foreach (var root in new[] { "/etc", "/usr", "/var" })
+        {
+            if (Directory.Exists(root)) return root;
+        }
+
+        return "/etc";
     }
 
     // ---- helpers ----------------------------------------------------------------------------

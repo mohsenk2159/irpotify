@@ -477,9 +477,11 @@ public sealed class InstallerSecurityTests : IDisposable
     public async Task The_token_check_command_fails_when_no_token_is_supplied()
     {
         var previous = Environment.GetEnvironmentVariable(TelegramTokenCheck.TokenEnvironmentVariable);
+        var previousIn = Console.In;
         try
         {
             Environment.SetEnvironmentVariable(TelegramTokenCheck.TokenEnvironmentVariable, null);
+            Console.SetIn(new StringReader(string.Empty));
 
             // The test host is not an interactive console, so Console.IsInputRedirected is true and
             // an empty stdin yields no token - the same path a pipeline with no data takes.
@@ -489,6 +491,7 @@ public sealed class InstallerSecurityTests : IDisposable
         }
         finally
         {
+            Console.SetIn(previousIn);
             Environment.SetEnvironmentVariable(TelegramTokenCheck.TokenEnvironmentVariable, previous);
         }
     }

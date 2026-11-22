@@ -57,11 +57,44 @@ public sealed class ContentAddressedStorage
         return AllowedExtensions.Contains(extension) ? extension : string.Empty;
     }
 
+    private static readonly char[] DangerousFileNameChars =
+    {
+        '\"', '<', '>', '|', '\0',
+        (char)1, (char)2, (char)3, (char)4, (char)5, (char)6, (char)7, (char)8, (char)9, (char)10,
+        (char)11, (char)12, (char)13, (char)14, (char)15, (char)16, (char)17, (char)18, (char)19, (char)20,
+        (char)21, (char)22, (char)23, (char)24, (char)25, (char)26, (char)27, (char)28, (char)29, (char)30,
+        (char)31, ':', '*', '?', '\\', '/'
+    };
+
     public static string SafeOriginalFileName(string? fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return "upload";
-        var name = Path.GetFileName(fileName.Trim());
+
+        var name = fileName.Trim();
+
+        var lastSeparator = Math.Max(name.LastIndexOf('/'), name.LastIndexOf('\\'));
+        if (lastSeparator >= 0)
+        {
+            name = name[(lastSeparator + 1)..].Trim();
+        }
+
+        var colonIdx = name.LastIndexOf(':');
+        if (colonIdx >= 0)
+        {
+            name = name[(colonIdx + 1)..].Trim();
+        }
+
         foreach (var invalid in Path.GetInvalidFileNameChars()) name = name.Replace(invalid, '_');
+        foreach (var invalid in DangerousFileNameChars) name = name.Replace(invalid, '_');
+
+        while (name.Contains("..", StringComparison.Ordinal))
+        {
+            name = name.Replace("..", "_", StringComparison.Ordinal);
+        }
+
+        name = name.Trim('.', ' ', '\t');
+        if (string.IsNullOrWhiteSpace(name)) return "upload";
+
         return name.Length > 240 ? name[^240..] : name;
     }
 
@@ -116,9 +149,35 @@ public sealed class ContentAddressedStorage
 
     public string ResolveMusicPath(string relativePath)
     {
-        var root = RootPath;
-        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            throw new UnauthorizedAccessException("Storage path is empty.");
+        }
+
+        if (relativePath.StartsWith('/') || relativePath.StartsWith('\\'))
+        {
+            throw new UnauthorizedAccessException("Storage path cannot be absolute.");
+        }
+
+        if (relativePath.Length >= 2 && char.IsAsciiLetter(relativePath[0]) && relativePath[1] == ':')
+        {
+            throw new UnauthorizedAccessException("Storage path cannot be a drive-rooted path.");
+        }
+
+        if (Path.IsPathRooted(relativePath))
+        {
+            throw new UnauthorizedAccessException("Storage path cannot be rooted.");
+        }
+
+        var normalized = relativePath.Replace('\\', '/');
+        if (normalized.StartsWith('/'))
+        {
+            throw new UnauthorizedAccessException("Storage path cannot be absolute.");
+        }
+
+        var root = Path.GetFullPath(RootPath);
+        var rootWithSeparator = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(Path.Combine(root, normalized.Replace('/', Path.DirectorySeparatorChar)));
         if (!full.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException("Storage path escaped the configured root.");
@@ -128,9 +187,15 @@ public sealed class ContentAddressedStorage
 
     public string ResolveArtworkPath(string relativePath)
     {
-        var artworkRoot = ArtworkRoot;
-        var rootWithSeparator = artworkRoot.EndsWith(Path.DirectorySeparatorChar) ? artworkRoot : artworkRoot + Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(Path.Combine(artworkRoot, Path.GetFileName(relativePath)));
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            throw new UnauthorizedAccessException("Artwork path is empty.");
+        }
+
+        var artworkRoot = Path.GetFullPath(ArtworkRoot);
+        var rootWithSeparator = artworkRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var safeFileName = SafeOriginalFileName(relativePath);
+        var full = Path.GetFullPath(Path.Combine(artworkRoot, safeFileName));
         if (!full.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException("Artwork path escaped the configured root.");

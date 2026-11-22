@@ -533,6 +533,19 @@ public sealed class TelegramIngestionService(
 
     private async Task UpsertOffsetAsync(long offset, CancellationToken ct)
     {
+        var tracked = db.ChangeTracker.Entries<AppSetting>()
+            .FirstOrDefault(x => x.Entity.Key == OffsetSettingKey);
+        if (tracked is not null)
+        {
+            if (tracked.State == EntityState.Deleted)
+            {
+                tracked.State = EntityState.Modified;
+            }
+            tracked.Entity.Value = offset.ToString();
+            tracked.Entity.UpdatedAt = DateTimeOffset.UtcNow;
+            return;
+        }
+
         var row = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == OffsetSettingKey, ct);
         if (row is null)
         {

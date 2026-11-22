@@ -255,6 +255,14 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("password", http => RateLimitPartition.GetFixedWindowLimiter(
         "password:" + (http.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? http.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = passwordPermitLimit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+    // Also configurable. Uploads are expensive, so production keeps 20 per minute per account, but
+    // the integration suite runs many uploads through one account and would hit that ceiling on a
+    // fast machine - the whole suite finished in 33 s on CI against 8 minutes locally, which is
+    // exactly when a fixed ceiling starts failing tests for reasons that have nothing to do with
+    // what they assert.
+    var uploadPermitLimit = Math.Max(1, builder.Configuration.GetValue("RateLimiting:UploadPermitLimit", 20));
+    // The global per-IP ceiling has the same problem: a whole test run is one client address.
+    var globalPermitLimit = Math.Max(1, builder.Configuration.GetValue("RateLimiting:GlobalPermitLimit", 600));
     options.AddPolicy("refresh", http => RateLimitPartition.GetFixedWindowLimiter(
         "refresh:" + (http.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
@@ -266,11 +274,11 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 12, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
     options.AddPolicy("upload", http => RateLimitPartition.GetFixedWindowLimiter(
         "upload:" + (http.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? http.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = uploadPermitLimit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
         RateLimitPartition.GetFixedWindowLimiter(
             "global:" + (http.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1), QueueLimit = 100, AutoReplenishment = true }));
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = globalPermitLimit, Window = TimeSpan.FromMinutes(1), QueueLimit = 100, AutoReplenishment = true }));
 });
 
 var app = builder.Build();
