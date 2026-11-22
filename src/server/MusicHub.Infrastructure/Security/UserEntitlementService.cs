@@ -111,15 +111,18 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
             return EntitlementResult.Denied(DeactivationReasons.Expired);
         }
 
-        var newUsed = user.ListenSecondsUsed + seconds;
         await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(s => s
-            .SetProperty(x => x.ListenSecondsUsed, newUsed)
+            .SetProperty(x => x.ListenSecondsUsed, x => x.ListenSecondsUsed + seconds)
             .SetProperty(x => x.UpdatedAt, now), ct);
 
-        if (user.ListenQuotaSeconds > 0 && newUsed >= user.ListenQuotaSeconds)
+        if (user.ListenQuotaSeconds > 0)
         {
-            await DeactivateAsync(userId, DeactivationReasons.ListeningQuota, ct);
-            return EntitlementResult.Denied(DeactivationReasons.ListeningQuota);
+            var updatedUsed = await db.Users.Where(x => x.Id == userId).Select(x => x.ListenSecondsUsed).SingleAsync(ct);
+            if (updatedUsed >= user.ListenQuotaSeconds)
+            {
+                await DeactivateAsync(userId, DeactivationReasons.ListeningQuota, ct);
+                return EntitlementResult.Denied(DeactivationReasons.ListeningQuota);
+            }
         }
 
         return EntitlementResult.AllowedResult;
