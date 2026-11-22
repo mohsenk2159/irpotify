@@ -253,30 +253,18 @@ public static class UserEndpoints
                 user.ListenQuotaSeconds = listenQuotaSeconds;
             }
             if (request.ResetListenUsage == true) user.ListenSecondsUsed = 0;
-            var primaryAdminId = await db.UserRoles
-                .Where(r => r.Role.Name == RoleNames.Administrator)
-                .OrderBy(r => r.User.CreatedAt)
-                .Select(r => r.UserId)
-                .FirstOrDefaultAsync(ct);
-
             var roleChanged = false;
             if (!string.IsNullOrWhiteSpace(request.Role) && RoleNames.All.Contains(request.Role))
             {
                 var currentRole = user.UserRoles.Select(x => x.Role.Name).FirstOrDefault();
                 if (!string.Equals(currentRole, request.Role, StringComparison.Ordinal))
                 {
-                    // The primary administrator role may never be altered.
-                    var isTargetAdministrator = string.Equals(currentRole, RoleNames.Administrator, StringComparison.Ordinal);
-                    var wouldRemoveAdministrator = isTargetAdministrator && !string.Equals(request.Role, RoleNames.Administrator, StringComparison.Ordinal);
-                    if (user.Id == primaryAdminId && wouldRemoveAdministrator)
-                    {
-                        return Results.BadRequest(new { error = "The primary administrator role cannot be changed." });
-                    }
-
                     // An administrator may not remove the last administrator: doing so leaves the
                     // instance with no recovery path outside direct database access. The dashboard
                     // only hides the control for the current user, and UI hiding is not
                     // authorization (CR-005).
+                    var isTargetAdministrator = string.Equals(currentRole, RoleNames.Administrator, StringComparison.Ordinal);
+                    var wouldRemoveAdministrator = isTargetAdministrator && !string.Equals(request.Role, RoleNames.Administrator, StringComparison.Ordinal);
                     if (wouldRemoveAdministrator)
                     {
                         var remaining = await db.UserRoles.CountAsync(x => x.Role.Name == RoleNames.Administrator && x.UserId != user.Id, ct);
@@ -308,12 +296,6 @@ public static class UserEndpoints
             }
             else if (request.IsActive is false)
             {
-                // The primary administrator account can never be deactivated.
-                if (user.Id == primaryAdminId)
-                {
-                    return Results.BadRequest(new { error = "The primary administrator account cannot be deactivated." });
-                }
-
                 // Same dead end as demotion, reached a different way: deactivating the last active
                 // administrator leaves nobody who can sign in to reactivate anyone, and the only
                 // remaining route is the offline install CLI. The demotion guard above does not

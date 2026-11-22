@@ -344,7 +344,7 @@ public class ReviewFindingsTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Primary_administrator_cannot_be_deleted_demoted_or_deactivated()
+    public async Task Primary_administrator_cannot_be_deleted()
     {
         using var admin = await factory.CreateAdminClientAsync();
         using var scope = factory.Services.CreateScope();
@@ -364,13 +364,6 @@ public class ReviewFindingsTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Contains("primary administrator", body.RootElement.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
-
-        // Also, the primary admin cannot be demoted or deactivated
-        var demote = await secondAdmin.PatchAsJsonAsync($"/api/users/{primaryAdminId}", new { role = RoleNames.Listener });
-        Assert.Equal(HttpStatusCode.BadRequest, demote.StatusCode);
-
-        var deactivate = await secondAdmin.PatchAsJsonAsync($"/api/users/{primaryAdminId}", new { isActive = false });
-        Assert.Equal(HttpStatusCode.BadRequest, deactivate.StatusCode);
 
         // Cleanup second admin
         var cleanup = await admin.DeleteAsync($"/api/users/{secondAdminId}");
