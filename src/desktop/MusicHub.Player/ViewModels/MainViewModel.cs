@@ -509,21 +509,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public bool HasStorageProgress
     {
         get => _hasStorageProgress;
-        private set => SetProperty(ref _hasStorageProgress, value);
+        set => SetProperty(ref _hasStorageProgress, value);
     }
 
     private double _storageProgressPercent;
     public double StorageProgressPercent
     {
         get => _storageProgressPercent;
-        private set => SetProperty(ref _storageProgressPercent, value);
+        set => SetProperty(ref _storageProgressPercent, value);
     }
 
     private string _storageProgressText = string.Empty;
     public string StorageProgressText
     {
         get => _storageProgressText;
-        private set => SetProperty(ref _storageProgressText, value);
+        set => SetProperty(ref _storageProgressText, value);
     }
 
     private DispatcherTimer? _storageTimer;
