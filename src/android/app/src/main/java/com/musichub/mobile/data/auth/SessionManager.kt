@@ -21,16 +21,19 @@ import com.musichub.mobile.data.settings.ServerProfile
 import com.musichub.mobile.data.settings.SettingsStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.URI
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.util.concurrent.TimeUnit
 
 enum class SessionEndReason { NONE, LOGGED_OUT, EXPIRED, NETWORK_ERROR }
 
@@ -181,19 +184,29 @@ class SessionManager(
     }
 
     /**
-     * Probes a server base URL with GET /api/healthz. Returns true only when the server validates
-     * and answers healthy. Used by the first-run and settings flows to pick a working server.
+     * Probes a server base URL with GET /api/healthz. Uses a 2-second timeout so LAN/probing never hangs.
      */
     suspend fun probeServer(rawServerUrl: String, allowCleartext: Boolean): Boolean {
         settingsStore.awaitLoaded()
         val validation = LocalNetworkPolicy.validateBaseUrl(rawServerUrl, allowCleartext)
         if (validation is UrlValidationResult.Invalid) return false
         val valid = validation as UrlValidationResult.Valid
-        return try {
-            runApi { apiFactory.publicApi(valid.baseUrl).healthz() }
-            true
-        } catch (_: Exception) {
-            false
+        return withContext(Dispatchers.IO) {
+            try {
+                val probeClient = apiFactory.publicClient.newBuilder()
+                    .connectTimeout(2, TimeUnit.SECONDS)
+                    .readTimeout(2, TimeUnit.SECONDS)
+                    .build()
+                val request = okhttp3.Request.Builder()
+                    .url(LocalNetworkPolicy.apiBaseUrl(valid.baseUrl) + "api/healthz")
+                    .get()
+                    .build()
+                probeClient.newCall(request).execute().use { response ->
+                    response.isSuccessful
+                }
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 

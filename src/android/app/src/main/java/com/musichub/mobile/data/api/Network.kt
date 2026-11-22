@@ -33,7 +33,7 @@ class CleartextPolicyInterceptor(private val settingsProvider: () -> AppSettings
         val request = chain.request()
         if (request.url.scheme == "http") {
             val settings = settingsProvider()
-            if (!settings.allowCleartext || !LocalNetworkPolicy.isLocalOrPrivateHost(request.url.host)) {
+            if (!settings.allowCleartext) {
                 throw IOException("Cleartext HTTP is disabled for this server. Enable the local-network option or use HTTPS.")
             }
         }

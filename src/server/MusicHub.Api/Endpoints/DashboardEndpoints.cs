@@ -210,8 +210,9 @@ public static class SettingsEndpoints
         {
             var stored = await db.AppSettings.AsNoTracking().Where(x => AllowedKeys.Contains(x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value, ct);
             var localIp = NetworkAddressDetector.DetectLocalIPv4();
+            var isDockerBridge = localIp.StartsWith("172.17.") || localIp.StartsWith("172.18.") || localIp.StartsWith("172.19.") || localIp.StartsWith("172.20.");
             var defaultLanPort = Environment.GetEnvironmentVariable("MUSICHUB_LAN_PORT") ?? "5080";
-            var defaultLanUrl = $"http://{localIp}:{defaultLanPort}";
+            var defaultLanUrl = isDockerBridge ? string.Empty : $"http://{localIp}:{defaultLanPort}";
             var defaultPublicUrl = Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty;
 
             return Results.Ok(new
@@ -223,7 +224,7 @@ public static class SettingsEndpoints
                     publicUrlEnabled = !stored.TryGetValue("server.publicUrlEnabled", out var pEn) || pEn != "false",
                     lanBaseUrl = Get(stored, "server.lanBaseUrl", defaultLanUrl),
                     lanUrlEnabled = !stored.TryGetValue("server.lanUrlEnabled", out var lEn) || lEn != "false",
-                    detectedLocalIp = localIp,
+                    detectedLocalIp = isDockerBridge ? string.Empty : localIp,
                     maintenanceMode = bool.TryParse(Get(stored, "server.maintenanceMode", "false"), out var maintenance) && maintenance,
                     defaultTheme = Get(stored, "ui.defaultTheme", "dark"),
                     defaultLanguage = Get(stored, "ui.defaultLanguage", "en"),

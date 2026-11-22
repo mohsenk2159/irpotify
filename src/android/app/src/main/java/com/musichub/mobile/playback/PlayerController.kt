@@ -214,65 +214,82 @@ class PlayerController(
         val resumeMs = withContext(Dispatchers.IO) {
             libraryRepository.playbackPosition(tracks[index].id)
         }.coerceIn(0, tracks[index].durationMs.coerceAtLeast(0))
-        mediaController.setMediaItems(items, index, resumeMs)
-        mediaController.prepare()
-        mediaController.play()
+        withContext(Dispatchers.Main) {
+            mediaController.setMediaItems(items, index, resumeMs)
+            mediaController.prepare()
+            mediaController.play()
+        }
         withContext(Dispatchers.IO) { libraryRepository.saveQueue(tracks) }
     }
 
     suspend fun playPause() {
         val player = awaitController() ?: return
-        if (player.isPlaying) player.pause() else player.play()
+        withContext(Dispatchers.Main) {
+            if (player.isPlaying) player.pause() else player.play()
+        }
     }
 
     suspend fun play() {
-        awaitController()?.play()
+        val player = awaitController() ?: return
+        withContext(Dispatchers.Main) { player.play() }
     }
 
     suspend fun pause() {
-        awaitController()?.pause()
+        val player = awaitController() ?: return
+        withContext(Dispatchers.Main) { player.pause() }
     }
 
     suspend fun seekTo(positionMs: Long) {
-        awaitController()?.seekTo(positionMs.coerceAtLeast(0))
+        val player = awaitController() ?: return
+        withContext(Dispatchers.Main) { player.seekTo(positionMs.coerceAtLeast(0)) }
     }
 
     suspend fun next() {
         val player = awaitController() ?: return
-        if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+        withContext(Dispatchers.Main) {
+            if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+        }
     }
 
     suspend fun previous() {
         val player = awaitController() ?: return
-        if (player.currentPosition > 5_000) {
-            player.seekTo(0)
-        } else if (player.hasPreviousMediaItem()) {
-            player.seekToPreviousMediaItem()
-        } else {
-            player.seekTo(0)
+        withContext(Dispatchers.Main) {
+            if (player.currentPosition > 5_000) {
+                player.seekTo(0)
+            } else if (player.hasPreviousMediaItem()) {
+                player.seekToPreviousMediaItem()
+            } else {
+                player.seekTo(0)
+            }
         }
     }
 
     suspend fun seekToQueueIndex(index: Int) {
         val player = awaitController() ?: return
-        if (index in 0 until player.mediaItemCount) {
-            player.seekTo(index, 0)
-            player.prepare()
-            player.play()
+        withContext(Dispatchers.Main) {
+            if (index in 0 until player.mediaItemCount) {
+                player.seekTo(index, 0)
+                player.prepare()
+                player.play()
+            }
         }
     }
 
     suspend fun toggleShuffle() {
         val player = awaitController() ?: return
-        player.shuffleModeEnabled = !player.shuffleModeEnabled
+        withContext(Dispatchers.Main) {
+            player.shuffleModeEnabled = !player.shuffleModeEnabled
+        }
     }
 
     suspend fun cycleRepeatMode() {
         val player = awaitController() ?: return
-        player.repeatMode = when (player.repeatMode) {
-            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-            else -> Player.REPEAT_MODE_OFF
+        withContext(Dispatchers.Main) {
+            player.repeatMode = when (player.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
         }
     }
 
@@ -282,10 +299,12 @@ class PlayerController(
     }
 
     suspend fun clear() {
-        controller?.stop()
-        controller?.clearMediaItems()
+        withContext(Dispatchers.Main) {
+            controller?.stop()
+            controller?.clearMediaItems()
+            publish(controller)
+        }
         withContext(Dispatchers.IO) { libraryRepository.saveQueue(emptyList()) }
-        publish(controller)
     }
 
     private suspend fun awaitController(): MediaController? {

@@ -95,6 +95,8 @@ export const api = {
         lanServerUrl: string | null;
         effectiveServerUrl: string;
         qrPayload: string;
+        qrCardUrl?: string;
+        qrImageUrl?: string;
       }>(`/api/users/${id}/pairing-qr`, { method: 'POST', json: payload ?? {} }),
   },
   tracks: {

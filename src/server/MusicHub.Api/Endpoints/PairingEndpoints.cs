@@ -112,15 +112,12 @@ public static class PairingEndpoints
             await db.SaveChangesAsync(ct);
 
             var stored = await db.AppSettings.AsNoTracking()
-                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.publicUrlEnabled" || x.Key == "server.lanBaseUrl" || x.Key == "server.lanUrlEnabled")
+                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
                 .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
 
-            var localIp = NetworkAddressDetector.DetectLocalIPv4();
-            var defaultLanPort = Environment.GetEnvironmentVariable("MUSICHUB_LAN_PORT") ?? "5080";
             var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
                 ? storedLan.Trim().TrimEnd('/')
-                : $"http://{localIp}:{defaultLanPort}";
-            var lanEnabled = !stored.TryGetValue("server.lanUrlEnabled", out var lEn) || lEn != "false";
+                : string.Empty;
 
             var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
                 ? storedPub.Trim().TrimEnd('/')
@@ -130,13 +127,10 @@ public static class PairingEndpoints
             {
                 publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
             }
-            var publicEnabled = !stored.TryGetValue("server.publicUrlEnabled", out var pEn) || pEn != "false";
 
-            var effectiveServer = publicEnabled && !string.IsNullOrWhiteSpace(publicUrl)
+            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
                 ? publicUrl
-                : (lanEnabled ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
-
-            var effectiveLan = lanEnabled ? lanUrl : string.Empty;
+                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
 
             var queryParams = new List<string>
             {
@@ -144,9 +138,9 @@ public static class PairingEndpoints
                 $"code={Uri.EscapeDataString(code)}",
                 $"expires={expiresAt.ToUnixTimeSeconds()}"
             };
-            if (!string.IsNullOrWhiteSpace(effectiveLan))
+            if (!string.IsNullOrWhiteSpace(lanUrl))
             {
-                queryParams.Add($"lan={Uri.EscapeDataString(effectiveLan)}");
+                queryParams.Add($"lan={Uri.EscapeDataString(lanUrl)}");
             }
             if (!string.IsNullOrWhiteSpace(deviceName))
             {
@@ -156,6 +150,8 @@ public static class PairingEndpoints
             queryParams.Add($"name={Uri.EscapeDataString(targetUser.DisplayName)}");
 
             var qrPayload = $"musichub://pair?{string.Join("&", queryParams)}";
+            var qrCardUrl = $"{effectiveServer}/api/pairing/{Uri.EscapeDataString(code)}/card";
+            var qrImageUrl = $"{effectiveServer}/api/pairing/{Uri.EscapeDataString(code)}/image.png";
 
             return Results.Ok(new
             {
@@ -165,12 +161,156 @@ public static class PairingEndpoints
                 deviceName,
                 code,
                 expiresAt,
-                publicServerUrl = publicEnabled ? publicUrl : null,
-                lanServerUrl = lanEnabled ? lanUrl : null,
+                publicServerUrl = !string.IsNullOrWhiteSpace(publicUrl) ? publicUrl : null,
+                lanServerUrl = !string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : null,
                 effectiveServerUrl = effectiveServer,
-                qrPayload
+                qrPayload,
+                qrCardUrl,
+                qrImageUrl
             });
         });
+
+        app.MapGet("/api/pairing/{code}/image.png", async (string code, MusicHubDbContext db, HttpContext http, IConfiguration config, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(code)) return Results.NotFound();
+            var hash = CryptoUtil.Sha256Hex(code.Trim());
+            var session = await db.PairingSessions.Include(x => x.User)
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x => x.CodeHash == hash, ct);
+            if (session is null || session.ExpiresAt <= DateTimeOffset.UtcNow || !session.User.IsActive)
+            {
+                return Results.NotFound();
+            }
+
+            var stored = await db.AppSettings.AsNoTracking()
+                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
+                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+
+            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
+                ? storedPub.Trim().TrimEnd('/')
+                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
+
+            if (string.IsNullOrWhiteSpace(publicUrl))
+            {
+                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
+            }
+
+            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
+                ? storedLan.Trim().TrimEnd('/')
+                : string.Empty;
+
+            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
+                ? publicUrl
+                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+
+            var queryParams = new List<string>
+            {
+                $"server={Uri.EscapeDataString(effectiveServer)}",
+                $"code={Uri.EscapeDataString(code.Trim())}",
+                $"expires={session.ExpiresAt.ToUnixTimeSeconds()}"
+            };
+            if (!string.IsNullOrWhiteSpace(lanUrl)) queryParams.Add($"lan={Uri.EscapeDataString(lanUrl)}");
+            if (!string.IsNullOrWhiteSpace(session.DeviceName)) queryParams.Add($"device={Uri.EscapeDataString(session.DeviceName)}");
+            queryParams.Add($"email={Uri.EscapeDataString(session.User.Email)}");
+            queryParams.Add($"name={Uri.EscapeDataString(session.User.DisplayName)}");
+
+            var qrPayload = $"musichub://pair?{string.Join("&", queryParams)}";
+
+            using var generator = new QRCoder.QRCodeGenerator();
+            var qrCodeData = generator.CreateQrCode(qrPayload, QRCoder.QRCodeGenerator.ECCLevel.Q);
+            var pngQr = new QRCoder.PngByteQRCode(qrCodeData);
+            byte[] bytes = pngQr.GetGraphic(20);
+            return Results.File(bytes, "image/png");
+        }).AllowAnonymous();
+
+        app.MapGet("/api/pairing/{code}/card", async (string code, MusicHubDbContext db, HttpContext http, IConfiguration config, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(code)) return Results.NotFound();
+            var hash = CryptoUtil.Sha256Hex(code.Trim());
+            var session = await db.PairingSessions.Include(x => x.User)
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x => x.CodeHash == hash, ct);
+            if (session is null || session.ExpiresAt <= DateTimeOffset.UtcNow || !session.User.IsActive)
+            {
+                return Results.Content("<h1 style='color:white;font-family:sans-serif;text-align:center;margin-top:100px;'>Pairing link expired or invalid</h1>", "text/html");
+            }
+
+            var stored = await db.AppSettings.AsNoTracking()
+                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
+                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+
+            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
+                ? storedPub.Trim().TrimEnd('/')
+                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
+
+            if (string.IsNullOrWhiteSpace(publicUrl))
+            {
+                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
+            }
+
+            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
+                ? storedLan.Trim().TrimEnd('/')
+                : string.Empty;
+
+            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
+                ? publicUrl
+                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+
+            var queryParams = new List<string>
+            {
+                $"server={Uri.EscapeDataString(effectiveServer)}",
+                $"code={Uri.EscapeDataString(code.Trim())}",
+                $"expires={session.ExpiresAt.ToUnixTimeSeconds()}"
+            };
+            if (!string.IsNullOrWhiteSpace(lanUrl)) queryParams.Add($"lan={Uri.EscapeDataString(lanUrl)}");
+            if (!string.IsNullOrWhiteSpace(session.DeviceName)) queryParams.Add($"device={Uri.EscapeDataString(session.DeviceName)}");
+            queryParams.Add($"email={Uri.EscapeDataString(session.User.Email)}");
+            queryParams.Add($"name={Uri.EscapeDataString(session.User.DisplayName)}");
+
+            var qrPayload = $"musichub://pair?{string.Join("&", queryParams)}";
+            var imageUrl = $"{effectiveServer}/api/pairing/{Uri.EscapeDataString(code.Trim())}/image.png";
+            var userName = System.Net.WebUtility.HtmlEncode(session.User.DisplayName);
+
+            var html = $@"<!DOCTYPE html>
+<html lang=""fa"" dir=""rtl"">
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <title>ورود سریع به irpotify - {userName}</title>
+    <meta property=""og:title"" content=""ورود سریع به irpotify - {userName}"" />
+    <meta property=""og:description"" content=""برای ورود به برنامه irpotify، این کد QR را اسکن کنید."" />
+    <meta property=""og:image"" content=""{imageUrl}"" />
+    <meta property=""og:image:width"" content=""600"" />
+    <meta property=""og:image:height"" content=""600"" />
+    <meta property=""og:type"" content=""website"" />
+    <meta name=""twitter:card"" content=""summary_large_image"" />
+    <meta name=""twitter:image"" content=""{imageUrl}"" />
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #121212; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; text-align: center; }}
+        .card {{ background: #181818; border: 1px solid #282828; border-radius: 20px; padding: 36px 24px; max-width: 420px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }}
+        .logo {{ font-size: 26px; font-weight: 800; color: #1db954; letter-spacing: -0.5px; margin-bottom: 6px; }}
+        h2 {{ margin: 6px 0 16px; font-size: 20px; font-weight: 600; color: #fff; }}
+        .qr-wrap {{ background: #ffffff; padding: 18px; border-radius: 16px; display: inline-flex; margin: 12px 0 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.25); }}
+        .qr-wrap img {{ display: block; width: 240px; height: 240px; }}
+        .desc {{ color: #b3b3b3; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }}
+        .btn {{ display: inline-block; background: #1db954; color: #000000; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 500px; font-size: 15px; transition: transform 0.15s, background 0.15s; }}
+        .btn:hover {{ transform: scale(1.04); background: #1ed760; }}
+    </style>
+</head>
+<body>
+    <div class=""card"">
+        <div class=""logo"">irpotify</div>
+        <h2>ورود سریع {userName}</h2>
+        <div class=""qr-wrap"">
+            <img src=""{imageUrl}"" alt=""QR Code"" />
+        </div>
+        <p class=""desc"">این تصویر را با دوربین داخل اپلیکیشن irpotify اسکن کنید تا آدرس سرور و اطلاعات حساب شما خودکار تنظیم شود.</p>
+        <a class=""btn"" href=""{qrPayload}"">باز کردن در اپلیکیشن irpotify</a>
+    </div>
+</body>
+</html>";
+            return Results.Content(html, "text/html", System.Text.Encoding.UTF8);
+        }).AllowAnonymous();
     }
 
     public sealed record PairingCreateRequest(string? DeviceName);

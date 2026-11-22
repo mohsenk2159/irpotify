@@ -52,7 +52,8 @@ object PairingPayloadParser {
         val code = parameters["code"]?.trim().orEmpty()
         val device = parameters["device"]?.trim()?.takeIf { it.isNotBlank() }
         val email = parameters["email"]?.trim()?.takeIf { it.isNotBlank() }
-        if (server.isEmpty() || code.isEmpty()) {
+        val effectiveServer = if (server.isNotBlank()) server else (lan ?: "")
+        if (effectiveServer.isEmpty() || code.isEmpty()) {
             return PairingParseResult.Failure(PairingParseFailure.MISSING_FIELDS)
         }
 
@@ -63,7 +64,7 @@ object PairingPayloadParser {
 
         return PairingParseResult.Success(
             PairingPayload(
-                serverUrl = server,
+                serverUrl = effectiveServer,
                 code = code,
                 expiresAtEpochSeconds = expires,
                 lanServerUrl = lan,

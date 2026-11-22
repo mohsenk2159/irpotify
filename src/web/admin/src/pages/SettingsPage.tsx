@@ -23,9 +23,7 @@ const MB = 1024 * 1024;
 interface SettingsForm {
   serverName: string;
   publicBaseUrl: string;
-  publicUrlEnabled: boolean;
   lanBaseUrl: string;
-  lanUrlEnabled: boolean;
   detectedLocalIp: string;
   maintenanceMode: boolean;
   defaultTheme: 'dark' | 'light';
@@ -37,9 +35,7 @@ interface SettingsForm {
 const FALLBACK_FORM: SettingsForm = {
   serverName: '',
   publicBaseUrl: '',
-  publicUrlEnabled: true,
   lanBaseUrl: '',
-  lanUrlEnabled: true,
   detectedLocalIp: '',
   maintenanceMode: false,
   defaultTheme: 'dark',
@@ -63,9 +59,7 @@ export function SettingsPage() {
     setForm({
       serverName: values.serverName,
       publicBaseUrl: values.publicBaseUrl,
-      publicUrlEnabled: values.publicUrlEnabled ?? true,
       lanBaseUrl: values.lanBaseUrl ?? '',
-      lanUrlEnabled: values.lanUrlEnabled ?? true,
       detectedLocalIp: values.detectedLocalIp ?? '',
       maintenanceMode: values.maintenanceMode,
       defaultTheme: values.defaultTheme === 'light' ? 'light' : 'dark',
@@ -126,9 +120,7 @@ export function SettingsPage() {
     saveMutation.mutate({
       'server.name': form.serverName.trim(),
       'server.publicBaseUrl': publicUrl,
-      'server.publicUrlEnabled': form.publicUrlEnabled ? 'true' : 'false',
       'server.lanBaseUrl': lanUrl,
-      'server.lanUrlEnabled': form.lanUrlEnabled ? 'true' : 'false',
       'server.maintenanceMode': form.maintenanceMode ? 'true' : 'false',
       'ui.defaultTheme': form.defaultTheme,
       'ui.defaultLanguage': form.defaultLanguage,
@@ -193,11 +185,6 @@ export function SettingsPage() {
                     onChange={(event) => setForm((current) => ({ ...current, lanBaseUrl: event.target.value }))}
                   />
                 </Field>
-                <Checkbox
-                  label={t('settings.lanUrlEnabled')}
-                  checked={form.lanUrlEnabled}
-                  onChange={(event) => setForm((current) => ({ ...current, lanUrlEnabled: event.target.checked }))}
-                />
 
                 <div style={{ marginTop: '0.75rem' }}>
                   <Field label={t('settings.publicBaseUrl')} htmlFor="settings-public-url" hint={t('settings.publicBaseUrlHint')}>
@@ -210,11 +197,6 @@ export function SettingsPage() {
                       onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
                     />
                   </Field>
-                  <Checkbox
-                    label={t('settings.publicUrlEnabled')}
-                    checked={form.publicUrlEnabled}
-                    onChange={(event) => setForm((current) => ({ ...current, publicUrlEnabled: event.target.checked }))}
-                  />
                 </div>
               </div>
 

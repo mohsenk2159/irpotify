@@ -41,6 +41,7 @@ export type IconName =
   | 'arrow-up'
   | 'arrow-down'
   | 'qr'
+  | 'whatsapp'
   | 'external';
 
 const paths: Record<IconName, string> = {
@@ -85,6 +86,7 @@ const paths: Record<IconName, string> = {
   'arrow-up': 'M12 19V5m0 0-6 6m6-6 6 6',
   'arrow-down': 'M12 5v14m0 0 6-6m-6 6-6-6',
   qr: 'M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-5 0h2v5h-2v-5zm3 3h2v2h-2v-2zm2 2h3v3h-3v-3zm-2 1h-3v2h3v-2z',
+  whatsapp: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z',
   external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
 };
 

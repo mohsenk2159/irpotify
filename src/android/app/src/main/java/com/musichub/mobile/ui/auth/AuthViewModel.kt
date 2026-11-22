@@ -112,6 +112,11 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     fun onQrScanned(raw: String) {
         when (val result = PairingPayloadParser.parse(raw)) {
             is PairingParseResult.Success -> {
+                val usesHttp = result.payload.serverUrl.startsWith("http://", ignoreCase = true) ||
+                    result.payload.lanServerUrl?.startsWith("http://", ignoreCase = true) == true
+                if (usesHttp) {
+                    setAllowCleartext(true)
+                }
                 _state.value = _state.value.copy(
                     serverUrl = result.payload.serverUrl,
                     lanServerUrl = result.payload.lanServerUrl ?: _state.value.lanServerUrl,
@@ -145,7 +150,7 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val result = container.sessionManager.claimPairing(
                 rawServerUrl = current.serverUrl,
-                allowCleartext = container.settingsStore.settings.value.allowCleartext,
+                allowCleartext = true,
                 code = current.pairingCode,
                 deviceName = current.deviceName.ifBlank { container.deviceIdentity.displayName },
                 lanBaseUrl = current.lanServerUrl.takeIf { it.isNotBlank() },

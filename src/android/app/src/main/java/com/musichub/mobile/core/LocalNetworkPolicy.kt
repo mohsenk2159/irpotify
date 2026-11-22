@@ -48,9 +48,8 @@ object LocalNetworkPolicy {
         }
 
         val isCleartext = scheme == "http"
-        if (isCleartext) {
-            if (!allowCleartext) return UrlValidationResult.Invalid(UrlValidationFailure.CLEARTEXT_DISABLED)
-            if (!isLocalOrPrivateHost(host)) return UrlValidationResult.Invalid(UrlValidationFailure.CLEARTEXT_NOT_LOCAL)
+        if (isCleartext && !allowCleartext) {
+            return UrlValidationResult.Invalid(UrlValidationFailure.CLEARTEXT_DISABLED)
         }
 
         val path = uri.rawPath.orEmpty().trimEnd('/')

@@ -135,16 +135,18 @@ export function UsersPage() {
   // QR Code fast pairing modal state
   const [qrUser, setQrUser] = useState<UserSummary | null>(null);
   const [qrData, setQrData] = useState<{
+    code: string;
     qrPayload: string;
     publicServerUrl: string | null;
     lanServerUrl: string | null;
     effectiveServerUrl: string;
     expiresAt: string;
     deviceName: string;
+    qrCardUrl?: string;
+    qrImageUrl?: string;
   } | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrDeviceName, setQrDeviceName] = useState('');
-  const [copiedImage, setCopiedImage] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const openQrModal = async (target: UserSummary, customDeviceName?: string) => {
@@ -152,16 +154,18 @@ export function UsersPage() {
     const initialDevice = customDeviceName || `${target.displayName}'s Android Device`;
     setQrDeviceName(initialDevice);
     setQrLoading(true);
-    setCopiedImage(false);
     try {
       const res = await api.users.pairingQr(target.id, { deviceName: initialDevice });
       setQrData({
+        code: res.code,
         qrPayload: res.qrPayload,
         publicServerUrl: res.publicServerUrl,
         lanServerUrl: res.lanServerUrl,
         effectiveServerUrl: res.effectiveServerUrl,
         expiresAt: res.expiresAt,
         deviceName: res.deviceName,
+        qrCardUrl: res.qrCardUrl,
+        qrImageUrl: res.qrImageUrl,
       });
     } catch (cause) {
       notify(errorMessage(cause, t('common.error')), 'error');
@@ -182,7 +186,7 @@ export function UsersPage() {
     });
   }, [qrData]);
 
-  const copyQrImage = () => {
+  const copyQrImageToClipboard = (showNotification = false) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.toBlob(async (blob) => {
@@ -191,11 +195,11 @@ export function UsersPage() {
         await navigator.clipboard.write([
           new ClipboardItem({ 'image/png': blob }),
         ]);
-        setCopiedImage(true);
-        notify(t('users.qrImageCopied'), 'success');
-        setTimeout(() => setCopiedImage(false), 3000);
-      } catch (err) {
-        notify(errorMessage(err, 'Failed to copy image to clipboard'), 'error');
+        if (showNotification) {
+          notify(t('users.qrImageCopied'), 'success');
+        }
+      } catch {
+        // Ignored if browser does not permit clipboard image writing
       }
     }, 'image/png');
   };
@@ -209,20 +213,26 @@ export function UsersPage() {
     a.click();
   };
 
-  const shareQr = async () => {
+  const sendTelegram = () => {
     if (!qrData || !qrUser) return;
-    const title = `irpotify Login QR - ${qrUser.displayName}`;
-    const text = `irpotify Fast Login for ${qrUser.displayName}:\n${qrData.qrPayload}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text, url: qrData.qrPayload });
-      } catch {
-        // Ignored or cancelled by user
-      }
-    } else {
-      await navigator.clipboard.writeText(qrData.qrPayload);
-      notify(t('users.qrImageCopied'), 'success');
-    }
+    downloadQrImage();
+    copyQrImageToClipboard(false);
+    const targetUrl = qrData.qrCardUrl || qrData.qrImageUrl || `${window.location.origin}/api/pairing/${encodeURIComponent(qrData.code)}/card`;
+    const caption = `ورود سریع به irpotify - ${qrUser.displayName || qrUser.email}`;
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(targetUrl)}&text=${encodeURIComponent(caption)}`;
+    window.open(tgUrl, '_blank', 'noopener,noreferrer');
+    notify(t('users.qrSentNotice'), 'success');
+  };
+
+  const sendWhatsApp = () => {
+    if (!qrData || !qrUser) return;
+    downloadQrImage();
+    copyQrImageToClipboard(false);
+    const targetUrl = qrData.qrCardUrl || qrData.qrImageUrl || `${window.location.origin}/api/pairing/${encodeURIComponent(qrData.code)}/card`;
+    const text = `ورود سریع به irpotify - ${qrUser.displayName || qrUser.email}:\n${targetUrl}`;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+    notify(t('users.qrSentNotice'), 'success');
   };
 
   const usersQuery = useQuery({ queryKey: ['users'], queryFn: api.users.list });
@@ -879,53 +889,23 @@ export function UsersPage() {
               <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%', height: 'auto' }} />
             </div>
 
-            {/* Quick Actions Row */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', width: '100%' }}>
-              <Button
-                variant={copiedImage ? 'primary' : 'secondary'}
-                size="sm"
-                icon="check"
-                onClick={copyQrImage}
-              >
-                {copiedImage ? t('common.confirm') : t('users.copyQrImage')}
-              </Button>
-              <Button variant="secondary" size="sm" icon="external" onClick={() => void shareQr()}>
-                {t('users.shareQr')}
-              </Button>
-              <Button variant="secondary" size="sm" icon="arrow-down" onClick={downloadQrImage}>
+            {/* Primary Action Buttons: Download, Telegram, WhatsApp */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', width: '100%', marginTop: '4px' }}>
+              <Button variant="primary" size="sm" icon="arrow-down" onClick={downloadQrImage}>
                 {t('users.downloadQr')}
+              </Button>
+              <Button variant="secondary" size="sm" icon="telegram" onClick={sendTelegram}>
+                {t('users.shareTelegram')}
+              </Button>
+              <Button variant="secondary" size="sm" icon="whatsapp" onClick={sendWhatsApp}>
+                {t('users.shareWhatsApp')}
               </Button>
             </div>
 
-            {/* Direct Messenger Share Links */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('users.shareQr')}:</span>
-              <a
-                href={`https://t.me/share/url?url=${encodeURIComponent(qrData.qrPayload)}&text=${encodeURIComponent('irpotify Fast Login for ' + (qrUser?.displayName || 'user'))}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-secondary btn-sm"
-                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
-              >
-                {t('users.shareTelegram')}
-              </a>
-              <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent('irpotify Fast Login link for ' + (qrUser?.displayName || '') + ':\n' + qrData.qrPayload)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-secondary btn-sm"
-                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
-              >
-                {t('users.shareWhatsApp')}
-              </a>
-              <a
-                href={`mailto:?subject=${encodeURIComponent('Your irpotify Login QR Code')}&body=${encodeURIComponent('Open or scan this link in the irpotify Android app:\n' + qrData.qrPayload)}`}
-                className="btn btn-secondary btn-sm"
-                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
-              >
-                {t('users.shareEmail')}
-              </a>
-            </div>
+            {/* Sharing Tip */}
+            <p style={{ margin: '0', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', lineHeight: '1.5', maxWidth: '380px' }}>
+              {t('users.qrSharingTip')}
+            </p>
 
             {/* Device Name Customization */}
             <div style={{ width: '100%', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
