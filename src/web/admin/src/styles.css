@@ -607,12 +607,80 @@ svg {
 .stat-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-2);
   color: var(--text-muted);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.08);
+}
+
+.stat-icon-tracks {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(6, 182, 212, 0.1));
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.stat-icon-albums {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(217, 70, 239, 0.1));
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.stat-icon-artists {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(239, 68, 68, 0.1));
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+}
+
+.stat-icon-users {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.22), rgba(59, 130, 246, 0.1));
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+}
+
+.stat-icon-playlists {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(244, 63, 94, 0.1));
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.35);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.15);
+}
+
+.stat-icon-folders {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(139, 92, 246, 0.1));
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.stat-icon-monitoring {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(14, 165, 233, 0.1));
+  color: #38bdf8;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.stat-icon-shield {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(16, 185, 129, 0.1));
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.35);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.15);
+}
+
+.stat-icon-warning {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(249, 115, 22, 0.1));
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
 }
 
 .stat-text {
@@ -2247,6 +2315,152 @@ html[dir="rtl"] .pager-double {
   opacity: 0.8;
 }
 
+.vinyl-cover-svg {
+  display: block;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.brand-logo-svg {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 10px rgba(16, 185, 129, 0.3));
+  transition: transform 0.25s ease;
+}
+
+.brand-link:hover .brand-logo-svg,
+.auth-brand-logo:hover {
+  transform: scale(1.08) rotate(3deg);
+}
+
+/* ==================================================================
+   Dashboard Studio Hero Banner
+   ================================================================== */
+
+.dashboard-hero-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.08) 50%, rgba(99, 102, 241, 0.12) 100%), var(--surface);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+  margin-block-end: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 700;
+  width: fit-content;
+  letter-spacing: 0.04em;
+}
+
+.live-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.hero-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--text) 30%, #10b981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  max-width: 620px;
+  line-height: 1.5;
+}
+
+.hero-metrics-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-start: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+
+.hero-metrics-pill .divider {
+  color: var(--border);
+}
+
+.hero-metrics-pill .status-online {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.hero-banner-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.hero-waves-svg {
+  width: 160px;
+  height: 80px;
+  filter: drop-shadow(0 6px 12px rgba(16, 185, 129, 0.25));
+}
+
+@media (max-width: 768px) {
+  .dashboard-hero-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hero-banner-art {
+    display: none;
+  }
+}
+
 /* ==================================================================
    Auth screens
    ================================================================== */
@@ -2257,6 +2471,9 @@ html[dir="rtl"] .pager-double {
   min-height: 100vh;
   padding: 26px;
   position: relative;
+  background: radial-gradient(circle at 50% 15%, rgba(16, 185, 129, 0.12), transparent 45%),
+    radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.08), transparent 40%),
+    var(--bg);
 }
 
 .auth-toolbar {

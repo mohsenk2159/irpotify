@@ -46,7 +46,7 @@ function formFrom(config: TelegramSummary): TelegramForm {
   return {
     token: '',
     clearToken: false,
-    adminTelegramUserId: config.adminTelegramUserId === null ? '' : String(config.adminTelegramUserId),
+    adminTelegramUserId: config.adminTelegramUserIds || (config.adminTelegramUserId === null ? '' : String(config.adminTelegramUserId)),
     adminChatId: config.adminChatId === null ? '' : String(config.adminChatId),
     destinationGroupId: config.destinationGroupId === null ? '' : String(config.destinationGroupId),
     destinationTopicId: config.destinationTopicId === null ? '' : String(config.destinationTopicId),
@@ -65,6 +65,20 @@ function optionalInteger(value: string): number | undefined {
   if (!trimmed) return undefined;
   const parsed = Number(trimmed);
   return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
+}
+
+function parseAdminUserIds(value: string): { valid: boolean; ids: number[]; normalized: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return { valid: true, ids: [], normalized: '' };
+  const rawParts = trimmed.split(/[\s;,]+/).filter(Boolean);
+  const ids: number[] = [];
+  for (const part of rawParts) {
+    if (!/^\d+$/.test(part)) return { valid: false, ids: [], normalized: '' };
+    const num = Number(part);
+    if (!Number.isSafeInteger(num) || num <= 0) return { valid: false, ids: [], normalized: '' };
+    ids.push(num);
+  }
+  return { valid: true, ids, normalized: ids.join(';') };
 }
 
 export function TelegramPage() {
@@ -194,11 +208,15 @@ export function TelegramPage() {
       setFormError(t('common.error'));
       return;
     }
-    const adminTelegramUserId = optionalInteger(form.adminTelegramUserId);
+    const parsedAdmin = parseAdminUserIds(form.adminTelegramUserId);
+    if (!parsedAdmin.valid) {
+      setFormError(t('telegram.adminUserIdInvalid'));
+      return;
+    }
     const adminChatId = optionalInteger(form.adminChatId);
     const destinationGroupId = optionalInteger(form.destinationGroupId);
     const destinationTopicId = optionalInteger(form.destinationTopicId);
-    if ([adminTelegramUserId, adminChatId, destinationGroupId, destinationTopicId].some((value) => Number.isNaN(value))) {
+    if ([adminChatId, destinationGroupId, destinationTopicId].some((value) => Number.isNaN(value))) {
       setFormError(t('common.error'));
       return;
     }
@@ -211,7 +229,8 @@ export function TelegramPage() {
       maxRetryAttempts: retries,
       apiEndpoint: form.apiEndpoint.trim(),
       localBotApiEndpoint: form.localBotApiEndpoint.trim() || null,
-      adminTelegramUserId: adminTelegramUserId ?? null,
+      adminTelegramUserId: parsedAdmin.ids.length > 0 ? parsedAdmin.ids[0] : null,
+      adminTelegramUserIds: parsedAdmin.normalized || null,
       adminChatId: adminChatId ?? null,
       destinationGroupId: destinationGroupId ?? null,
       destinationTopicId: destinationTopicId ?? null,
@@ -279,11 +298,15 @@ export function TelegramPage() {
                   }
                 />
                 <div className="form-grid two">
-                  <Field label={t('telegram.adminUserId')} htmlFor="telegram-admin-user">
+                  <Field
+                    label={t('telegram.adminUserId')}
+                    htmlFor="telegram-admin-user"
+                    hint={t('telegram.adminUserIdHint')}
+                  >
                     <Input
                       id="telegram-admin-user"
-                      inputMode="numeric"
                       value={form.adminTelegramUserId}
+                      placeholder="1234124;4324234"
                       onChange={(event) =>
                         setForm((current) => (current ? { ...current, adminTelegramUserId: event.target.value } : current))
                       }

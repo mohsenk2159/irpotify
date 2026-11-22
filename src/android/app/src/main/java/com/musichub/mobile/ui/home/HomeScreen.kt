@@ -500,9 +500,17 @@ private fun HomeHeader() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(placeholderBrush("MusicHub"))
+            .background(placeholderBrush("irpotify"))
             .padding(horizontal = 18.dp, vertical = 20.dp),
     ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+            val w = size.width
+            val h = size.height
+            val ringColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f)
+            drawCircle(color = ringColor, radius = h * 1.2f, center = androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawCircle(color = ringColor, radius = h * 0.9f, center = androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawCircle(color = ringColor, radius = h * 0.6f, center = androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = stringResource(R.string.home_welcome),

@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api } from '../api/endpoints';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from './UiProvider';
-import { Icon, type IconName } from './icons';
+import { Icon, BrandLogo, type IconName } from './icons';
 import { Badge, IconButton } from './primitives';
 import { roleLabel } from './helpers';
 
@@ -122,9 +122,7 @@ export function Layout() {
       <aside className={`sidebar${navOpen ? ' is-open' : ''}`} aria-label={t('nav.mainNavigation')}>
         <div className="sidebar-brand">
           <Link to={isAdmin ? '/dashboard' : '/library/tracks'} className="brand-link">
-            <span className="brand-mark" aria-hidden="true">
-              <Icon name="music" size={20} />
-            </span>
+            <BrandLogo size={34} />
             <span className="brand-text">
               <span className="brand-name">{t('common.appName')}</span>
               <span className="brand-tagline">{t('common.tagline')}</span>

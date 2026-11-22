@@ -596,4 +596,26 @@ public class TelegramBotAdminGateTests
         Assert.False(TelegramBotAdminGate.IsAllowed(config, senderId, senderId));
         Assert.False(TelegramBotAdminGate.IsAllowed(null, senderId, senderId));
     }
+
+    [Fact]
+    public void Multiple_administrators_configured_via_semicolon_are_all_allowed()
+    {
+        var config = new TelegramConfiguration { AdminTelegramUserId = 1234124, AdminChatId = null };
+        var adminIds = TelegramBotAdminGate.ParseAdminIds("1234124;4324234;999888");
+
+        Assert.True(TelegramBotAdminGate.IsAllowed(config, 1234124, 1234124, adminIds));
+        Assert.True(TelegramBotAdminGate.IsAllowed(config, 4324234, 4324234, adminIds));
+        Assert.True(TelegramBotAdminGate.IsAllowed(config, 999888, 999888, adminIds));
+        Assert.False(TelegramBotAdminGate.IsAllowed(config, 555555, 555555, adminIds));
+    }
+
+    [Fact]
+    public void ParseAdminIds_handles_various_formats_and_whitespace()
+    {
+        var ids = TelegramBotAdminGate.ParseAdminIds(" 1234124 ; 4324234 ; invalid ; 0 ; -5 ; 888 ");
+        Assert.Equal(3, ids.Count);
+        Assert.Contains(1234124L, ids);
+        Assert.Contains(4324234L, ids);
+        Assert.Contains(888L, ids);
+    }
 }

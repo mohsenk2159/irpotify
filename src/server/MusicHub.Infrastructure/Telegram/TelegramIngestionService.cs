@@ -46,7 +46,10 @@ public sealed class TelegramIngestionService(
         {
             return new TelegramIngestionResult(0, 0, 0, 0, "Telegram ingestion is disabled or not configured.");
         }
-        if (config.AdminTelegramUserId is null)
+        var adminIdsSetting = await db.AppSettings.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+        var allowedAdminIds = TelegramBotAdminGate.ParseAdminIds(adminIdsSetting?.Value, config.AdminTelegramUserId);
+        if (allowedAdminIds.Count == 0)
         {
             return new TelegramIngestionResult(0, 0, 0, 0, "No admin Telegram user is configured; ingestion is blocked.");
         }
@@ -159,7 +162,11 @@ public sealed class TelegramIngestionService(
         var threadId = message.TryGetProperty("message_thread_id", out var thread) && thread.TryGetInt64(out var parsedThread)
             ? (long?)parsedThread : null;
 
-        if (senderId == 0 || senderId != config.AdminTelegramUserId)
+        var adminIdsSetting = await db.AppSettings.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+        var allowedAdminIds = TelegramBotAdminGate.ParseAdminIds(adminIdsSetting?.Value, config.AdminTelegramUserId);
+
+        if (senderId == 0 || !allowedAdminIds.Contains(senderId))
         {
             logger.LogWarning("Rejected Telegram message from unauthorized user {SenderId} in chat {ChatId}.", senderId, chatId);
             db.TelegramImports.Add(new TelegramImport
@@ -460,7 +467,11 @@ public sealed class TelegramIngestionService(
 
         // Audit the two writes this typed name performed. The sender is the configured admin: a
         // non-admin message was rejected by the gate long before this method could run.
-        if (config.AdminTelegramUserId is { } auditUserId)
+        var auditUserId = message.TryGetProperty("from", out var from) && from.TryGetProperty("id", out var fromIdElement)
+            ? fromIdElement.GetInt64()
+            : (config.AdminTelegramUserId ?? 0);
+
+        if (auditUserId > 0)
         {
             if (existing is null)
             {

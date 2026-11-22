@@ -69,10 +69,21 @@ fun ArtworkImage(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val maxR = kotlin.math.min(this.size.width, this.size.height) / 2f
+                val grooveColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f)
+                drawCircle(color = grooveColor, radius = maxR * 0.88f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                drawCircle(color = grooveColor, radius = maxR * 0.72f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                drawCircle(color = grooveColor, radius = maxR * 0.56f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                drawCircle(color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), radius = maxR * 0.38f)
+                drawCircle(color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.3f), radius = maxR * 0.38f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                drawCircle(color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.75f), radius = maxR * 0.12f)
+            }
             Text(
                 text = artworkInitial(seed),
                 style = MaterialTheme.typography.titleMedium,
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.95f),
             )
         }
     }

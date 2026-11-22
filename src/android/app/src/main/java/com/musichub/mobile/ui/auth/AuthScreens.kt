@@ -103,19 +103,30 @@ fun AuthFlow(container: AppContainer, signedOut: SessionState.SignedOut) {
                 .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(72.dp),
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(80.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(R.drawable.ic_music_note),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(38.dp),
-                    )
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxSize(),
+                    shadowElevation = 8.dp,
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                        val maxR = size.minDimension / 2f
+                        val ringColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f)
+                        drawCircle(color = ringColor, radius = maxR * 0.85f, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+                        drawCircle(color = ringColor, radius = maxR * 0.70f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                        drawCircle(color = ringColor, radius = maxR * 0.55f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+                    }
                 }
+                Icon(
+                    painterResource(R.drawable.ic_music_note),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(40.dp),
+                )
             }
             Spacer(Modifier.height(16.dp))
             Text(

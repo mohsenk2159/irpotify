@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useUi } from './UiProvider';
-import { Icon } from './icons';
+import { Icon, BrandLogo } from './icons';
 
 export function AuthShell({ children, title, subtitle }: { children: ReactNode; title: string; subtitle?: string }) {
   const { t, theme, toggleTheme, language, setLanguage } = useUi();
@@ -27,9 +27,7 @@ export function AuthShell({ children, title, subtitle }: { children: ReactNode; 
       </div>
       <main className="auth-card" aria-labelledby="auth-title">
         <div className="auth-brand">
-          <span className="brand-mark brand-mark-lg" aria-hidden="true">
-            <Icon name="music" size={28} />
-          </span>
+          <BrandLogo size={52} className="auth-brand-logo" />
           <div>
             <p className="brand-name">{t('common.appName')}</p>
             <p className="brand-tagline">{t('common.tagline')}</p>

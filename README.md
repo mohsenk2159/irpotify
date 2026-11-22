@@ -29,10 +29,12 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 ## ✨ Features
 
 - 🎧 **Original Spotify Experience:** Modern top category chips on the Home screen (`All`, `Tracks`, `Albums`, `Artists`, `Favorites`) and the iconic "Your Library" screen with pinned Liked Songs.
+- 📱 **Instant User QR Login & Pairing:** Skip typing long URLs, IPs, usernames, or passwords. Admins can generate a user-specific QR code from the Users table with one click. Scan it in the Android app to configure network routes and log in instantly. Features high-res PNG download, direct Telegram & WhatsApp sharing with rich image previews, and automatic clipboard copy.
+- 🎨 **Modern Visual Identity & Realistic Vinyl Artwork:** Completely redesigned visual style featuring realistic vector vinyl record jackets with dynamic gradient center labels for tracks and albums without covers, a live studio dashboard hero banner with soundwaves, and category-themed gradient stat badges.
 - 📱 **Client-Side Custom Playlists:** Create, edit, and organize custom playlists stored 100% locally on your device (Room Database) with zero server overhead or sync issues.
 - 🚀 **1-Command Linux Installation:** Fully automated setup script installing Docker, PostgreSQL 17, Caddy SSL reverse proxy, and system management tool in under 2 minutes.
 - 🛠️ **CLI Management Tool:** Inspect live logs, check health, restart, or update the server at any time with the built-in `irpotify` CLI.
-- 🤖 **Telegram Ingestion Bot:** Drop audio files or albums into your private Telegram bot for instant extraction, cover art caching, and library indexing.
+- 🤖 **Telegram Ingestion Bot with Multi-Admin Support:** Drop audio files or albums into your private Telegram bot for instant extraction, cover art caching, and library indexing. Supports multiple admin user IDs separated by `;` (e.g. `1234124;4324234`).
 - ⚡ **High-Performance Audio Core:** ASP.NET Core (.NET 10) Minimal API, PostgreSQL 17 with SCRAM-SHA-256 auth, LibVLC audio engine, and ExoPlayer Media3.
 - 🔒 **Enterprise-Grade Security:** Android Keystore encrypted credentials, JWT tokens with rotating refresh tokens, automated malware screening, and strict Admin Gate access control.
 - 🔐 **Zero-Lockout Password Recovery:** Reset or recover forgotten accounts via the web login modal using your secret server Bootstrap Token, or directly from the host terminal with `sudo irpotify reset-password`.
@@ -108,25 +110,36 @@ docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
 
 ---
 
-### 3. Setting Up the Android App
+### 3. Setting Up the Android App & Fast QR Login
 
-1. Download [**irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) on your Android device and install it.
-2. Open the app and connect using your server's IP/Domain or scan the QR code from the Web Dashboard.
-   * *Local Wi-Fi Note:* If your server and phone are on the same Wi-Fi network without a domain, enter the server's local LAN IP (e.g. `http://192.168.1.xxx:5080`).
-3. Enjoy your library, create custom local playlists, and listen to music seamlessly!
+1. Download and install [**irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) on your Android device.
+2. **Instant QR Login (Recommended):**
+   - Open the Web Dashboard as an administrator and go to **Users**.
+   - Under the **Actions** column for any user, click the **QR Code** icon.
+   - A modal displays the user's personal QR code. You can:
+     - Scan it directly with the irpotify app's built-in camera scanner.
+     - Click **Download PNG** to save the image.
+     - Click **Telegram** or **WhatsApp**: the image is downloaded, copied to your clipboard (ready for instant `Ctrl+V` paste into chats), and messenger opens with a rich OpenGraph image preview card.
+   - The Android app scans the QR code, auto-populates server network routes (LAN & Internet), and claims the user session in under a second!
+3. **Manual Connection:**
+   - Alternatively, type your server base URL and username/password.
+   - *Local Wi-Fi Note:* If your server and phone are on the same Wi-Fi without a public domain, enter the server's local LAN IP (e.g. `http://192.168.1.xxx:5080`).
 
 ---
 
-### 4. Configuring the Telegram Ingestion Bot
+### 4. Configuring the Telegram Ingestion Bot (Multi-Admin Supported)
 
 irpotify allows you to upload songs directly via Telegram:
 1. Create a bot using [@BotFather](https://t.me/BotFather) and copy your **Bot Token**.
 2. Find your personal Telegram numerical ID by messaging [@userinfobot](https://t.me/userinfobot) (e.g. `123456789`).
 3. Log into the irpotify Web Dashboard as Administrator:
    - Navigate to **Settings** → **Telegram**.
-   - Enter your **Bot Token** and **Admin Telegram User ID**.
-   - Enable **Ingestion**.
-4. Send or forward any audio file (MP3, FLAC, M4A, OGG, WAV) to your bot to instantly import it into your library!
+   - Enter your **Bot Token**.
+   - Enter your **Admin Telegram User ID**:
+     > 💡 **Multi-Admin Support:** To authorize multiple administrators to send music and control the bot, separate their numeric user IDs with semicolons (`;`); for example:  
+     > `1234124;4324234;99887766`
+   - Enable **Ingestion** and save.
+4. Any configured admin can now send or forward audio files (MP3, FLAC, M4A, OGG, WAV) to your bot to instantly import them into the library!
 
 ---
 

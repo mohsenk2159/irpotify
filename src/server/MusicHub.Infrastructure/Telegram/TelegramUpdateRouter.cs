@@ -43,12 +43,55 @@ public enum TelegramRouteOutcome
 /// </remarks>
 public static class TelegramBotAdminGate
 {
-    public static bool IsAllowed(TelegramConfiguration? config, long senderId, long chatId)
+    public const string AdminUserIdsSettingKey = "telegram.adminUserIds";
+
+    public static bool IsAllowed(TelegramConfiguration? config, long senderId, long chatId, IEnumerable<long>? adminUserIds = null)
     {
-        if (config?.AdminTelegramUserId is not { } adminUserId) return false;
-        if (senderId == 0 || senderId != adminUserId) return false;
-        if (config.AdminChatId is { } adminChatId && chatId != adminChatId) return false;
-        return true;
+        if (senderId == 0) return false;
+        if (config?.AdminChatId is { } adminChatId && chatId != adminChatId) return false;
+
+        var allowed = ParseAdminIds(adminUserIds, config?.AdminTelegramUserId);
+        if (allowed.Count == 0) return false;
+
+        return allowed.Contains(senderId);
+    }
+
+    public static HashSet<long> ParseAdminIds(string? raw, long? fallbackSingleId = null)
+    {
+        var set = new HashSet<long>();
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            var parts = raw.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var part in parts)
+            {
+                if (long.TryParse(part, out var id) && id > 0)
+                {
+                    set.Add(id);
+                }
+            }
+        }
+        if (set.Count == 0 && fallbackSingleId is { } single && single > 0)
+        {
+            set.Add(single);
+        }
+        return set;
+    }
+
+    public static HashSet<long> ParseAdminIds(IEnumerable<long>? ids, long? fallbackSingleId = null)
+    {
+        var set = new HashSet<long>();
+        if (ids is not null)
+        {
+            foreach (var id in ids)
+            {
+                if (id > 0) set.Add(id);
+            }
+        }
+        if (set.Count == 0 && fallbackSingleId is { } single && single > 0)
+        {
+            set.Add(single);
+        }
+        return set;
     }
 }
 
@@ -197,7 +240,11 @@ public sealed class TelegramUpdateRouter(
             .OrderBy(x => x.UpdatedAt)
             .FirstOrDefaultAsync(ct);
 
-        var allowed = TelegramBotAdminGate.IsAllowed(config, senderId, chatId);
+        var adminIdsSetting = await db.AppSettings.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+        var allowedAdminIds = TelegramBotAdminGate.ParseAdminIds(adminIdsSetting?.Value, config?.AdminTelegramUserId);
+
+        var allowed = TelegramBotAdminGate.IsAllowed(config, senderId, chatId, allowedAdminIds);
 
         // The token is only ever used locally to talk to the Bot API; it is never logged, stored
         // on the access record's diagnostic surface, or echoed into a reply.

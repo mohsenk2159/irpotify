@@ -20,7 +20,9 @@ public static class TelegramEndpoints
         group.MapGet("", async (MusicHubDbContext db, CancellationToken ct) =>
         {
             var config = await db.TelegramConfigurations.AsNoTracking().OrderBy(x => x.UpdatedAt).FirstOrDefaultAsync(ct);
-            return Results.Ok(ToSummary(config));
+            var adminIdsSetting = await db.AppSettings.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+            return Results.Ok(ToSummary(config, adminIdsSetting?.Value));
         });
 
         group.MapPut("", async (TelegramConfigRequest request, ClaimsPrincipal principal, MusicHubDbContext db,
@@ -64,7 +66,57 @@ public static class TelegramEndpoints
             {
                 config.BotTokenProtected = request.BotToken.Length == 0 ? null : protector.Protect(request.BotToken.Trim());
             }
-            if (request.AdminTelegramUserId is not null) config.AdminTelegramUserId = request.AdminTelegramUserId;
+            string? savedAdminIds = null;
+            if (request.AdminTelegramUserIds is not null)
+            {
+                var trimmed = request.AdminTelegramUserIds.Trim();
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    config.AdminTelegramUserId = null;
+                    var setting = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+                    if (setting is not null) db.AppSettings.Remove(setting);
+                }
+                else
+                {
+                    var ids = TelegramBotAdminGate.ParseAdminIds(trimmed);
+                    if (ids.Count > 0)
+                    {
+                        config.AdminTelegramUserId = ids.First();
+                        savedAdminIds = string.Join(";", ids);
+                        var setting = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+                        if (setting is null)
+                        {
+                            db.AppSettings.Add(new AppSetting { Key = TelegramBotAdminGate.AdminUserIdsSettingKey, Value = savedAdminIds, UpdatedAt = DateTimeOffset.UtcNow });
+                        }
+                        else
+                        {
+                            setting.Value = savedAdminIds;
+                            setting.UpdatedAt = DateTimeOffset.UtcNow;
+                        }
+                    }
+                }
+            }
+            else if (request.AdminTelegramUserId is not null)
+            {
+                config.AdminTelegramUserId = request.AdminTelegramUserId;
+                savedAdminIds = request.AdminTelegramUserId.Value.ToString();
+                var setting = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+                if (setting is null)
+                {
+                    db.AppSettings.Add(new AppSetting { Key = TelegramBotAdminGate.AdminUserIdsSettingKey, Value = savedAdminIds, UpdatedAt = DateTimeOffset.UtcNow });
+                }
+                else
+                {
+                    setting.Value = savedAdminIds;
+                    setting.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+            else
+            {
+                var setting = await db.AppSettings.AsNoTracking().SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+                savedAdminIds = setting?.Value;
+            }
+
             if (request.AdminChatId is not null) config.AdminChatId = request.AdminChatId;
             if (request.DestinationGroupId is not null) config.DestinationGroupId = request.DestinationGroupId;
             if (request.DestinationTopicId is not null) config.DestinationTopicId = request.DestinationTopicId;
@@ -93,7 +145,7 @@ public static class TelegramEndpoints
                     config.DestinationGroupId
                 }), RequestHelpers.Ip(http));
             await db.SaveChangesAsync(ct);
-            return Results.Ok(ToSummary(config));
+            return Results.Ok(ToSummary(config, savedAdminIds));
         });
 
         group.MapPost("/test", async (MusicHubDbContext db, TelegramSecretProtector protector, HttpContext http,
@@ -245,8 +297,14 @@ public static class TelegramEndpoints
             if (config is null) return Results.BadRequest(new { error = "Telegram is not configured." });
             if (enabled && string.IsNullOrWhiteSpace(config.BotTokenProtected))
                 return Results.BadRequest(new { error = "A bot token must be stored before enabling ingestion." });
-            if (enabled && config.AdminTelegramUserId is null)
+
+            var adminIdsSetting = await db.AppSettings.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Key == TelegramBotAdminGate.AdminUserIdsSettingKey, ct);
+            var allowedAdminIds = TelegramBotAdminGate.ParseAdminIds(adminIdsSetting?.Value, config.AdminTelegramUserId);
+
+            if (enabled && allowedAdminIds.Count == 0)
                 return Results.BadRequest(new { error = "An administrator Telegram user id is required before enabling ingestion." });
+
             config.IngestionEnabled = enabled;
             config.UpdatedAt = DateTimeOffset.UtcNow;
             config.UpdatedByUserId = principal.GetUserId();
@@ -257,11 +315,12 @@ public static class TelegramEndpoints
         });
     }
 
-    private static object ToSummary(TelegramConfiguration? config) => new
+    private static object ToSummary(TelegramConfiguration? config, string? adminTelegramUserIds = null) => new
     {
         configured = config is not null,
         tokenConfigured = !string.IsNullOrWhiteSpace(config?.BotTokenProtected),
         adminTelegramUserId = config?.AdminTelegramUserId,
+        adminTelegramUserIds = adminTelegramUserIds ?? (config?.AdminTelegramUserId?.ToString()),
         adminChatId = config?.AdminChatId,
         destinationGroupId = config?.DestinationGroupId,
         destinationTopicId = config?.DestinationTopicId,
@@ -278,6 +337,7 @@ public static class TelegramEndpoints
     public sealed record TelegramConfigRequest(
         string? BotToken,
         long? AdminTelegramUserId,
+        string? AdminTelegramUserIds,
         long? AdminChatId,
         long? DestinationGroupId,
         long? DestinationTopicId,

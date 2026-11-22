@@ -115,3 +115,38 @@ export function Icon({ name, size = 20, ...rest }: IconProps) {
     </svg>
   );
 }
+
+export function BrandLogo({ size = 32, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      width={size}
+      height={size}
+      className={['brand-logo-svg', className ?? ''].filter(Boolean).join(' ')}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="50%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#6366f1" />
+        </linearGradient>
+        <linearGradient id="brand-disc" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#1f1f2e" />
+          <stop offset="100%" stopColor="#0f0f17" />
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="14" fill="url(#brand-grad)" />
+      <circle cx="24" cy="24" r="19" fill="url(#brand-disc)" />
+      <circle cx="24" cy="24" r="15" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+      <circle cx="24" cy="24" r="11" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <rect x="14" y="21" width="3" height="6" rx="1.5" fill="#10b981" />
+      <rect x="19" y="16" width="3" height="16" rx="1.5" fill="#06b6d4" />
+      <rect x="24" y="12" width="3" height="24" rx="1.5" fill="#38bdf8" />
+      <rect x="29" y="15" width="3" height="18" rx="1.5" fill="#818cf8" />
+      <rect x="34" y="20" width="3" height="8" rx="1.5" fill="#a78bfa" />
+    </svg>
+  );
+}

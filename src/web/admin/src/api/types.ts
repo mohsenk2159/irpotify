@@ -425,6 +425,7 @@ export interface TelegramSummary {
   configured: boolean;
   tokenConfigured: boolean;
   adminTelegramUserId: number | null;
+  adminTelegramUserIds?: string | null;
   adminChatId: number | null;
   destinationGroupId: number | null;
   destinationTopicId: number | null;
@@ -441,6 +442,7 @@ export interface TelegramSummary {
 export interface TelegramConfigWrite {
   botToken?: string;
   adminTelegramUserId?: number | null;
+  adminTelegramUserIds?: string | null;
   adminChatId?: number | null;
   destinationGroupId?: number | null;
   destinationTopicId?: number | null;
