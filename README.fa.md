@@ -48,9 +48,11 @@
 
 | پلتفرم | لینک دانلود | توضیحات |
 | :--- | :--- | :--- |
-| **اندروید (۸.۰ به بالا)** | [📥 **دانلود فایل irpotify-android.apk** (نسخه ۱.۰.۰)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | نسخه رسمی امضاشده Release با حجم ۴.۷ مگابایت. پیاده‌سازی با Jetpack Compose، پخش آنلاین، دانلود آفلاین و اتصال با QR. |
-| **پلیر ویندوز** | [📥 **دانلود نسخه ویندوز دسکتاپ** (v1.0.0)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) | برنامه پرتابل دسکتاپ با موتور LibVLC (بدون نیاز به نصب پیش‌نیاز). |
-| **سرور ویندوز** | [📥 **دانلود پکیج سرور ویندوز** (v1.0.0)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) | بسته کامل شامل سرویس‌های سرور، دیتابیس و پنل مدیریت برای ویندوز سرور. |
+| **اندروید (۸.۰ به بالا)** | [📥 **دانلود فایل irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | نسخه رسمی امضاشده Release با حجم ۴.۷ مگابایت. رابط کاربری اسپاتیفای، دانلود آفلاین و اتصال با QR. |
+| **نرم‌افزار نصبی پلیر ویندوز** | [💿 **دانلود irpotify-player-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe) | اینستالر نصبی یک‌کلیکه ویندوز با ساخت آیکون دسکتاپ، منوی استارت و بدون نیاز به نصب هیچ پیش‌نیاز. |
+| **پلیر ویندوز (نسخه پرتابل)** | [📦 **دانلود irpotify-player-win-x64-1.0.0.zip**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0.zip) | نسخه بدون نیاز به نصب با موتور صوتی قدرتمند LibVLC (فقط کافیست اکسترکت کنید). |
+| **نرم‌افزار نصبی سرور ویندوز** | [💿 **دانلود irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | برنامه نصب خودکار سرور روی ویندوز شامل دیتابیس PostgreSQL 17، بک‌اند، ورکر، داشبورد و اجرای خودکار. |
+| **سرور ویندوز (پکیج پرتابل)** | [📦 **دانلود irpotify-server-win-x64-1.0.0.zip**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0.zip) | پکیج کامل سرور با فایل‌های اجرایی آماده `install.bat`، `start.bat`، `stop.bat` و `dashboard.bat`. |
 | **سرور لینوکس (داکر)** | فایل `deploy/docker/docker-compose.yml` | استقرار کانتینری بهینه برای معماری‌های x86_64 و ARM64. |
 
 > 🔗 تمامی فایل‌ها و کدهای هش اعتبارسنجی در [صفحه رسمی انتشار (Releases)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) در دسترس هستند.
