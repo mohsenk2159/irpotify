@@ -173,24 +173,6 @@ export function UsersPage() {
     });
   }, [qrData]);
 
-  const copyQrImageToClipboard = (showNotification = false) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob }),
-        ]);
-        if (showNotification) {
-          notify(t('users.qrImageCopied'), 'success');
-        }
-      } catch {
-        // Ignored if browser does not permit clipboard image writing
-      }
-    }, 'image/png');
-  };
-
   const downloadQrImage = () => {
     const canvas = canvasRef.current;
     if (!canvas || !qrUser) return;
@@ -198,28 +180,6 @@ export function UsersPage() {
     a.download = `irpotify-qr-${qrUser.email}.png`;
     a.href = canvas.toDataURL('image/png');
     a.click();
-  };
-
-  const sendTelegram = () => {
-    if (!qrData || !qrUser) return;
-    downloadQrImage();
-    copyQrImageToClipboard(false);
-    const targetUrl = qrData.qrCardUrl || qrData.qrImageUrl || `${window.location.origin}/api/pairing/${encodeURIComponent(qrData.code)}/card`;
-    const caption = `ورود سریع به irpotify - ${qrUser.displayName || qrUser.email}`;
-    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(targetUrl)}&text=${encodeURIComponent(caption)}`;
-    window.open(tgUrl, '_blank', 'noopener,noreferrer');
-    notify(t('users.qrSentNotice'), 'success');
-  };
-
-  const sendWhatsApp = () => {
-    if (!qrData || !qrUser) return;
-    downloadQrImage();
-    copyQrImageToClipboard(false);
-    const targetUrl = qrData.qrCardUrl || qrData.qrImageUrl || `${window.location.origin}/api/pairing/${encodeURIComponent(qrData.code)}/card`;
-    const text = `ورود سریع به irpotify - ${qrUser.displayName || qrUser.email}:\n${targetUrl}`;
-    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
-    notify(t('users.qrSentNotice'), 'success');
   };
 
   const usersQuery = useQuery({ queryKey: ['users'], queryFn: api.users.list });
@@ -883,23 +843,12 @@ export function UsersPage() {
               <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%', height: 'auto' }} />
             </div>
 
-            {/* Primary Action Buttons: Download, Telegram, WhatsApp */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', width: '100%', marginTop: '4px' }}>
+            {/* Primary Action Button: Download QR */}
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: '4px' }}>
               <Button variant="primary" size="sm" icon="arrow-down" onClick={downloadQrImage}>
                 {t('users.downloadQr')}
               </Button>
-              <Button variant="secondary" size="sm" icon="telegram" onClick={sendTelegram}>
-                {t('users.shareTelegram')}
-              </Button>
-              <Button variant="secondary" size="sm" icon="whatsapp" onClick={sendWhatsApp}>
-                {t('users.shareWhatsApp')}
-              </Button>
             </div>
-
-            {/* Sharing Tip */}
-            <p style={{ margin: '0', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center', lineHeight: '1.5', maxWidth: '380px' }}>
-              {t('users.qrSharingTip')}
-            </p>
 
             {/* Device Name Customization */}
             <div style={{ width: '100%', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>

@@ -7,7 +7,6 @@ import {
   Badge,
   Button,
   Card,
-  Checkbox,
   DefinitionList,
   ErrorState,
   Field,
@@ -25,7 +24,6 @@ interface SettingsForm {
   publicBaseUrl: string;
   lanBaseUrl: string;
   detectedLocalIp: string;
-  maintenanceMode: boolean;
   defaultTheme: 'dark' | 'light';
   defaultLanguage: 'en' | 'fa';
   maxUploadMb: string;
@@ -37,7 +35,6 @@ const FALLBACK_FORM: SettingsForm = {
   publicBaseUrl: '',
   lanBaseUrl: '',
   detectedLocalIp: '',
-  maintenanceMode: false,
   defaultTheme: 'dark',
   defaultLanguage: 'en',
   maxUploadMb: '1024',
@@ -61,7 +58,6 @@ export function SettingsPage() {
       publicBaseUrl: values.publicBaseUrl,
       lanBaseUrl: values.lanBaseUrl ?? '',
       detectedLocalIp: values.detectedLocalIp ?? '',
-      maintenanceMode: values.maintenanceMode,
       defaultTheme: values.defaultTheme === 'light' ? 'light' : 'dark',
       defaultLanguage: values.defaultLanguage === 'fa' ? 'fa' : 'en',
       maxUploadMb: String(Math.round((values.maxUploadBytes / MB) * 100) / 100),
@@ -121,7 +117,6 @@ export function SettingsPage() {
       'server.name': form.serverName.trim(),
       'server.publicBaseUrl': publicUrl,
       'server.lanBaseUrl': lanUrl,
-      'server.maintenanceMode': form.maintenanceMode ? 'true' : 'false',
       'ui.defaultTheme': form.defaultTheme,
       'ui.defaultLanguage': form.defaultLanguage,
       'storage.maxUploadBytes': String(Math.round(maxMb * MB)),
@@ -200,16 +195,7 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.75rem' }}>
-                <Checkbox
-                  label={t('settings.maintenance')}
-                  description={t('settings.maintenanceHint')}
-                  checked={form.maintenanceMode}
-                  onChange={(event) => setForm((current) => ({ ...current, maintenanceMode: event.target.checked }))}
-                />
-              </div>
-
-              <div className="form-grid two">
+              <div className="form-grid two" style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.75rem' }}>
                 <Field label={t('settings.defaultTheme')} htmlFor="settings-theme">
                   <Select
                     id="settings-theme"
