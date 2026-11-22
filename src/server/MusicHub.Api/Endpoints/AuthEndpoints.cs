@@ -182,6 +182,10 @@ public static class UserEndpoints
             if ((request.Password ?? string.Empty).Length < 12) return Results.BadRequest(new { error = "Password must be at least 12 characters." });
             if (request.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow)
                 return Results.BadRequest(new { error = "Expiry date must be in the future." });
+            if (request.ListenQuotaSeconds is { } createListenQuota && (createListenQuota < 0 || createListenQuota > MaxListenQuotaSeconds))
+                return Results.BadRequest(new { error = "Listening allowance must be between 0 (unlimited) and 87600 hours." });
+            if (request.QuotaBytes is { } createQuota && (createQuota < 0 || createQuota > 100L * 1024 * 1024 * 1024 * 1024))
+                return Results.BadRequest(new { error = "Storage quota must be between 0 and 100 TB." });
 
             var roleName = RoleNames.All.Contains(request.Role) ? request.Role! : RoleNames.Listener;
             var role = await db.Roles.SingleAsync(x => x.Name == roleName, ct);
@@ -191,10 +195,10 @@ public static class UserEndpoints
                 NormalizedEmail = email,
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? email : request.DisplayName.Trim(),
                 PasswordHash = MusicHub.Infrastructure.Security.PasswordHasher.Hash(request.Password!),
-                QuotaBytes = 0,
+                QuotaBytes = request.QuotaBytes is { } qb ? Math.Max(0, qb) : 0,
                 CanUsePlayer = request.CanUsePlayer ?? true,
                 ExpiresAt = request.ExpiresAt,
-                ListenQuotaSeconds = 0
+                ListenQuotaSeconds = request.ListenQuotaSeconds is { } lq ? Math.Max(0, lq) : 0
             };
             user.UserRoles.Add(new UserRole { User = user, RoleId = role.Id });
             db.Users.Add(user);

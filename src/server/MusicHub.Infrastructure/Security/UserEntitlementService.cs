@@ -70,11 +70,27 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
             return EntitlementResult.Denied(DeactivationReasons.Expired);
         }
 
+        if (user.ListenQuotaSeconds > 0 && user.ListenSecondsUsed >= user.ListenQuotaSeconds)
+        {
+            await DeactivateAsync(user.Id, DeactivationReasons.ListeningQuota, ct);
+            return EntitlementResult.Denied(DeactivationReasons.ListeningQuota);
+        }
+
+        if (checkStorage && user.QuotaBytes > 0)
+        {
+            var used = await GetStorageUsedBytesAsync(user.Id, ct);
+            if (used >= user.QuotaBytes)
+            {
+                await DeactivateAsync(user.Id, DeactivationReasons.StorageQuota, ct);
+                return EntitlementResult.Denied(DeactivationReasons.StorageQuota);
+            }
+        }
+
         return EntitlementResult.AllowedResult;
     }
 
     /// <summary>
-    /// Adds reported playback time to the user's statistics and verifies the account has not expired.
+    /// Adds reported playback time to the user's statistics and verifies the account has not expired or exceeded quota.
     /// </summary>
     public async Task<EntitlementResult> ConsumeListeningTimeAsync(Guid userId, long seconds, CancellationToken ct)
     {
@@ -95,9 +111,16 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
             return EntitlementResult.Denied(DeactivationReasons.Expired);
         }
 
+        var newUsed = user.ListenSecondsUsed + seconds;
         await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(s => s
-            .SetProperty(x => x.ListenSecondsUsed, x => x.ListenSecondsUsed + seconds)
+            .SetProperty(x => x.ListenSecondsUsed, newUsed)
             .SetProperty(x => x.UpdatedAt, now), ct);
+
+        if (user.ListenQuotaSeconds > 0 && newUsed >= user.ListenQuotaSeconds)
+        {
+            await DeactivateAsync(userId, DeactivationReasons.ListeningQuota, ct);
+            return EntitlementResult.Denied(DeactivationReasons.ListeningQuota);
+        }
 
         return EntitlementResult.AllowedResult;
     }
@@ -146,6 +169,7 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
     public async Task<int> EnforceAllAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
+        var deactivated = 0;
 
         var expiredUserIds = await db.Users.AsNoTracking()
             .Where(x => x.IsActive)
@@ -154,14 +178,31 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
             .Select(x => x.Id)
             .ToListAsync(ct);
 
-        if (expiredUserIds.Count == 0) return 0;
-
-        var deactivated = 0;
-        foreach (var userId in expiredUserIds)
+        if (expiredUserIds.Count > 0)
         {
-            ct.ThrowIfCancellationRequested();
-            await DeactivateAsync(userId, DeactivationReasons.Expired, ct);
-            deactivated++;
+            foreach (var userId in expiredUserIds)
+            {
+                ct.ThrowIfCancellationRequested();
+                await DeactivateAsync(userId, DeactivationReasons.Expired, ct);
+                deactivated++;
+            }
+        }
+
+        var listenQuotaUserIds = await db.Users.AsNoTracking()
+            .Where(x => x.IsActive)
+            .Where(x => !x.UserRoles.Any(r => r.Role.Name == RoleNames.Administrator))
+            .Where(x => x.ListenQuotaSeconds > 0 && x.ListenSecondsUsed >= x.ListenQuotaSeconds)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+
+        if (listenQuotaUserIds.Count > 0)
+        {
+            foreach (var userId in listenQuotaUserIds)
+            {
+                ct.ThrowIfCancellationRequested();
+                await DeactivateAsync(userId, DeactivationReasons.ListeningQuota, ct);
+                deactivated++;
+            }
         }
 
         if (deactivated > 0)
