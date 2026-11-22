@@ -173,6 +173,7 @@ fun AuthFlow(container: AppContainer, signedOut: SessionState.SignedOut) {
                     onPassword = viewModel::updatePassword,
                     onDevice = viewModel::updateDeviceName,
                     onSubmit = viewModel::login,
+                    onScan = viewModel::openScanner,
                 )
                 TextButton(onClick = { viewModel.setMode(AuthMode.PAIRING) }) {
                     Text(stringResource(R.string.action_use_pairing))
@@ -316,7 +317,15 @@ private fun LoginForm(
     onPassword: (String) -> Unit,
     onDevice: (String) -> Unit,
     onSubmit: () -> Unit,
+    onScan: () -> Unit,
 ) {
+    OutlinedButton(
+        onClick = onScan,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.action_scan_qr))
+    }
+    Spacer(Modifier.height(16.dp))
     OutlinedTextField(
         value = state.lanServerUrl,
         onValueChange = onLanServer,

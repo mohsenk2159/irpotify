@@ -114,7 +114,11 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
             is PairingParseResult.Success -> {
                 _state.value = _state.value.copy(
                     serverUrl = result.payload.serverUrl,
+                    lanServerUrl = result.payload.lanServerUrl ?: _state.value.lanServerUrl,
+                    internetServerUrl = result.payload.internetServerUrl ?: _state.value.internetServerUrl,
                     pairingCode = result.payload.code,
+                    deviceName = result.payload.deviceName ?: _state.value.deviceName,
+                    email = result.payload.userEmail ?: _state.value.email,
                     scannerOpen = false,
                     error = null,
                 )
@@ -144,6 +148,8 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
                 allowCleartext = container.settingsStore.settings.value.allowCleartext,
                 code = current.pairingCode,
                 deviceName = current.deviceName.ifBlank { container.deviceIdentity.displayName },
+                lanBaseUrl = current.lanServerUrl.takeIf { it.isNotBlank() },
+                internetBaseUrl = current.internetServerUrl.takeIf { it.isNotBlank() },
             )
             _state.value = _state.value.copy(
                 busy = false,

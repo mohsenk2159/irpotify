@@ -229,9 +229,16 @@ class SessionManager(
         allowCleartext: Boolean,
         code: String,
         deviceName: String,
+        lanBaseUrl: String? = null,
+        internetBaseUrl: String? = null,
     ): Result<Unit> {
         settingsStore.awaitLoaded()
-        val validation = LocalNetworkPolicy.validateBaseUrl(rawServerUrl, allowCleartext)
+        val targetServerUrl = if (!lanBaseUrl.isNullOrBlank() && probeServer(lanBaseUrl, allowCleartext)) {
+            lanBaseUrl
+        } else {
+            rawServerUrl
+        }
+        val validation = LocalNetworkPolicy.validateBaseUrl(targetServerUrl, allowCleartext)
         if (validation is UrlValidationResult.Invalid) {
             return Result.failure(ServerUrlException(validation.reason))
         }
@@ -242,7 +249,13 @@ class SessionManager(
                     PairingClaimRequest(code = code.trim(), deviceName = deviceName),
                 )
             }
-            persistSession(valid.baseUrl, valid.cleartext, response)
+            persistSession(
+                baseUrl = valid.baseUrl,
+                cleartext = valid.cleartext,
+                response = response,
+                lanBaseUrl = lanBaseUrl?.trim()?.takeIf { it.isNotBlank() },
+                internetBaseUrl = internetBaseUrl?.trim()?.takeIf { it.isNotBlank() } ?: rawServerUrl.trim().takeIf { it.isNotBlank() },
+            )
             Result.success(Unit)
         } catch (exception: ApiCallException) {
             Result.failure(exception)

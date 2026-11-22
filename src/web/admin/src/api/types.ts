@@ -403,6 +403,10 @@ export interface SystemSettings {
   values: {
     serverName: string;
     publicBaseUrl: string;
+    publicUrlEnabled?: boolean;
+    lanBaseUrl?: string;
+    lanUrlEnabled?: boolean;
+    detectedLocalIp?: string;
     maintenanceMode: boolean;
     defaultTheme: string;
     defaultLanguage: string;

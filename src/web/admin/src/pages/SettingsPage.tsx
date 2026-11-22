@@ -23,6 +23,10 @@ const MB = 1024 * 1024;
 interface SettingsForm {
   serverName: string;
   publicBaseUrl: string;
+  publicUrlEnabled: boolean;
+  lanBaseUrl: string;
+  lanUrlEnabled: boolean;
+  detectedLocalIp: string;
   maintenanceMode: boolean;
   defaultTheme: 'dark' | 'light';
   defaultLanguage: 'en' | 'fa';
@@ -33,6 +37,10 @@ interface SettingsForm {
 const FALLBACK_FORM: SettingsForm = {
   serverName: '',
   publicBaseUrl: '',
+  publicUrlEnabled: true,
+  lanBaseUrl: '',
+  lanUrlEnabled: true,
+  detectedLocalIp: '',
   maintenanceMode: false,
   defaultTheme: 'dark',
   defaultLanguage: 'en',
@@ -55,6 +63,10 @@ export function SettingsPage() {
     setForm({
       serverName: values.serverName,
       publicBaseUrl: values.publicBaseUrl,
+      publicUrlEnabled: values.publicUrlEnabled ?? true,
+      lanBaseUrl: values.lanBaseUrl ?? '',
+      lanUrlEnabled: values.lanUrlEnabled ?? true,
+      detectedLocalIp: values.detectedLocalIp ?? '',
       maintenanceMode: values.maintenanceMode,
       defaultTheme: values.defaultTheme === 'light' ? 'light' : 'dark',
       defaultLanguage: values.defaultLanguage === 'fa' ? 'fa' : 'en',
@@ -91,15 +103,32 @@ export function SettingsPage() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
+
+    const publicUrl = form.publicBaseUrl.trim();
+    if (publicUrl && !publicUrl.startsWith('http://') && !publicUrl.startsWith('https://')) {
+      setFormError(t('settings.urlProtocolRequired'));
+      return;
+    }
+
+    const lanUrl = form.lanBaseUrl.trim();
+    if (lanUrl && !lanUrl.startsWith('http://') && !lanUrl.startsWith('https://')) {
+      setFormError(t('settings.urlProtocolRequired'));
+      return;
+    }
+
     const maxMb = Number(form.maxUploadMb);
     const streams = Number(form.maxConcurrentStreamsPerUser);
     if (!Number.isFinite(maxMb) || maxMb <= 0 || !Number.isFinite(streams) || streams <= 0 || !Number.isInteger(streams)) {
       setFormError(t('settings.invalidNumbers'));
       return;
     }
+
     saveMutation.mutate({
       'server.name': form.serverName.trim(),
-      'server.publicBaseUrl': form.publicBaseUrl.trim(),
+      'server.publicBaseUrl': publicUrl,
+      'server.publicUrlEnabled': form.publicUrlEnabled ? 'true' : 'false',
+      'server.lanBaseUrl': lanUrl,
+      'server.lanUrlEnabled': form.lanUrlEnabled ? 'true' : 'false',
       'server.maintenanceMode': form.maintenanceMode ? 'true' : 'false',
       'ui.defaultTheme': form.defaultTheme,
       'ui.defaultLanguage': form.defaultLanguage,
@@ -143,22 +172,61 @@ export function SettingsPage() {
                   onChange={(event) => setForm((current) => ({ ...current, serverName: event.target.value }))}
                 />
               </Field>
-              <Field label={t('settings.publicBaseUrl')} htmlFor="settings-public-url" hint={t('settings.publicBaseUrlHint')}>
-                <Input
-                  id="settings-public-url"
-                  type="url"
-                  inputMode="url"
-                  placeholder="https://music.example.com"
-                  value={form.publicBaseUrl}
-                  onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
+
+              {/* Network & Remote Connection Section */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 0.35rem' }}>
+                  {t('settings.networkTitle')}
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
+                  {t('settings.networkSubtitle')}
+                  {form.detectedLocalIp ? ` (${t('settings.detectedLocalIp', { ip: form.detectedLocalIp })})` : ''}
+                </p>
+
+                <Field label={t('settings.lanBaseUrl')} htmlFor="settings-lan-url" hint={t('settings.lanBaseUrlHint')}>
+                  <Input
+                    id="settings-lan-url"
+                    type="url"
+                    inputMode="url"
+                    placeholder="http://192.168.1.50:5080"
+                    value={form.lanBaseUrl}
+                    onChange={(event) => setForm((current) => ({ ...current, lanBaseUrl: event.target.value }))}
+                  />
+                </Field>
+                <Checkbox
+                  label={t('settings.lanUrlEnabled')}
+                  checked={form.lanUrlEnabled}
+                  onChange={(event) => setForm((current) => ({ ...current, lanUrlEnabled: event.target.checked }))}
                 />
-              </Field>
-              <Checkbox
-                label={t('settings.maintenance')}
-                description={t('settings.maintenanceHint')}
-                checked={form.maintenanceMode}
-                onChange={(event) => setForm((current) => ({ ...current, maintenanceMode: event.target.checked }))}
-              />
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <Field label={t('settings.publicBaseUrl')} htmlFor="settings-public-url" hint={t('settings.publicBaseUrlHint')}>
+                    <Input
+                      id="settings-public-url"
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://music.example.com or http://203.0.113.10:5080"
+                      value={form.publicBaseUrl}
+                      onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
+                    />
+                  </Field>
+                  <Checkbox
+                    label={t('settings.publicUrlEnabled')}
+                    checked={form.publicUrlEnabled}
+                    onChange={(event) => setForm((current) => ({ ...current, publicUrlEnabled: event.target.checked }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.75rem' }}>
+                <Checkbox
+                  label={t('settings.maintenance')}
+                  description={t('settings.maintenanceHint')}
+                  checked={form.maintenanceMode}
+                  onChange={(event) => setForm((current) => ({ ...current, maintenanceMode: event.target.checked }))}
+                />
+              </div>
+
               <div className="form-grid two">
                 <Field label={t('settings.defaultTheme')} htmlFor="settings-theme">
                   <Select

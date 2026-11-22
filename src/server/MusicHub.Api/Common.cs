@@ -132,6 +132,51 @@ public static class PublicUrl
     }
 }
 
+public static class NetworkAddressDetector
+{
+    public static string DetectLocalIPv4()
+    {
+        try
+        {
+            using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
+            socket.Connect("8.8.8.8", 65530);
+            if (socket.LocalEndPoint is System.Net.IPEndPoint endPoint)
+            {
+                var ip = endPoint.Address.ToString();
+                if (!string.IsNullOrWhiteSpace(ip) && ip != "0.0.0.0") return ip;
+            }
+        }
+        catch
+        {
+            // Socket routing probe failed (e.g. offline machine); fallback to scanning network interfaces
+        }
+
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up ||
+                    ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                {
+                    continue;
+                }
+
+                foreach (var ip in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                        !System.Net.IPAddress.IsLoopback(ip.Address))
+                    {
+                        return ip.Address.ToString();
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return "127.0.0.1";
+    }
+}
+
 public sealed class ApiException(int statusCode, string message) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;

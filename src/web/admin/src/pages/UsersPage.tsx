@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import QRCode from 'qrcode';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
 import type { RoleName, UserSummary } from '../api/types';
@@ -131,6 +132,99 @@ export function UsersPage() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<UserSummary | null>(null);
 
+  // QR Code fast pairing modal state
+  const [qrUser, setQrUser] = useState<UserSummary | null>(null);
+  const [qrData, setQrData] = useState<{
+    qrPayload: string;
+    publicServerUrl: string | null;
+    lanServerUrl: string | null;
+    effectiveServerUrl: string;
+    expiresAt: string;
+    deviceName: string;
+  } | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrDeviceName, setQrDeviceName] = useState('');
+  const [copiedImage, setCopiedImage] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const openQrModal = async (target: UserSummary, customDeviceName?: string) => {
+    setQrUser(target);
+    const initialDevice = customDeviceName || `${target.displayName}'s Android Device`;
+    setQrDeviceName(initialDevice);
+    setQrLoading(true);
+    setCopiedImage(false);
+    try {
+      const res = await api.users.pairingQr(target.id, { deviceName: initialDevice });
+      setQrData({
+        qrPayload: res.qrPayload,
+        publicServerUrl: res.publicServerUrl,
+        lanServerUrl: res.lanServerUrl,
+        effectiveServerUrl: res.effectiveServerUrl,
+        expiresAt: res.expiresAt,
+        deviceName: res.deviceName,
+      });
+    } catch (cause) {
+      notify(errorMessage(cause, t('common.error')), 'error');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!qrData?.qrPayload || !canvasRef.current) return;
+    void QRCode.toCanvas(canvasRef.current, qrData.qrPayload, {
+      width: 280,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    });
+  }, [qrData]);
+
+  const copyQrImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob }),
+        ]);
+        setCopiedImage(true);
+        notify(t('users.qrImageCopied'), 'success');
+        setTimeout(() => setCopiedImage(false), 3000);
+      } catch (err) {
+        notify(errorMessage(err, 'Failed to copy image to clipboard'), 'error');
+      }
+    }, 'image/png');
+  };
+
+  const downloadQrImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !qrUser) return;
+    const a = document.createElement('a');
+    a.download = `irpotify-qr-${qrUser.email}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+
+  const shareQr = async () => {
+    if (!qrData || !qrUser) return;
+    const title = `irpotify Login QR - ${qrUser.displayName}`;
+    const text = `irpotify Fast Login for ${qrUser.displayName}:\n${qrData.qrPayload}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url: qrData.qrPayload });
+      } catch {
+        // Ignored or cancelled by user
+      }
+    } else {
+      await navigator.clipboard.writeText(qrData.qrPayload);
+      notify(t('users.qrImageCopied'), 'success');
+    }
+  };
+
   const usersQuery = useQuery({ queryKey: ['users'], queryFn: api.users.list });
   const historyQuery = useQuery({
     queryKey: ['users', historyFor?.id, 'login-history'],
@@ -175,11 +269,28 @@ export function UsersPage() {
         listenQuotaSeconds,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
       setCreateOpen(false);
       setCreateForm(EMPTY_CREATE);
       notify(t('users.created'), 'success');
+      void openQrModal({
+        id: data.id,
+        email: variables.email.trim(),
+        displayName: variables.displayName.trim(),
+        roles: [variables.role],
+        isActive: true,
+        quotaBytes: 0,
+        storageUsedBytes: 0,
+        canUsePlayer: variables.canUsePlayer,
+        listenQuotaSeconds: 0,
+        listenSecondsUsed: 0,
+        expiresAt: null,
+        deactivatedAt: null,
+        deactivationReason: null,
+        createdAt: new Date().toISOString(),
+        lastLoginAt: null,
+      });
     },
     onError: (error) => setCreateError(errorMessage(error, t('common.error'))),
   });
@@ -438,6 +549,7 @@ export function UsersPage() {
                           }}
                         />
                         <IconButton icon="sessions" label={t('users.historyTitle')} onClick={() => setHistoryFor(target)} />
+                        <IconButton icon="qr" label={t('users.qrCode')} onClick={() => void openQrModal(target)} />
                       </div>
                     </td>
                   </tr>
@@ -730,6 +842,143 @@ export function UsersPage() {
               </table>
             </div>
           )
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={qrUser !== null}
+        title={t('users.qrModalTitle', { name: qrUser?.displayName || qrUser?.email || '' })}
+        onClose={() => setQrUser(null)}
+        size="md"
+        footer={
+          <Button variant="secondary" onClick={() => setQrUser(null)}>
+            {t('common.close')}
+          </Button>
+        }
+      >
+        <p style={{ margin: '0 0 1rem', color: 'var(--text-muted)', fontSize: '13px' }}>
+          {t('users.qrModalSubtitle')}
+        </p>
+
+        {qrLoading ? (
+          <LoadingState />
+        ) : qrData ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+            {/* White card container for crisp QR scanning */}
+            <div
+              style={{
+                background: '#ffffff',
+                padding: '16px',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                display: 'inline-flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%', height: 'auto' }} />
+            </div>
+
+            {/* Quick Actions Row */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', width: '100%' }}>
+              <Button
+                variant={copiedImage ? 'primary' : 'secondary'}
+                size="sm"
+                icon="check"
+                onClick={copyQrImage}
+              >
+                {copiedImage ? t('common.confirm') : t('users.copyQrImage')}
+              </Button>
+              <Button variant="secondary" size="sm" icon="external" onClick={() => void shareQr()}>
+                {t('users.shareQr')}
+              </Button>
+              <Button variant="secondary" size="sm" icon="arrow-down" onClick={downloadQrImage}>
+                {t('users.downloadQr')}
+              </Button>
+            </div>
+
+            {/* Direct Messenger Share Links */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('users.shareQr')}:</span>
+              <a
+                href={`https://t.me/share/url?url=${encodeURIComponent(qrData.qrPayload)}&text=${encodeURIComponent('irpotify Fast Login for ' + (qrUser?.displayName || 'user'))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-secondary btn-sm"
+                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
+              >
+                {t('users.shareTelegram')}
+              </a>
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent('irpotify Fast Login link for ' + (qrUser?.displayName || '') + ':\n' + qrData.qrPayload)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-secondary btn-sm"
+                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
+              >
+                {t('users.shareWhatsApp')}
+              </a>
+              <a
+                href={`mailto:?subject=${encodeURIComponent('Your irpotify Login QR Code')}&body=${encodeURIComponent('Open or scan this link in the irpotify Android app:\n' + qrData.qrPayload)}`}
+                className="btn btn-secondary btn-sm"
+                style={{ textDecoration: 'none', fontSize: '12px', padding: '4px 10px' }}
+              >
+                {t('users.shareEmail')}
+              </a>
+            </div>
+
+            {/* Device Name Customization */}
+            <div style={{ width: '100%', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <Field label={t('users.deviceName')} htmlFor="qr-device-name" hint={t('users.deviceNameHint')}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Input
+                    id="qr-device-name"
+                    value={qrDeviceName}
+                    onChange={(e) => setQrDeviceName(e.target.value)}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="refresh"
+                    onClick={() => qrUser && void openQrModal(qrUser, qrDeviceName)}
+                  >
+                    {t('users.regenerateQr')}
+                  </Button>
+                </div>
+              </Field>
+            </div>
+
+            {/* Network Endpoints Information */}
+            <div
+              style={{
+                width: '100%',
+                background: 'var(--surface-2)',
+                padding: '12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
+            >
+              <div style={{ fontWeight: 600, color: 'var(--text)' }}>{t('users.serverAddresses')}:</div>
+              {qrData.lanServerUrl ? (
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{t('users.lanAddress')}: </span>
+                  <code style={{ fontSize: '11px' }}>{qrData.lanServerUrl}</code>
+                </div>
+              ) : null}
+              {qrData.publicServerUrl ? (
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{t('users.publicAddress')}: </span>
+                  <code style={{ fontSize: '11px' }}>{qrData.publicServerUrl}</code>
+                </div>
+              ) : null}
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>
+                {t('users.qrNotice')}
+              </div>
+            </div>
+          </div>
         ) : null}
       </Modal>
 

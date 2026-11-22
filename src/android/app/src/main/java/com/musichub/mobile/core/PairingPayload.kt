@@ -8,6 +8,10 @@ data class PairingPayload(
     val serverUrl: String,
     val code: String,
     val expiresAtEpochSeconds: Long?,
+    val lanServerUrl: String? = null,
+    val internetServerUrl: String? = null,
+    val deviceName: String? = null,
+    val userEmail: String? = null,
 )
 
 enum class PairingParseFailure {
@@ -44,7 +48,10 @@ object PairingPayloadParser {
 
         val parameters = parseQuery(uri.rawQuery)
         val server = parameters["server"]?.trim().orEmpty()
+        val lan = parameters["lan"]?.trim()?.takeIf { it.isNotBlank() }
         val code = parameters["code"]?.trim().orEmpty()
+        val device = parameters["device"]?.trim()?.takeIf { it.isNotBlank() }
+        val email = parameters["email"]?.trim()?.takeIf { it.isNotBlank() }
         if (server.isEmpty() || code.isEmpty()) {
             return PairingParseResult.Failure(PairingParseFailure.MISSING_FIELDS)
         }
@@ -54,7 +61,17 @@ object PairingPayloadParser {
             return PairingParseResult.Failure(PairingParseFailure.EXPIRED)
         }
 
-        return PairingParseResult.Success(PairingPayload(server, code, expires))
+        return PairingParseResult.Success(
+            PairingPayload(
+                serverUrl = server,
+                code = code,
+                expiresAtEpochSeconds = expires,
+                lanServerUrl = lan,
+                internetServerUrl = server.takeIf { it.isNotBlank() },
+                deviceName = device,
+                userEmail = email,
+            ),
+        )
     }
 
     private fun parseQuery(rawQuery: String?): Map<String, String> {

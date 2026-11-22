@@ -199,21 +199,31 @@ public static class SettingsEndpoints
 
     private static readonly HashSet<string> AllowedKeys =
     [
-        "server.name", "server.publicBaseUrl", "server.maintenanceMode", "ui.defaultTheme", "ui.defaultLanguage",
+        "server.name", "server.publicBaseUrl", "server.publicUrlEnabled", "server.lanBaseUrl", "server.lanUrlEnabled",
+        "server.maintenanceMode", "ui.defaultTheme", "ui.defaultLanguage",
         "storage.maxUploadBytes", MaxConcurrentPerUserKey, "telegram.enabled"
     ];
 
     public static void MapSettingsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/admin/settings", [Authorize(Policy = "Admin")] async (MusicHubDbContext db, IConfiguration config, IOptions<StorageOptions> storage, CancellationToken ct) =>
+        app.MapGet("/api/admin/settings", [Authorize(Policy = "Admin")] async (MusicHubDbContext db, IConfiguration config, IOptions<StorageOptions> storage, HttpContext http, CancellationToken ct) =>
         {
             var stored = await db.AppSettings.AsNoTracking().Where(x => AllowedKeys.Contains(x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+            var localIp = NetworkAddressDetector.DetectLocalIPv4();
+            var defaultLanPort = Environment.GetEnvironmentVariable("MUSICHUB_LAN_PORT") ?? "5080";
+            var defaultLanUrl = $"http://{localIp}:{defaultLanPort}";
+            var defaultPublicUrl = Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty;
+
             return Results.Ok(new
             {
                 values = new
                 {
                     serverName = Get(stored, "server.name", config["Server:Name"] ?? "MusicHub Enterprise"),
-                    publicBaseUrl = Get(stored, "server.publicBaseUrl", config["Server:PublicBaseUrl"] ?? string.Empty),
+                    publicBaseUrl = Get(stored, "server.publicBaseUrl", defaultPublicUrl),
+                    publicUrlEnabled = !stored.TryGetValue("server.publicUrlEnabled", out var pEn) || pEn != "false",
+                    lanBaseUrl = Get(stored, "server.lanBaseUrl", defaultLanUrl),
+                    lanUrlEnabled = !stored.TryGetValue("server.lanUrlEnabled", out var lEn) || lEn != "false",
+                    detectedLocalIp = localIp,
                     maintenanceMode = bool.TryParse(Get(stored, "server.maintenanceMode", "false"), out var maintenance) && maintenance,
                     defaultTheme = Get(stored, "ui.defaultTheme", "dark"),
                     defaultLanguage = Get(stored, "ui.defaultLanguage", "en"),
@@ -234,6 +244,24 @@ public static class SettingsEndpoints
         {
             var rejected = values.Keys.Where(x => !AllowedKeys.Contains(x)).ToList();
             if (rejected.Count > 0) return Results.BadRequest(new { error = "Unknown settings keys.", rejected });
+
+            if (values.TryGetValue("server.publicBaseUrl", out var pUrl) && !string.IsNullOrWhiteSpace(pUrl))
+            {
+                var pTrim = pUrl.Trim();
+                if (!pTrim.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !pTrim.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.BadRequest(new { error = "Public Server URL must start with http:// or https://" });
+                }
+            }
+            if (values.TryGetValue("server.lanBaseUrl", out var lUrl) && !string.IsNullOrWhiteSpace(lUrl))
+            {
+                var lTrim = lUrl.Trim();
+                if (!lTrim.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !lTrim.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Results.BadRequest(new { error = "Local LAN Server URL must start with http:// or https://" });
+                }
+            }
+
             foreach (var (key, value) in values)
             {
                 var existing = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == key, ct);

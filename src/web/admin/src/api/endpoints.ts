@@ -83,6 +83,19 @@ export const api = {
     resetPassword: (id: string, newPassword: string) =>
       http.request<void>(`/api/users/${id}/reset-password`, { method: 'POST', json: { newPassword } }),
     loginHistory: (id: string) => http.request<LoginHistoryEntry[]>(`/api/users/${id}/login-history`),
+    pairingQr: (id: string, payload?: { deviceName?: string; expiryDays?: number }) =>
+      http.request<{
+        userId: string;
+        email: string;
+        displayName: string;
+        deviceName: string;
+        code: string;
+        expiresAt: string;
+        publicServerUrl: string | null;
+        lanServerUrl: string | null;
+        effectiveServerUrl: string;
+        qrPayload: string;
+      }>(`/api/users/${id}/pairing-qr`, { method: 'POST', json: payload ?? {} }),
   },
   tracks: {
     list: (query: TrackQuery) => http.request<Paged<Track>>('/api/tracks', { query: { ...query } }),

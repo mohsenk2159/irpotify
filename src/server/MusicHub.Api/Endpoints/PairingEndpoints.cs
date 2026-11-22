@@ -86,8 +86,94 @@ public static class PairingEndpoints
                 .ToListAsync(ct);
             return Results.Ok(rows);
         });
+
+        app.MapPost("/api/users/{id:guid}/pairing-qr", [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")] async (Guid id, UserPairingQrRequest? request, ClaimsPrincipal principal, MusicHubDbContext db, HttpContext http, IConfiguration config, CancellationToken ct) =>
+        {
+            var targetUser = await db.Users.SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (targetUser is null) return Results.NotFound(new { error = "User not found." });
+
+            var deviceName = !string.IsNullOrWhiteSpace(request?.DeviceName)
+                ? request.DeviceName.Trim()
+                : $"{targetUser.DisplayName}'s Device";
+
+            var days = Math.Clamp(request?.ExpiryDays ?? 30, 1, 365);
+            var expiresAt = DateTimeOffset.UtcNow.AddDays(days);
+            var code = CryptoUtil.Base64UrlEncode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+
+            var pairing = new MusicHub.Domain.PairingSession
+            {
+                CodeHash = CryptoUtil.Sha256Hex(code),
+                UserId = targetUser.Id,
+                DeviceName = deviceName,
+                ExpiresAt = expiresAt
+            };
+            db.PairingSessions.Add(pairing);
+            AuditWriter.Add(db, principal, "user.pairing_qr", "User", targetUser.Id.ToString(), null, RequestHelpers.Ip(http));
+            await db.SaveChangesAsync(ct);
+
+            var stored = await db.AppSettings.AsNoTracking()
+                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.publicUrlEnabled" || x.Key == "server.lanBaseUrl" || x.Key == "server.lanUrlEnabled")
+                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+
+            var localIp = NetworkAddressDetector.DetectLocalIPv4();
+            var defaultLanPort = Environment.GetEnvironmentVariable("MUSICHUB_LAN_PORT") ?? "5080";
+            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
+                ? storedLan.Trim().TrimEnd('/')
+                : $"http://{localIp}:{defaultLanPort}";
+            var lanEnabled = !stored.TryGetValue("server.lanUrlEnabled", out var lEn) || lEn != "false";
+
+            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
+                ? storedPub.Trim().TrimEnd('/')
+                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
+
+            if (string.IsNullOrWhiteSpace(publicUrl))
+            {
+                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
+            }
+            var publicEnabled = !stored.TryGetValue("server.publicUrlEnabled", out var pEn) || pEn != "false";
+
+            var effectiveServer = publicEnabled && !string.IsNullOrWhiteSpace(publicUrl)
+                ? publicUrl
+                : (lanEnabled ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+
+            var effectiveLan = lanEnabled ? lanUrl : string.Empty;
+
+            var queryParams = new List<string>
+            {
+                $"server={Uri.EscapeDataString(effectiveServer)}",
+                $"code={Uri.EscapeDataString(code)}",
+                $"expires={expiresAt.ToUnixTimeSeconds()}"
+            };
+            if (!string.IsNullOrWhiteSpace(effectiveLan))
+            {
+                queryParams.Add($"lan={Uri.EscapeDataString(effectiveLan)}");
+            }
+            if (!string.IsNullOrWhiteSpace(deviceName))
+            {
+                queryParams.Add($"device={Uri.EscapeDataString(deviceName)}");
+            }
+            queryParams.Add($"email={Uri.EscapeDataString(targetUser.Email)}");
+            queryParams.Add($"name={Uri.EscapeDataString(targetUser.DisplayName)}");
+
+            var qrPayload = $"musichub://pair?{string.Join("&", queryParams)}";
+
+            return Results.Ok(new
+            {
+                userId = targetUser.Id,
+                email = targetUser.Email,
+                displayName = targetUser.DisplayName,
+                deviceName,
+                code,
+                expiresAt,
+                publicServerUrl = publicEnabled ? publicUrl : null,
+                lanServerUrl = lanEnabled ? lanUrl : null,
+                effectiveServerUrl = effectiveServer,
+                qrPayload
+            });
+        });
     }
 
     public sealed record PairingCreateRequest(string? DeviceName);
     public sealed record PairingClaimRequest(string? Code, string? DeviceName);
+    public sealed record UserPairingQrRequest(string? DeviceName, int? ExpiryDays);
 }
