@@ -15,18 +15,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -47,6 +52,7 @@ import com.musichub.mobile.R
 import com.musichub.mobile.data.AppContainer
 import com.musichub.mobile.data.library.HomeData
 import com.musichub.mobile.data.local.AlbumEntity
+import com.musichub.mobile.data.local.ArtistEntity
 import com.musichub.mobile.data.local.TrackEntity
 import com.musichub.mobile.ui.components.ArtworkImage
 import com.musichub.mobile.ui.components.FavoriteButton
@@ -65,41 +71,324 @@ fun HomeScreen(
         factory = viewModelFactory { initializer { HomeViewModel(container) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
+    val allTracks by viewModel.tracks.collectAsStateWithLifecycle()
+    val allAlbums by viewModel.albums.collectAsStateWithLifecycle()
+    val allArtists by viewModel.artists.collectAsStateWithLifecycle()
+    val allFavorites by viewModel.favorites.collectAsStateWithLifecycle()
 
-    when (val home = state) {
-        HomeState.Loading -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
+    Column(modifier = Modifier.fillMaxSize()) {
+        CategoryFilterRow(
+            selectedTab = selectedTab,
+            onSelectTab = viewModel::selectTab,
+        )
 
-        is HomeState.Failed -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(errorMessage(home.error))
-                    Button(onClick = { viewModel.reload() }) {
-                        Text(stringResource(R.string.action_retry))
+        when (selectedTab) {
+            HomeTab.All -> {
+                when (val home = state) {
+                    HomeState.Loading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    is HomeState.Failed -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(errorMessage(home.error))
+                                Button(onClick = { viewModel.reload() }) {
+                                    Text(stringResource(R.string.action_retry))
+                                }
+                            }
+                        }
+                    }
+
+                    is HomeState.Success -> PullToRefreshBox(
+                        isRefreshing = home.refreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        HomeContent(
+                            data = home.data,
+                            container = container,
+                            onOpenAlbum = onOpenAlbum,
+                            onPlayTracks = onPlayTracks,
+                            onToggleFavorite = viewModel::toggleFavorite,
+                        )
                     }
                 }
             }
-        }
 
-        is HomeState.Success -> PullToRefreshBox(
-            isRefreshing = home.refreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            HomeContent(
-                data = home.data,
-                container = container,
-                onOpenAlbum = onOpenAlbum,
-                onPlayTracks = onPlayTracks,
-                onToggleFavorite = viewModel::toggleFavorite,
-            )
+            HomeTab.Tracks -> {
+                FullTrackList(
+                    tracks = allTracks,
+                    container = container,
+                    onPlayTracks = onPlayTracks,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                )
+            }
+
+            HomeTab.Albums -> {
+                FullAlbumList(
+                    albums = allAlbums,
+                    container = container,
+                    onOpenAlbum = onOpenAlbum,
+                )
+            }
+
+            HomeTab.Artists -> {
+                FullArtistList(
+                    artists = allArtists,
+                    onOpenArtist = onOpenArtist,
+                )
+            }
+
+            HomeTab.Favorites -> {
+                FullTrackList(
+                    tracks = allFavorites,
+                    container = container,
+                    onPlayTracks = onPlayTracks,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun CategoryFilterRow(
+    selectedTab: HomeTab,
+    onSelectTab: (HomeTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(HomeTab.entries.toTypedArray()) { tab ->
+            val isSelected = tab == selectedTab
+            Surface(
+                onClick = { onSelectTab(tab) },
+                shape = RoundedCornerShape(50),
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+                contentColor = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            ) {
+                Text(
+                    text = when (tab) {
+                        HomeTab.All -> stringResource(R.string.home_tab_all)
+                        HomeTab.Tracks -> stringResource(R.string.library_tracks)
+                        HomeTab.Albums -> stringResource(R.string.library_albums)
+                        HomeTab.Artists -> stringResource(R.string.library_artists)
+                        HomeTab.Favorites -> stringResource(R.string.library_favorites)
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullTrackList(
+    tracks: List<TrackEntity>,
+    container: AppContainer,
+    onPlayTracks: (tracks: List<TrackEntity>, startIndex: Int) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+) {
+    if (tracks.isEmpty()) {
+        EmptyStateNotice(stringResource(R.string.library_empty))
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+    ) {
+        itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+            Surface(
+                onClick = { onPlayTracks(tracks, index) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ArtworkImage(
+                        artworkUrl = track.artworkUrl,
+                        seed = track.title,
+                        loader = container.artworkLoader,
+                        size = 48.dp,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = track.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = listOf(track.artist, track.album).filter { it.isNotBlank() }.joinToString(" • "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    FavoriteButton(
+                        isFavorite = track.isFavorite,
+                        onToggle = { onToggleFavorite(track.id) },
+                    )
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        }
+    }
+}
+
+@Composable
+private fun FullAlbumList(
+    albums: List<AlbumEntity>,
+    container: AppContainer,
+    onOpenAlbum: (String) -> Unit,
+) {
+    if (albums.isEmpty()) {
+        EmptyStateNotice(stringResource(R.string.library_empty))
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+    ) {
+        items(albums, key = { it.id }) { album ->
+            Surface(
+                onClick = { onOpenAlbum(album.id) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ArtworkImage(
+                        artworkUrl = album.artworkUrl,
+                        seed = album.title,
+                        loader = container.artworkLoader,
+                        size = 56.dp,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = album.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = listOfNotNull(album.albumArtist, album.year?.toString())
+                                .filter { it.isNotBlank() }
+                                .joinToString(" • "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        }
+    }
+}
+
+@Composable
+private fun FullArtistList(
+    artists: List<ArtistEntity>,
+    onOpenArtist: (String) -> Unit,
+) {
+    if (artists.isEmpty()) {
+        EmptyStateNotice(stringResource(R.string.library_empty))
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+    ) {
+        items(artists, key = { it.id }) { artist ->
+            Surface(
+                onClick = { onOpenArtist(artist.id) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(placeholderBrush(artist.name)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = artist.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(R.string.detail_artist),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        }
+    }
+}
+
+@Composable
+private fun EmptyStateNotice(text: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(24.dp),
+        )
     }
 }
 
@@ -113,7 +402,7 @@ private fun HomeContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item { HomeHeader() }
@@ -352,7 +641,7 @@ private fun AlbumRow(
                     Text(
                         text = listOfNotNull(album.albumArtist, album.year?.toString())
                             .filter { it.isNotBlank() }
-                            .joinToString(" Ã¢â‚¬Â¢ "),
+                            .joinToString(" • "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

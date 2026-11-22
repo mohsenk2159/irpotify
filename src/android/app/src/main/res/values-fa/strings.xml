@@ -36,6 +36,7 @@
     <string name="action_allow">اجازه دادن</string>
     <string name="action_favorite">افزودن به موردعلاقه‌ها</string>
     <string name="action_unfavorite">حذف از موردعلاقه‌ها</string>
+    <string name="common_back">بازگشت</string>
 
     <string name="auth_title">اتصال به MusicHub</string>
     <string name="auth_subtitle">با حساب کاربری خود وارد شوید. نشانی شبکه محلی، نشانی اینترنت یا هر دو را وارد کنید؛ برنامه به هر کدام که پاسخ دهد متصل می‌شود.</string>
@@ -80,6 +81,24 @@
     <string name="home_quick_favorites">موردعلاقه‌ها</string>
     <string name="home_quick_history">تاریخچه</string>
     <string name="home_cache_notice">داده‌های ذخیره‌شده نمایش داده می‌شود. برخی بخش‌ها ممکن است قدیمی باشند.</string>
+
+    <string name="home_tab_all">همه</string>
+    <string name="library_title">کتابخانه شما</string>
+    <string name="library_create_playlist">ساخت پلی‌لیست</string>
+    <string name="playlist_new_title">پلی‌لیست جدید</string>
+    <string name="playlist_name_hint">نام پلی‌لیست را بنویسید</string>
+    <string name="playlist_create">ایجاد</string>
+    <string name="playlist_empty">این پلی‌لیست هنوز آهنگی ندارد.</string>
+    <string name="playlist_add_songs">افزودن آهنگ</string>
+    <string name="playlist_add_to">افزودن به پلی‌لیست</string>
+    <string name="playlist_added">به پلی‌لیست اضافه شد</string>
+    <string name="playlist_delete">حذف پلی‌لیست</string>
+    <string name="playlist_delete_confirm">پلی‌لیست «%1$s» حذف شود؟ این عمل قابل بازگشت نیست.</string>
+    <string name="playlist_count_format">%1$d آهنگ</string>
+    <string name="liked_songs_title">آهنگ‌های پسندیده</string>
+    <string name="filter_playlists">پلی‌لیست‌ها</string>
+    <string name="filter_artists">هنرمندان</string>
+    <string name="filter_albums">آلبوم‌ها</string>
 
     <string name="library_tracks">قطعه‌ها</string>
     <string name="library_albums">آلبوم‌ها</string>

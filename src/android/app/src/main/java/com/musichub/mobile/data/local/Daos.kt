@@ -123,6 +123,24 @@ interface PlaylistDao {
     @Upsert
     suspend fun upsertAll(playlists: List<PlaylistEntity>)
 
+    @Upsert
+    suspend fun upsert(playlist: PlaylistEntity)
+
+    @Query("DELETE FROM playlists WHERE id = :playlistId")
+    suspend fun deletePlaylist(playlistId: String)
+
+    @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId AND trackId = :trackId")
+    suspend fun removeTrack(playlistId: String, trackId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaylistTrack(item: PlaylistTrackEntity)
+
+    @Query("SELECT COUNT(*) FROM playlist_tracks WHERE playlistId = :playlistId")
+    suspend fun getTrackCount(playlistId: String): Int
+
+    @Query("UPDATE playlists SET trackCount = :count WHERE id = :playlistId")
+    suspend fun updateTrackCount(playlistId: String, count: Int)
+
     @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId")
     suspend fun clearTracks(playlistId: String)
 

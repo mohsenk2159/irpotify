@@ -36,6 +36,7 @@
     <string name="action_allow">Allow</string>
     <string name="action_favorite">Add to favorites</string>
     <string name="action_unfavorite">Remove from favorites</string>
+    <string name="common_back">Back</string>
 
     <string name="auth_title">Connect to MusicHub</string>
     <string name="auth_subtitle">Sign in with your account. Enter a LAN address, an internet address, or both. The app connects to whichever answers.</string>
@@ -80,6 +81,24 @@
     <string name="home_quick_favorites">Favorites</string>
     <string name="home_quick_history">History</string>
     <string name="home_cache_notice">Showing cached library data. Some sections may be out of date.</string>
+
+    <string name="home_tab_all">All</string>
+    <string name="library_title">Your Library</string>
+    <string name="library_create_playlist">Create playlist</string>
+    <string name="playlist_new_title">New playlist</string>
+    <string name="playlist_name_hint">Give your playlist a name</string>
+    <string name="playlist_create">Create</string>
+    <string name="playlist_empty">This playlist is empty.</string>
+    <string name="playlist_add_songs">Add songs</string>
+    <string name="playlist_add_to">Add to playlist</string>
+    <string name="playlist_added">Added to playlist</string>
+    <string name="playlist_delete">Delete playlist</string>
+    <string name="playlist_delete_confirm">Delete “%1$s”? This cannot be undone.</string>
+    <string name="playlist_count_format">%1$d songs</string>
+    <string name="liked_songs_title">Liked Songs</string>
+    <string name="filter_playlists">Playlists</string>
+    <string name="filter_artists">Artists</string>
+    <string name="filter_albums">Albums</string>
 
     <string name="library_tracks">Tracks</string>
     <string name="library_albums">Albums</string>

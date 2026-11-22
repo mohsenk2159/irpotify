@@ -6,11 +6,24 @@ import com.musichub.mobile.data.AppContainer
 import com.musichub.mobile.data.library.FavoriteWriter
 import com.musichub.mobile.data.library.HomeData
 import com.musichub.mobile.data.library.HomeDataSource
+import com.musichub.mobile.data.library.LibraryRepository
+import com.musichub.mobile.data.local.AlbumEntity
+import com.musichub.mobile.data.local.ArtistEntity
 import com.musichub.mobile.data.local.TrackEntity
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+enum class HomeTab {
+    All,
+    Tracks,
+    Albums,
+    Artists,
+    Favorites,
+}
 
 sealed interface HomeState {
     /** First load: nothing to show yet, so a full-screen indicator is correct. */
@@ -28,6 +41,7 @@ sealed interface HomeState {
 class HomeViewModel(
     private val homeSource: HomeDataSource,
     private val favoriteWriter: FavoriteWriter,
+    private val libraryRepo: LibraryRepository? = null,
 ) : ViewModel() {
 
     constructor(container: AppContainer) : this(
@@ -35,13 +49,37 @@ class HomeViewModel(
         favoriteWriter = FavoriteWriter { id, favorite ->
             container.libraryRepository.setFavorite(id, favorite)
         },
+        libraryRepo = container.libraryRepository,
     )
 
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
+    private val _selectedTab = MutableStateFlow(HomeTab.All)
+    val selectedTab: StateFlow<HomeTab> = _selectedTab.asStateFlow()
+
+    val tracks: StateFlow<List<TrackEntity>> = libraryRepo?.observeTracks()
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        ?: MutableStateFlow(emptyList())
+
+    val albums: StateFlow<List<AlbumEntity>> = libraryRepo?.observeAlbums()
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        ?: MutableStateFlow(emptyList())
+
+    val artists: StateFlow<List<ArtistEntity>> = libraryRepo?.observeArtists()
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        ?: MutableStateFlow(emptyList())
+
+    val favorites: StateFlow<List<TrackEntity>> = libraryRepo?.observeFavorites()
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        ?: MutableStateFlow(emptyList())
+
     init {
         reload()
+    }
+
+    fun selectTab(tab: HomeTab) {
+        _selectedTab.value = tab
     }
 
     /** Initial load and retry-from-error path: replaces the screen with the loading state. */
@@ -80,20 +118,30 @@ class HomeViewModel(
      */
     fun toggleFavorite(trackId: String) {
         val current = _state.value
-        if (current !is HomeState.Success) return
-        val existing = current.data.allTracks().firstOrNull { it.id == trackId } ?: return
-        val target = !existing.isFavorite
-        _state.value = HomeState.Success(current.data.withFavorite(trackId, target), current.refreshing)
-        viewModelScope.launch {
-            favoriteWriter.setFavorite(trackId, target).onFailure {
-                val now = _state.value
-                if (now is HomeState.Success) {
-                    _state.value = HomeState.Success(
-                        now.data.withFavorite(trackId, !target),
-                        now.refreshing,
-                    )
+        if (current is HomeState.Success) {
+            val existing = current.data.allTracks().firstOrNull { it.id == trackId }
+            if (existing != null) {
+                val target = !existing.isFavorite
+                _state.value = HomeState.Success(current.data.withFavorite(trackId, target), current.refreshing)
+                viewModelScope.launch {
+                    favoriteWriter.setFavorite(trackId, target).onFailure {
+                        val now = _state.value
+                        if (now is HomeState.Success) {
+                            _state.value = HomeState.Success(
+                                now.data.withFavorite(trackId, !target),
+                                now.refreshing,
+                            )
+                        }
+                    }
                 }
+                return
             }
+        }
+        val isFav = favorites.value.any { it.id == trackId } ||
+            (tracks.value.firstOrNull { it.id == trackId }?.isFavorite == true)
+        val target = !isFav
+        viewModelScope.launch {
+            favoriteWriter.setFavorite(trackId, target)
         }
     }
 }

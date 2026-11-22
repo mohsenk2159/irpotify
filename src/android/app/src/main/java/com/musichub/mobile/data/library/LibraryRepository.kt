@@ -93,6 +93,45 @@ class LibraryRepository(
     fun observePlaylistTracks(playlistId: String): Flow<List<TrackEntity>> =
         database.playlists().observePlaylistTracks(playlistId)
 
+    suspend fun getLocalPlaylistTracks(playlistId: String): List<TrackEntity> =
+        database.playlists().getPlaylistTracks(playlistId)
+
+    suspend fun createLocalPlaylist(name: String): String {
+        val id = "local_" + UUID.randomUUID().toString()
+        val playlist = PlaylistEntity(
+            id = id,
+            name = name.trim(),
+            description = null,
+            ownerUserId = "local",
+            isPublic = false,
+            trackCount = 0,
+            updatedAt = System.currentTimeMillis().toString(),
+            cachedAt = now(),
+        )
+        database.playlists().upsert(playlist)
+        return id
+    }
+
+    suspend fun deleteLocalPlaylist(playlistId: String) {
+        database.playlists().clearTracks(playlistId)
+        database.playlists().deletePlaylist(playlistId)
+    }
+
+    suspend fun addTrackToLocalPlaylist(playlistId: String, trackId: String) {
+        val currentTracks = database.playlists().getPlaylistTracks(playlistId)
+        if (currentTracks.any { it.id == trackId }) return
+        val nextPosition = currentTracks.size
+        database.playlists().insertPlaylistTrack(PlaylistTrackEntity(playlistId, trackId, nextPosition))
+        val count = database.playlists().getTrackCount(playlistId)
+        database.playlists().updateTrackCount(playlistId, count)
+    }
+
+    suspend fun removeTrackFromLocalPlaylist(playlistId: String, trackId: String) {
+        database.playlists().removeTrack(playlistId, trackId)
+        val count = database.playlists().getTrackCount(playlistId)
+        database.playlists().updateTrackCount(playlistId, count)
+    }
+
     fun observeFolderTracks(folderId: String): Flow<List<TrackEntity>> =
         database.folders().observeFolderTracks(folderId)
 
@@ -180,6 +219,12 @@ class LibraryRepository(
     }
 
     suspend fun loadPlaylist(id: String): Result<PlaylistDetailData> {
+        if (id.startsWith("local_")) {
+            val playlist = database.playlists().get(id)
+                ?: return Result.failure(NoSuchElementException("Playlist not found"))
+            val tracks = database.playlists().getPlaylistTracks(id)
+            return Result.success(PlaylistDetailData(playlist, tracks, fromCache = true))
+        }
         return try {
             val response = runApi { api().playlist(id) }
             val playlist = cachePlaylist(response.playlist)
