@@ -46,11 +46,9 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 
 | Platform | Download | Description |
 | :--- | :--- | :--- |
-| **Android (8.0+)** | [📥 **irpotify-android.apk** (4.7 MB)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | Official signed release APK. Spotify UI, offline downloads, instant QR pairing. |
+| **Android (8.0+)** | [📥 **irpotify-android.apk** (4.9 MB)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | Official signed release APK. Spotify UI, offline downloads, instant QR pairing. |
 | **Windows Player (Setup)** | [💿 **irpotify-player-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe) | Official 1-click Windows Setup installer with Desktop & Start Menu shortcuts. |
-| **Windows Player (Portable)** | [📦 **irpotify-player-win-x64-1.0.0.zip**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0.zip) | Portable standalone player with LibVLC audio core. No installation required. |
 | **Windows Server (Setup)** | [💿 **irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | Complete 1-click Windows Server Setup installer: PostgreSQL 17, API, Worker & Dashboard. |
-| **Windows Server (Portable)** | [📦 **irpotify-server-win-x64-1.0.0.zip**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0.zip) | Portable server bundle with automated `install.bat`, `start.bat`, and `status.bat`. |
 | **Docker (Linux/ARM)** | `deploy/docker/docker-compose.yml` | Multi-arch production topology with automatic SSL by Caddy. |
 
 > 🔗 All binaries and checksums are verified and hosted on the [GitHub Releases Page](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0).
