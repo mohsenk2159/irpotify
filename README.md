@@ -40,6 +40,21 @@ verified before it is installed.
 
 ## Quick start
 
+### 🚀 One-Line Linux Quick Install (Recommended)
+
+Install all prerequisites (Docker, PostgreSQL 17, audio tools, SSL certificate, and system manager) with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mohsenk2159/irpotify/main/install.sh | sudo bash
+```
+
+> **Instant Management:** After installation, manage the server, inspect live logs, restart, or update anytime simply by running:
+> ```bash
+> irpotify
+> ```
+
+---
+
 ### Windows server package (recommended for a Windows server)
 
 Download `MusicHubServer-win-x64-<version>.zip`, extract it, and run the installer from the extracted
