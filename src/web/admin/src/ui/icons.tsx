@@ -42,6 +42,8 @@ export type IconName =
   | 'arrow-down'
   | 'qr'
   | 'whatsapp'
+  | 'calendar'
+  | 'clock'
   | 'external';
 
 const paths: Record<IconName, string> = {
@@ -87,6 +89,8 @@ const paths: Record<IconName, string> = {
   'arrow-down': 'M12 5v14m0 0 6-6m-6 6-6-6',
   qr: 'M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-5 0h2v5h-2v-5zm3 3h2v2h-2v-2zm2 2h3v3h-3v-3zm-2 1h-3v2h3v-2z',
   whatsapp: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z',
+  calendar: 'M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V9h14v11Z',
+  clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-18a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm1 4h-2v5l4 2.5 1-1.6-3-1.9V8Z',
   external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
 };
 

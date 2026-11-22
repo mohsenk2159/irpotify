@@ -34,7 +34,8 @@ public sealed record EntitlementResult(bool Allowed, string? Reason)
 }
 
 /// <summary>
-/// Central authority for account expiry, storage quota, and listening-time quota.
+/// Central authority for account expiry enforcement.
+/// Evaluates account status strictly based on authentic server system time (DateTimeOffset.UtcNow).
 /// Administrators are always exempt from automatic deactivation.
 /// </summary>
 public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEntitlementService> logger)
@@ -47,15 +48,9 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
     private static bool IsExpired(DateTimeOffset? expiresAt, DateTimeOffset now) =>
         expiresAt is { } value && value <= now;
 
-    private static bool IsStorageExhausted(long quotaBytes, long usedBytes) =>
-        quotaBytes > 0 && usedBytes >= quotaBytes;
-
-    private static bool IsListeningExhausted(long quotaSeconds, long usedSeconds) =>
-        quotaSeconds > 0 && usedSeconds >= quotaSeconds;
-
     /// <summary>
-    /// Evaluates the user's entitlements and deactivates the account when a limit is exhausted.
-    /// Returns <see cref="EntitlementResult.AllowedResult"/> for administrators and for accounts within limits.
+    /// Evaluates the user's expiration date using server system time and deactivates the account when expired.
+    /// Returns <see cref="EntitlementResult.AllowedResult"/> for administrators and for accounts whose period is active.
     /// </summary>
     public async Task<EntitlementResult> EnforceAsync(Guid userId, bool checkStorage, CancellationToken ct)
     {
@@ -69,19 +64,17 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
         if (!user.IsActive) return EntitlementResult.Denied(user.DeactivationReason ?? DeactivationReasons.Manual);
 
         var now = DateTimeOffset.UtcNow;
-        string? violation = null;
-        if (IsExpired(user.ExpiresAt, now)) violation = DeactivationReasons.Expired;
-        else if (IsListeningExhausted(user.ListenQuotaSeconds, user.ListenSecondsUsed)) violation = DeactivationReasons.ListeningQuota;
-        else if (checkStorage && IsStorageExhausted(user.QuotaBytes, await GetStorageUsedBytesAsync(userId, ct))) violation = DeactivationReasons.StorageQuota;
+        if (IsExpired(user.ExpiresAt, now))
+        {
+            await DeactivateAsync(user.Id, DeactivationReasons.Expired, ct);
+            return EntitlementResult.Denied(DeactivationReasons.Expired);
+        }
 
-        if (violation is null) return EntitlementResult.AllowedResult;
-
-        await DeactivateAsync(user.Id, violation, ct);
-        return EntitlementResult.Denied(violation);
+        return EntitlementResult.AllowedResult;
     }
 
     /// <summary>
-    /// Adds reported playback time to the user's usage and enforces the listening quota immediately.
+    /// Adds reported playback time to the user's statistics and verifies the account has not expired.
     /// </summary>
     public async Task<EntitlementResult> ConsumeListeningTimeAsync(Guid userId, long seconds, CancellationToken ct)
     {
@@ -95,30 +88,16 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
             .AnyAsync(x => x.UserId == userId && x.Role.Name == RoleNames.Administrator, ct);
         if (isAdministrator) return EntitlementResult.AllowedResult;
 
-        // Increment in SQL. Reading the row, adding in memory and saving meant two overlapping
-        // reports (the player flushes every 30 s and on pause/track change) both started from the
-        // same baseline and the last commit won, so usage was systematically under-counted and
-        // the allowance outlived what the operator granted (CR-018).
         var now = DateTimeOffset.UtcNow;
+        if (IsExpired(user.ExpiresAt, now))
+        {
+            await DeactivateAsync(userId, DeactivationReasons.Expired, ct);
+            return EntitlementResult.Denied(DeactivationReasons.Expired);
+        }
+
         await db.Users.Where(x => x.Id == userId).ExecuteUpdateAsync(s => s
             .SetProperty(x => x.ListenSecondsUsed, x => x.ListenSecondsUsed + seconds)
             .SetProperty(x => x.UpdatedAt, now), ct);
-
-        // Only this entity is stale. Detaching it (rather than clearing the whole tracker) keeps any
-        // pending work the caller has staged - the playback event the request is about to insert,
-        // for example - instead of silently discarding it.
-        db.Entry(user).State = EntityState.Detached;
-
-        // Re-read after the atomic increment so the exhaustion decision uses the real total.
-        var updated = await db.Users.AsNoTracking().Where(x => x.Id == userId)
-            .Select(x => new { x.ListenQuotaSeconds, x.ListenSecondsUsed }).SingleOrDefaultAsync(ct);
-        if (updated is null) return EntitlementResult.Denied(DeactivationReasons.Manual);
-
-        if (IsListeningExhausted(updated.ListenQuotaSeconds, updated.ListenSecondsUsed))
-        {
-            await DeactivateAsync(userId, DeactivationReasons.ListeningQuota, ct);
-            return EntitlementResult.Denied(DeactivationReasons.ListeningQuota);
-        }
 
         return EntitlementResult.AllowedResult;
     }
@@ -161,56 +140,33 @@ public sealed class UserEntitlementService(MusicHubDbContext db, ILogger<UserEnt
     }
 
     /// <summary>
-    /// Sweeps every active non-administrator whose expiry, storage quota, or listening quota
-    /// is exhausted and deactivates them. Returns the number of accounts deactivated.
+    /// Sweeps every active non-administrator whose expiry date has passed and deactivates them,
+    /// revoking all sessions and tokens across all devices.
     /// </summary>
-    /// <remarks>
-    /// Everything needed to decide is read in two queries - the candidate rows and their storage
-    /// usage - and the previous per-user <see cref="EnforceAsync"/> call (two more round trips per
-    /// candidate, on every 2-minute pass) is gone. Deactivation still goes through
-    /// <see cref="DeactivateAsync(Guid, string, CancellationToken)"/>, which revokes tokens,
-    /// sessions and writes an audit row (CR-009).
-    /// </remarks>
     public async Task<int> EnforceAllAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
 
-        var candidates = await db.Users.AsNoTracking()
+        var expiredUserIds = await db.Users.AsNoTracking()
             .Where(x => x.IsActive)
             .Where(x => !x.UserRoles.Any(r => r.Role.Name == RoleNames.Administrator))
-            .Where(x => (x.ExpiresAt != null && x.ExpiresAt <= now)
-                || (x.ListenQuotaSeconds > 0 && x.ListenSecondsUsed >= x.ListenQuotaSeconds)
-                || x.QuotaBytes > 0)
-            .Select(x => new { x.Id, x.ExpiresAt, x.ListenQuotaSeconds, x.ListenSecondsUsed, x.QuotaBytes })
+            .Where(x => x.ExpiresAt != null && x.ExpiresAt <= now)
+            .Select(x => x.Id)
             .ToListAsync(ct);
 
-        if (candidates.Count == 0) return 0;
-
-        var usage = await db.Tracks.AsNoTracking()
-            .Where(x => !x.IsDeleted && x.CreatedByUserId != null)
-            .GroupBy(x => x.CreatedByUserId!.Value)
-            .Select(g => new { UserId = g.Key, Bytes = g.Sum(x => (long?)x.AudioAsset.SizeBytes) ?? 0 })
-            .ToDictionaryAsync(x => x.UserId, x => x.Bytes, ct);
+        if (expiredUserIds.Count == 0) return 0;
 
         var deactivated = 0;
-        foreach (var candidate in candidates)
+        foreach (var userId in expiredUserIds)
         {
             ct.ThrowIfCancellationRequested();
-
-            // Same precedence as EnforceAsync: expiry, then listening, then storage.
-            var violation = IsExpired(candidate.ExpiresAt, now) ? DeactivationReasons.Expired
-                : IsListeningExhausted(candidate.ListenQuotaSeconds, candidate.ListenSecondsUsed) ? DeactivationReasons.ListeningQuota
-                : IsStorageExhausted(candidate.QuotaBytes, usage.GetValueOrDefault(candidate.Id)) ? DeactivationReasons.StorageQuota
-                : null;
-
-            if (violation is null) continue;
-            await DeactivateAsync(candidate.Id, violation, ct);
+            await DeactivateAsync(userId, DeactivationReasons.Expired, ct);
             deactivated++;
         }
 
         if (deactivated > 0)
         {
-            logger.LogInformation("Entitlement sweep deactivated {Count} account(s).", deactivated);
+            logger.LogInformation("Entitlement sweep deactivated {Count} expired account(s).", deactivated);
         }
         return deactivated;
     }

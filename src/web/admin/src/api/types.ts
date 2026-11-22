@@ -234,7 +234,7 @@ export interface UserCreate {
   password: string;
   displayName: string;
   role: RoleName;
-  quotaBytes: number;
+  quotaBytes?: number;
   canUsePlayer?: boolean;
   expiresAt?: string | null;
   listenQuotaSeconds?: number;

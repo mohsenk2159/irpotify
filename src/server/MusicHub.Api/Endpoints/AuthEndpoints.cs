@@ -182,9 +182,6 @@ public static class UserEndpoints
             if ((request.Password ?? string.Empty).Length < 12) return Results.BadRequest(new { error = "Password must be at least 12 characters." });
             if (request.ExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow)
                 return Results.BadRequest(new { error = "Expiry date must be in the future." });
-            var listenQuotaSeconds = request.ListenQuotaSeconds ?? 0;
-            if (listenQuotaSeconds < 0 || listenQuotaSeconds > MaxListenQuotaSeconds)
-                return Results.BadRequest(new { error = "Listening allowance must be between 0 (unlimited) and 87600 hours." });
 
             var roleName = RoleNames.All.Contains(request.Role) ? request.Role! : RoleNames.Listener;
             var role = await db.Roles.SingleAsync(x => x.Name == roleName, ct);
@@ -194,10 +191,10 @@ public static class UserEndpoints
                 NormalizedEmail = email,
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? email : request.DisplayName.Trim(),
                 PasswordHash = MusicHub.Infrastructure.Security.PasswordHasher.Hash(request.Password!),
-                QuotaBytes = Math.Max(0, request.QuotaBytes ?? storageOptions.Value.DefaultUserQuotaBytes),
+                QuotaBytes = 0,
                 CanUsePlayer = request.CanUsePlayer ?? true,
                 ExpiresAt = request.ExpiresAt,
-                ListenQuotaSeconds = listenQuotaSeconds
+                ListenQuotaSeconds = 0
             };
             user.UserRoles.Add(new UserRole { User = user, RoleId = role.Id });
             db.Users.Add(user);
@@ -275,16 +272,12 @@ public static class UserEndpoints
 
             if (request.IsActive is true)
             {
-                // An inactive account may only be reactivated when nothing is still exhausted, otherwise the
-                // very next request would deactivate it again. Admins extend or reset first.
+                // An inactive account may only be reactivated when the access period has not ended.
+                // If the account has expired, a future expiry date must be set first or concurrently to start a new period.
                 if (!wasActive)
                 {
                     if (user.ExpiresAt is { } userExpiresAt && userExpiresAt <= now)
-                        return Results.BadRequest(new { error = "Cannot reactivate: the access period has ended. Set a future expiry date first." });
-                    if (user.ListenQuotaSeconds > 0 && user.ListenSecondsUsed >= user.ListenQuotaSeconds)
-                        return Results.BadRequest(new { error = "Cannot reactivate: the listening allowance is exhausted. Increase the allowance or reset usage first." });
-                    if (user.QuotaBytes > 0 && storageUsed >= user.QuotaBytes)
-                        return Results.BadRequest(new { error = "Cannot reactivate: the storage allowance is exhausted. Increase the quota first." });
+                        return Results.BadRequest(new { error = "Cannot reactivate: the access period has ended. Set a future expiry date first to start a new period." });
                 }
                 user.IsActive = true;
                 user.DeactivatedAt = null;

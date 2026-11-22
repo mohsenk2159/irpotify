@@ -37,6 +37,7 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 - 🤖 **Telegram Ingestion Bot with Multi-Admin Support:** Drop audio files or albums into your private Telegram bot for instant extraction, cover art caching, and library indexing. Supports multiple admin user IDs separated by `;` (e.g. `1234124;4324234`).
 - ⚡ **High-Performance Audio Core:** ASP.NET Core (.NET 10) Minimal API, PostgreSQL 17 with SCRAM-SHA-256 auth, LibVLC audio engine, and ExoPlayer Media3.
 - 🔒 **Enterprise-Grade Security:** Android Keystore encrypted credentials, JWT tokens with rotating refresh tokens, automated malware screening, and strict Admin Gate access control.
+- ⏳ **Server-Authoritative Subscription & Expiry Periods:** Eliminates legacy storage/listening quotas in favor of a pure, date-based access model measured strictly by the server's authoritative system clock (`DateTimeOffset.UtcNow`). On the day/time access ends, accounts automatically deactivate and are instantly evicted from all devices (revoking all active JWTs, sessions, and refresh tokens). Administrators can renew or start a new period at any time with 1-click presets (+1 Month, +3 Months, +6 Months, +1 Year) or a custom date.
 - 🔐 **Zero-Lockout Password Recovery:** Reset or recover forgotten accounts via the web login modal using your secret server Bootstrap Token, or directly from the host terminal with `sudo irpotify reset-password`.
 
 ---

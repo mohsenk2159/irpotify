@@ -6,9 +6,8 @@ using MusicHub.Infrastructure.Security;
 namespace MusicHub.Worker;
 
 /// <summary>
-/// Periodically deactivates accounts whose access period, storage allowance, or listening
-/// allowance is exhausted. Login, token validation, and playback reporting also enforce these
-/// rules inline; this sweep covers accounts that are idle or already signed in.
+/// Periodically sweeps and deactivates accounts whose access period has expired based on server time,
+/// revoking tokens and sessions across all devices.
 /// </summary>
 public sealed class EntitlementEnforcementWorker(
     IServiceScopeFactory scopeFactory,

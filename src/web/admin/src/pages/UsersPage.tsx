@@ -23,8 +23,6 @@ import {
 import { errorMessage, roleLabel } from '../ui/helpers';
 import { Icon } from '../ui/icons';
 
-const GB = 1024 * 1024 * 1024;
-const HOUR_SECONDS = 3600;
 const ROLES: RoleName[] = ['Administrator', 'Contributor', 'Listener'];
 
 interface CreateForm {
@@ -32,8 +30,6 @@ interface CreateForm {
   displayName: string;
   password: string;
   role: RoleName;
-  quotaGb: string;
-  listenHours: string;
   expiresOn: string;
   canUsePlayer: boolean;
 }
@@ -42,11 +38,8 @@ interface EditForm {
   displayName: string;
   role: RoleName;
   isActive: boolean;
-  quotaGb: string;
-  listenHours: string;
   expiresOn: string;
   clearExpiry: boolean;
-  resetListenUsage: boolean;
   canUsePlayer: boolean;
 }
 
@@ -55,33 +48,9 @@ const EMPTY_CREATE: CreateForm = {
   displayName: '',
   password: '',
   role: 'Listener',
-  quotaGb: '10',
-  listenHours: '0',
   expiresOn: '',
   canUsePlayer: true,
 };
-
-function gbFromBytes(bytes: number): string {
-  const value = bytes / GB;
-  return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '0';
-}
-
-function bytesFromGb(value: string): number | null {
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return Math.round(parsed * GB);
-}
-
-function hoursFromSeconds(seconds: number): string {
-  if (!seconds) return '0';
-  return String(Math.round((seconds / HOUR_SECONDS) * 100) / 100);
-}
-
-function secondsFromHours(value: string): number | null {
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return Math.round(parsed * HOUR_SECONDS);
-}
 
 /** Converts a stored timestamp to the local `yyyy-mm-dd` value used by `<input type="date">`. */
 function dateInputFromIso(iso: string | null): string {
@@ -97,6 +66,21 @@ function isoFromDateInput(value: string): string | null {
   if (!value) return null;
   const date = new Date(`${value}T23:59:59`);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** Computes future date `yyyy-mm-dd` from today by adding days */
+function addDaysFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function getDaysRemaining(iso: string): number {
+  const expiry = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = expiry - now;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
 function deactivationLabelKey(reason: string | null) {
@@ -115,7 +99,7 @@ function deactivationLabelKey(reason: string | null) {
 }
 
 export function UsersPage() {
-  const { t, formatNumber, formatDate, formatBytes } = useUi();
+  const { t, formatNumber, formatDate } = useUi();
   const { user: currentUser, refreshUser } = useAuth();
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -131,6 +115,9 @@ export function UsersPage() {
   const [newPassword, setNewPassword] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<UserSummary | null>(null);
+  const [renewTarget, setRenewTarget] = useState<UserSummary | null>(null);
+  const [renewDate, setRenewDate] = useState<string>('');
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   // QR Code fast pairing modal state
   const [qrUser, setQrUser] = useState<UserSummary | null>(null);
@@ -258,25 +245,17 @@ export function UsersPage() {
 
   const isSelf = (user: UserSummary) => currentUser?.id === user.id;
 
-  const hoursLabel = (seconds: number) =>
-    t('users.hoursValue', { value: formatNumber(Math.round((seconds / HOUR_SECONDS) * 10) / 10) });
   const isExpired = (iso: string) => new Date(iso).getTime() <= Date.now();
 
   const createMutation = useMutation({
     mutationFn: (form: CreateForm) => {
-      const quotaBytes = bytesFromGb(form.quotaGb);
-      if (quotaBytes === null) throw new Error(t('settings.invalidNumbers'));
-      const listenQuotaSeconds = secondsFromHours(form.listenHours);
-      if (listenQuotaSeconds === null) throw new Error(t('settings.invalidNumbers'));
       return api.users.create({
         email: form.email.trim(),
         password: form.password,
         displayName: form.displayName.trim(),
         role: form.role,
-        quotaBytes,
         canUsePlayer: form.canUsePlayer,
         expiresAt: isoFromDateInput(form.expiresOn),
-        listenQuotaSeconds,
       });
     },
     onSuccess: (data, variables) => {
@@ -295,7 +274,7 @@ export function UsersPage() {
         canUsePlayer: variables.canUsePlayer,
         listenQuotaSeconds: 0,
         listenSecondsUsed: 0,
-        expiresAt: null,
+        expiresAt: isoFromDateInput(variables.expiresOn),
         deactivatedAt: null,
         deactivationReason: null,
         createdAt: new Date().toISOString(),
@@ -307,10 +286,6 @@ export function UsersPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ target, form }: { target: UserSummary; form: EditForm }) => {
-      const quotaBytes = bytesFromGb(form.quotaGb);
-      if (quotaBytes === null) throw new Error(t('settings.invalidNumbers'));
-      const listenQuotaSeconds = secondsFromHours(form.listenHours);
-      if (listenQuotaSeconds === null) throw new Error(t('settings.invalidNumbers'));
       const expiry: { expiresAt?: string; clearExpiresAt?: boolean } = form.clearExpiry
         ? { clearExpiresAt: true }
         : form.expiresOn
@@ -318,10 +293,7 @@ export function UsersPage() {
           : {};
       return api.users.update(target.id, {
         displayName: form.displayName.trim(),
-        quotaBytes,
         canUsePlayer: form.canUsePlayer,
-        listenQuotaSeconds,
-        ...(form.resetListenUsage ? { resetListenUsage: true } : {}),
         ...expiry,
         ...(isSelf(target) ? {} : { role: form.role, isActive: form.isActive }),
       });
@@ -336,13 +308,23 @@ export function UsersPage() {
     onError: (error) => setEditError(errorMessage(error, t('common.error'))),
   });
 
-  const reactivateMutation = useMutation({
-    mutationFn: (target: UserSummary) => api.users.update(target.id, { isActive: true }),
+  const renewMutation = useMutation({
+    mutationFn: ({ target, date }: { target: UserSummary; date: string }) => {
+      const expiresAt = isoFromDateInput(date);
+      if (!expiresAt) throw new Error(t('common.requiredField'));
+      return api.users.update(target.id, {
+        expiresAt,
+        isActive: true,
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
-      notify(t('users.reactivated'), 'success');
+      setRenewTarget(null);
+      setRenewDate('');
+      setRenewError(null);
+      notify(t('users.renewed'), 'success');
     },
-    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+    onError: (error) => setRenewError(errorMessage(error, t('common.error'))),
   });
 
   const resetMutation = useMutation({
@@ -362,11 +344,8 @@ export function UsersPage() {
       displayName: target.displayName,
       role: target.roles[0] ?? 'Listener',
       isActive: target.isActive,
-      quotaGb: gbFromBytes(target.quotaBytes),
-      listenHours: hoursFromSeconds(target.listenQuotaSeconds),
       expiresOn: dateInputFromIso(target.expiresAt),
       clearExpiry: false,
-      resetListenUsage: false,
       canUsePlayer: target.canUsePlayer ?? true,
     });
     setEditError(null);
@@ -383,10 +362,6 @@ export function UsersPage() {
       setCreateError(t('users.passwordHint'));
       return;
     }
-    if (bytesFromGb(createForm.quotaGb) === null || secondsFromHours(createForm.listenHours) === null) {
-      setCreateError(t('settings.invalidNumbers'));
-      return;
-    }
     createMutation.mutate({ ...createForm, email });
   };
 
@@ -395,10 +370,6 @@ export function UsersPage() {
     if (!editing || !editForm) return;
     if (!editForm.displayName.trim()) {
       setEditError(t('common.requiredField'));
-      return;
-    }
-    if (bytesFromGb(editForm.quotaGb) === null || secondsFromHours(editForm.listenHours) === null) {
-      setEditError(t('settings.invalidNumbers'));
       return;
     }
     updateMutation.mutate({ target: editing, form: editForm });
@@ -477,8 +448,7 @@ export function UsersPage() {
                   <th scope="col">{t('users.role')}</th>
                   <th scope="col">{t('common.status')}</th>
                   <th scope="col">{t('users.playerAccess')}</th>
-                  <th scope="col">{t('users.usage')}</th>
-                  <th scope="col">{t('users.expires')}</th>
+                  <th scope="col">{t('users.accessPeriod')}</th>
                   <th scope="col">{t('common.lastLogin')}</th>
                   <th scope="col">{t('common.actions')}</th>
                 </tr>
@@ -518,24 +488,28 @@ export function UsersPage() {
                       )}
                     </td>
                     <td className="small">
-                      <div>
-                        <span className="muted">{t('users.storageUsage')}: </span>
-                        {formatBytes(target.storageUsedBytes)} /{' '}
-                        {target.quotaBytes > 0 ? formatBytes(target.quotaBytes) : t('users.unlimited')}
-                      </div>
-                      <div>
-                        <span className="muted">{t('users.listenUsage')}: </span>
-                        {hoursLabel(target.listenSecondsUsed)} /{' '}
-                        {target.listenQuotaSeconds > 0 ? hoursLabel(target.listenQuotaSeconds) : t('users.unlimited')}
-                      </div>
-                    </td>
-                    <td className="small">
                       {target.expiresAt ? (
-                        <span className={isExpired(target.expiresAt) ? 'text-danger' : undefined}>
-                          {formatDate(target.expiresAt, { dateStyle: 'medium' })}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span className={isExpired(target.expiresAt) ? 'text-danger font-medium' : undefined}>
+                            {formatDate(target.expiresAt, { dateStyle: 'medium' })}
+                          </span>
+                          <div>
+                            {isExpired(target.expiresAt) ? (
+                              <Badge tone="danger">{t('users.expiredTag')}</Badge>
+                            ) : (
+                              <Badge tone="success">
+                                {t('users.daysRemaining', { count: formatNumber(Math.max(0, getDaysRemaining(target.expiresAt))) })}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       ) : (
-                        <span className="muted">{t('users.noExpiry')}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span className="muted">{t('users.noExpiry')}</span>
+                          <div>
+                            <Badge tone="neutral">{t('users.unlimitedTag')}</Badge>
+                          </div>
+                        </div>
                       )}
                     </td>
                     <td className="muted small">{formatDate(target.lastLoginAt)}</td>
@@ -544,9 +518,13 @@ export function UsersPage() {
                         <IconButton icon="edit" label={t('users.edit')} onClick={() => openEdit(target)} />
                         {!target.isActive && !isSelf(target) ? (
                           <IconButton
-                            icon="play"
-                            label={t('users.reactivate')}
-                            onClick={() => reactivateMutation.mutate(target)}
+                            icon="clock"
+                            label={t('users.renew')}
+                            onClick={() => {
+                              setRenewTarget(target);
+                              setRenewDate(addDaysFromToday(30));
+                              setRenewError(null);
+                            }}
                           />
                         ) : null}
                         <IconButton
@@ -625,34 +603,12 @@ export function UsersPage() {
                 onChange={(event) => setCreateForm((form) => ({ ...form, role: event.target.value as RoleName }))}
               />
             </Field>
-            <Field label={t('users.quota')} htmlFor="user-quota" hint={t('users.quotaHint')}>
-              <Input
-                id="user-quota"
-                type="number"
-                min={0}
-                step="0.5"
-                value={createForm.quotaGb}
-                onChange={(event) => setCreateForm((form) => ({ ...form, quotaGb: event.target.value }))}
-              />
-            </Field>
-          </div>
-          <div className="form-grid two">
             <Field label={t('users.expiresAt')} htmlFor="user-expires" hint={t('users.expiresHint')}>
               <Input
                 id="user-expires"
                 type="date"
                 value={createForm.expiresOn}
                 onChange={(event) => setCreateForm((form) => ({ ...form, expiresOn: event.target.value }))}
-              />
-            </Field>
-            <Field label={t('users.listenQuota')} htmlFor="user-listen" hint={t('users.listenQuotaHint')}>
-              <Input
-                id="user-listen"
-                type="number"
-                min={0}
-                step="0.5"
-                value={createForm.listenHours}
-                onChange={(event) => setCreateForm((form) => ({ ...form, listenHours: event.target.value }))}
               />
             </Field>
           </div>
@@ -714,18 +670,6 @@ export function UsersPage() {
                 onChange={(event) => setEditForm((form) => (form ? { ...form, role: event.target.value as RoleName } : form))}
               />
             </Field>
-            <Field label={t('users.quota')} htmlFor="edit-quota" hint={t('users.quotaHint')}>
-              <Input
-                id="edit-quota"
-                type="number"
-                min={0}
-                step="0.5"
-                value={editForm?.quotaGb ?? ''}
-                onChange={(event) => setEditForm((form) => (form ? { ...form, quotaGb: event.target.value } : form))}
-              />
-            </Field>
-          </div>
-          <div className="form-grid two">
             <Field label={t('users.expiresAt')} htmlFor="edit-expires" hint={t('users.expiresHint')}>
               <Input
                 id="edit-expires"
@@ -735,27 +679,11 @@ export function UsersPage() {
                 onChange={(event) => setEditForm((form) => (form ? { ...form, expiresOn: event.target.value } : form))}
               />
             </Field>
-            <Field label={t('users.listenQuota')} htmlFor="edit-listen" hint={t('users.listenQuotaHint')}>
-              <Input
-                id="edit-listen"
-                type="number"
-                min={0}
-                step="0.5"
-                value={editForm?.listenHours ?? ''}
-                onChange={(event) => setEditForm((form) => (form ? { ...form, listenHours: event.target.value } : form))}
-              />
-            </Field>
           </div>
           <Checkbox
             label={t('users.clearExpiry')}
             checked={editForm?.clearExpiry ?? false}
             onChange={(event) => setEditForm((form) => (form ? { ...form, clearExpiry: event.target.checked } : form))}
-          />
-          <Checkbox
-            label={t('users.resetListenUsage')}
-            description={t('users.resetListenUsageHint')}
-            checked={editForm?.resetListenUsage ?? false}
-            onChange={(event) => setEditForm((form) => (form ? { ...form, resetListenUsage: event.target.checked } : form))}
           />
           <Checkbox
             label={t('users.active')}
@@ -771,6 +699,72 @@ export function UsersPage() {
             onChange={(event) => setEditForm((form) => (form ? { ...form, canUsePlayer: event.target.checked } : form))}
           />
         </form>
+      </Modal>
+
+      <Modal
+        open={renewTarget !== null}
+        title={t('users.renewTitle', { name: renewTarget?.displayName || renewTarget?.email || '' })}
+        onClose={() => {
+          setRenewTarget(null);
+          setRenewDate('');
+          setRenewError(null);
+        }}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setRenewTarget(null);
+                setRenewDate('');
+                setRenewError(null);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              icon="check"
+              loading={renewMutation.isPending}
+              onClick={() => {
+                if (!renewTarget || !renewDate) return;
+                renewMutation.mutate({ target: renewTarget, date: renewDate });
+              }}
+            >
+              {renewMutation.isPending ? t('common.saving') : t('users.renewSubmit')}
+            </Button>
+          </>
+        }
+      >
+        {renewError ? (
+          <div className="notice notice-error" role="alert">
+            {renewError}
+          </div>
+        ) : null}
+        <p className="muted small" style={{ marginBottom: '1rem' }}>
+          {t('users.renewDescription')}
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <Button type="button" onClick={() => setRenewDate(addDaysFromToday(30))}>
+            {t('users.renewPreset1m')}
+          </Button>
+          <Button type="button" onClick={() => setRenewDate(addDaysFromToday(90))}>
+            {t('users.renewPreset3m')}
+          </Button>
+          <Button type="button" onClick={() => setRenewDate(addDaysFromToday(180))}>
+            {t('users.renewPreset6m')}
+          </Button>
+          <Button type="button" onClick={() => setRenewDate(addDaysFromToday(365))}>
+            {t('users.renewPreset1y')}
+          </Button>
+        </div>
+        <Field label={t('users.expiresAt')} htmlFor="renew-expires-date" required>
+          <Input
+            id="renew-expires-date"
+            type="date"
+            value={renewDate}
+            onChange={(e) => setRenewDate(e.target.value)}
+            required
+          />
+        </Field>
       </Modal>
 
       <Modal

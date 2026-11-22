@@ -132,6 +132,7 @@ builder.Services.AddSingleton<RealtimeNotifier>();
 builder.Services.AddSingleton<StreamTracker>();
 builder.Services.AddSingleton<ListeningTimeTracker>();
 builder.Services.AddSingleton<StreamTokenService>();
+builder.Services.AddHostedService<AccountExpirationSweepWorker>();
 builder.Services.AddSignalR();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
@@ -193,9 +194,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
                 {
                     x.IsActive,
                     x.SecurityStamp,
-                    x.ExpiresAt,
-                    x.ListenQuotaSeconds,
-                    x.ListenSecondsUsed
+                    x.ExpiresAt
                 }).SingleOrDefaultAsync(context.HttpContext.RequestAborted);
             if (state is null || !state.IsActive || !string.Equals(state.SecurityStamp, stamp, StringComparison.Ordinal))
             {
@@ -203,19 +202,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
                 return;
             }
 
-            // Administrators are exempt. Expiry and listening quota are re-checked on every request so an
-            // exhausted account is blocked immediately, even before the background sweep runs.
+            // Administrators are exempt. Server system clock (DateTimeOffset.UtcNow) is used to verify expiry on every request,
+            // immediately invalidating access tokens when the access period has concluded.
             if (!principal.IsInRole(RoleNames.Administrator))
             {
                 var now = DateTimeOffset.UtcNow;
-                var violation =
-                    state.ExpiresAt is { } expiresAt && expiresAt <= now ? DeactivationReasons.Expired
-                    : state.ListenQuotaSeconds > 0 && state.ListenSecondsUsed >= state.ListenQuotaSeconds ? DeactivationReasons.ListeningQuota
-                    : null;
-                if (violation is not null)
+                if (state.ExpiresAt is { } expiresAt && expiresAt <= now)
                 {
                     var entitlements = context.HttpContext.RequestServices.GetRequiredService<UserEntitlementService>();
-                    await entitlements.DeactivateAsync(userId, violation, context.HttpContext.RequestAborted);
+                    await entitlements.DeactivateAsync(userId, DeactivationReasons.Expired, context.HttpContext.RequestAborted);
                     context.Fail("Session revoked.");
                 }
             }
