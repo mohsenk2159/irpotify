@@ -50,6 +50,10 @@
 -keep class com.musichub.mobile.MainActivity { *; }
 -keep class com.musichub.mobile.playback.PlaybackService { *; }
 
+# ZXing QR Code scanner
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
+
 # Do not strip line numbers: crash reports from a release build must stay actionable.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

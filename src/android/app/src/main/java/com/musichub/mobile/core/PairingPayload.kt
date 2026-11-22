@@ -39,14 +39,25 @@ object PairingPayloadParser {
         val uri = try {
             URI(trimmed)
         } catch (_: Exception) {
+            null
+        }
+
+        val scheme = uri?.scheme?.lowercase()
+        val isRecognizedScheme = scheme == "musichub" || scheme == "irpotify" || scheme == "http" || scheme == "https"
+        val hostPart = uri?.host ?: uri?.authority ?: uri?.path?.trimStart('/')?.substringBefore('?')
+        val isPairHost = hostPart?.equals("pair", ignoreCase = true) ?: false
+
+        if (uri != null && uri.scheme != null && !isRecognizedScheme && !isPairHost) {
             return PairingParseResult.Failure(PairingParseFailure.INVALID_FORMAT)
         }
 
-        if (!uri.scheme.equals("musichub", ignoreCase = true) || !uri.host.equals("pair", ignoreCase = true)) {
-            return PairingParseResult.Failure(PairingParseFailure.INVALID_FORMAT)
+        val rawQuery = uri?.rawQuery ?: when {
+            trimmed.contains('?') -> trimmed.substringAfter('?')
+            trimmed.contains('&') -> trimmed
+            else -> null
         }
 
-        val parameters = parseQuery(uri.rawQuery)
+        val parameters = parseQuery(rawQuery)
         val server = parameters["server"]?.trim().orEmpty()
         val lan = parameters["lan"]?.trim()?.takeIf { it.isNotBlank() }
         val code = parameters["code"]?.trim().orEmpty()
