@@ -35,6 +35,7 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 - 🤖 **Telegram Ingestion Bot:** Drop audio files or albums into your private Telegram bot for instant extraction, cover art caching, and library indexing.
 - ⚡ **High-Performance Audio Core:** ASP.NET Core (.NET 10) Minimal API, PostgreSQL 17 with SCRAM-SHA-256 auth, LibVLC audio engine, and ExoPlayer Media3.
 - 🔒 **Enterprise-Grade Security:** Android Keystore encrypted credentials, JWT tokens with rotating refresh tokens, automated malware screening, and strict Admin Gate access control.
+- 🔐 **Zero-Lockout Password Recovery:** Reset or recover forgotten accounts via the web login modal using your secret server Bootstrap Token, or directly from the host terminal with `sudo irpotify reset-password`.
 
 ---
 
@@ -126,6 +127,32 @@ irpotify allows you to upload songs directly via Telegram:
    - Enter your **Bot Token** and **Admin Telegram User ID**.
    - Enable **Ingestion**.
 4. Send or forward any audio file (MP3, FLAC, M4A, OGG, WAV) to your bot to instantly import it into your library!
+
+---
+
+### 5. 🔐 Password Recovery & Reset
+
+Because irpotify is a self-hosted private cloud that does not depend on external SMTP email providers, it provides two failsafe methods to recover access if you ever forget your password:
+
+#### Method A: From the Web Dashboard (No Server Access Needed)
+1. On the login screen, click **"Forgot password?"**.
+2. Enter your server's **Bootstrap Token** (the master key displayed at installation time and stored in your server's `.env`, or viewed via `sudo irpotify credentials`).
+3. Enter your account email (or leave blank to reset the primary administrator account).
+4. Enter your new password (minimum 12 characters) and click **Reset Password**.
+
+#### Method B: From the Linux Server Terminal (CLI)
+If you have SSH/terminal access to your host, you can reset any password instantly without opening the browser:
+```bash
+# Interactive prompt (prompts for email and new password):
+sudo irpotify reset-password
+
+# Or pass parameters directly:
+sudo irpotify reset-password admin@local MyNewSecretPassword123!
+```
+You can also open the management menu via `sudo irpotify` and select **Option 8 (Reset Account Password)**.
+
+> [!NOTE]
+> When a password is reset, irpotify automatically rotates the user's security stamp, revokes all previously issued JWT refresh tokens and active sessions, and clears any failed-login lockout counters.
 
 ---
 
