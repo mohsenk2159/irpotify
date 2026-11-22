@@ -82,6 +82,7 @@ sudo irpotify logs        # مشاهده لاگ‌های زنده سرور
 sudo irpotify restart     # راه‌اندازی مجدد سرویس‌ها
 sudo irpotify update      # به‌روزرسانی سرور به آخرین نسخه گیت‌هاب
 sudo irpotify credentials # مشاهده اطلاعات و توکن راه‌اندازی
+sudo irpotify reset-password # بازیابی و تغییر گذرواژه کاربر یا مدیر از ترمینال
 ```
 
 > [!IMPORTANT]

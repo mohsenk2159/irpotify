@@ -57,6 +57,12 @@ export const api = {
     status: () => http.request<SetupStatus>('/api/setup/status', { auth: false }),
     initialize: (payload: { bootstrapToken: string; email: string; password: string; displayName: string }) =>
       http.request<SetupResult>('/api/setup/initialize', { method: 'POST', json: payload, auth: false }),
+    resetPassword: (payload: { bootstrapToken: string; email?: string; newPassword: string }) =>
+      http.request<{ success: boolean; email: string; message: string }>('/api/setup/reset-password', {
+        method: 'POST',
+        json: payload,
+        auth: false,
+      }),
   },
   auth: {
     login: (payload: { email: string; password: string; deviceName: string }) =>

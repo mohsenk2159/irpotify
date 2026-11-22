@@ -296,6 +296,39 @@ case "$1" in
     credentials|token)
         grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null || true
         ;;
+    reset-password)
+        shift
+        r_email="$1"
+        r_pwd="$2"
+        if [ -z "$r_pwd" ]; then
+            echo -e "\033[1;36m=== irpotify Password Reset ===\033[0m"
+            read -r -p "Enter user email (leave blank for primary admin): " r_email
+            read -r -s -p "Enter new password (min 12 chars): " r_pwd
+            echo ""
+        fi
+        if [ ${#r_pwd} -lt 12 ]; then
+            echo -e "\033[0;31m[ERROR] Password must be at least 12 characters.\033[0m"
+            exit 1
+        fi
+        token=$(grep "MUSICHUB_BOOTSTRAP_TOKEN" "$INSTALL_DIR/.env" | cut -d '=' -f2- | tr -d ' "\r\n')
+        if [ -z "$token" ]; then
+            echo -e "\033[0;31m[ERROR] Could not read MUSICHUB_BOOTSTRAP_TOKEN from $INSTALL_DIR/.env\033[0m"
+            exit 1
+        fi
+        echo -e "\033[0;34mResetting password on server...\033[0m"
+        if [ -n "$r_email" ]; then
+            payload=$(printf '{"bootstrapToken":"%s","email":"%s","newPassword":"%s"}' "$token" "$r_email" "$r_pwd")
+        else
+            payload=$(printf '{"bootstrapToken":"%s","newPassword":"%s"}' "$token" "$r_pwd")
+        fi
+        cd "$INSTALL_DIR"
+        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+            -H "Content-Type: application/json" \
+            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+            -H "Content-Type: application/json" \
+            -d "$payload" 2>/dev/null)
+        echo -e "\033[0;32m$resp\033[0m"
+        ;;
     --menu|"")
         bash "$CLI_SCRIPT" --menu
         ;;
@@ -326,13 +359,14 @@ show_menu() {
         echo -e "  ${GREEN}5)${NC} ${BOLD}Start Services (Start)${NC}"
         echo -e "  ${GREEN}6)${NC} ${BOLD}Update to Latest GitHub Version (Update)${NC}"
         echo -e "  ${GREEN}7)${NC} ${BOLD}View Credentials & Bootstrap Token (Credentials)${NC}"
-        echo -e "  ${RED}8)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Uninstall)${NC}"
+        echo -e "  ${GREEN}8)${NC} ${BOLD}Reset Account Password (Reset Password)${NC}"
+        echo -e "  ${RED}9)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Uninstall)${NC}"
         echo -e "  ${YELLOW}0)${NC} Exit"
         echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
         echo ""
 
         local op
-        read -r -p "Select an option [0-8]: " op </dev/tty
+        read -r -p "Select an option [0-9]: " op </dev/tty
         echo ""
 
         case "$op" in
@@ -383,6 +417,35 @@ show_menu() {
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
             8)
+                echo -e "${BOLD}${CYAN}Reset User / Admin Password:${NC}"
+                read -r -p "Enter user email (leave blank for primary admin): " r_email </dev/tty
+                read -r -s -p "Enter new password (min 12 chars): " r_pwd </dev/tty
+                echo ""
+                if [ ${#r_pwd} -lt 12 ]; then
+                    echo -e "${RED}[ERROR] Password must be at least 12 characters.${NC}"
+                else
+                    token=$(grep "MUSICHUB_BOOTSTRAP_TOKEN" "$INSTALL_DIR/.env" | cut -d '=' -f2- | tr -d ' "\r\n')
+                    if [ -z "$token" ]; then
+                        echo -e "${RED}[ERROR] Could not read MUSICHUB_BOOTSTRAP_TOKEN from .env${NC}"
+                    else
+                        echo -e "${BLUE}Sending password reset request...${NC}"
+                        if [ -n "$r_email" ]; then
+                            payload=$(printf '{"bootstrapToken":"%s","email":"%s","newPassword":"%s"}' "$token" "$r_email" "$r_pwd")
+                        else
+                            payload=$(printf '{"bootstrapToken":"%s","newPassword":"%s"}' "$token" "$r_pwd")
+                        fi
+                        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+                            -H "Content-Type: application/json" \
+                            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+                            -H "Content-Type: application/json" \
+                            -d "$payload" 2>/dev/null)
+                        echo -e "${GREEN}$resp${NC}"
+                    fi
+                fi
+                echo ""
+                read -r -p "Press Enter to continue..." </dev/tty
+                ;;
+            9)
                 read -r -p "Are you sure you want to completely uninstall irpotify? (y/N): " confirm </dev/tty
                 if [[ "$confirm" =~ ^[Yy]$ ]]; then
                     dc down -v || true

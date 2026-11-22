@@ -80,6 +80,7 @@ sudo irpotify logs        # Stream live real-time server logs
 sudo irpotify restart     # Graceful restart of all services
 sudo irpotify update      # Pull latest GitHub updates and rebuild
 sudo irpotify credentials # Display bootstrap token and URLs
+sudo irpotify reset-password # Reset admin or user password via CLI
 ```
 
 > [!IMPORTANT]
