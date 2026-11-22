@@ -65,7 +65,7 @@ fun HomeScreen(
     container: AppContainer,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
-    onPlayTracks: (tracks: List<TrackEntity>, startIndex: Int) -> Unit,
+    onPlayTracks: () -> Unit,
 ) {
     val viewModel: HomeViewModel = viewModel(
         factory = viewModelFactory { initializer { HomeViewModel(container) } },
@@ -115,7 +115,10 @@ fun HomeScreen(
                             data = home.data,
                             container = container,
                             onOpenAlbum = onOpenAlbum,
-                            onPlayTracks = onPlayTracks,
+                            onPlayTracks = { tracks, startIndex ->
+                                viewModel.playTracks(tracks, startIndex)
+                                onPlayTracks()
+                            },
                             onToggleFavorite = viewModel::toggleFavorite,
                         )
                     }
@@ -126,7 +129,10 @@ fun HomeScreen(
                 FullTrackList(
                     tracks = allTracks,
                     container = container,
-                    onPlayTracks = onPlayTracks,
+                    onPlayTracks = { tracks, startIndex ->
+                        viewModel.playTracks(tracks, startIndex)
+                        onPlayTracks()
+                    },
                     onToggleFavorite = viewModel::toggleFavorite,
                 )
             }
@@ -150,7 +156,10 @@ fun HomeScreen(
                 FullTrackList(
                     tracks = allFavorites,
                     container = container,
-                    onPlayTracks = onPlayTracks,
+                    onPlayTracks = { tracks, startIndex ->
+                        viewModel.playTracks(tracks, startIndex)
+                        onPlayTracks()
+                    },
                     onToggleFavorite = viewModel::toggleFavorite,
                 )
             }

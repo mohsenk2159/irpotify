@@ -134,7 +134,7 @@ fun MainShell(
                     container = container,
                     onOpenAlbum = { navigate(ROUTE_LIBRARY) },
                     onOpenArtist = { navigate(ROUTE_LIBRARY) },
-                    onPlayTracks = { _, _ -> navigate(ROUTE_NOW_PLAYING) },
+                    onPlayTracks = { navigate(ROUTE_NOW_PLAYING) },
                 )
 
                 ROUTE_SEARCH -> SearchScreen(
@@ -159,7 +159,7 @@ fun MainShell(
                     container = container,
                     onOpenAlbum = { navigate(ROUTE_LIBRARY) },
                     onOpenArtist = { navigate(ROUTE_LIBRARY) },
-                    onPlayTracks = { _, _ -> navigate(ROUTE_NOW_PLAYING) },
+                    onPlayTracks = { navigate(ROUTE_NOW_PLAYING) },
                 )
             }
         }

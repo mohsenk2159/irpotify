@@ -10,6 +10,7 @@ import com.musichub.mobile.data.library.LibraryRepository
 import com.musichub.mobile.data.local.AlbumEntity
 import com.musichub.mobile.data.local.ArtistEntity
 import com.musichub.mobile.data.local.TrackEntity
+import com.musichub.mobile.playback.PlayerController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,7 @@ class HomeViewModel(
     private val homeSource: HomeDataSource,
     private val favoriteWriter: FavoriteWriter,
     private val libraryRepo: LibraryRepository? = null,
+    private val playerController: PlayerController? = null,
 ) : ViewModel() {
 
     constructor(container: AppContainer) : this(
@@ -50,6 +52,7 @@ class HomeViewModel(
             container.libraryRepository.setFavorite(id, favorite)
         },
         libraryRepo = container.libraryRepository,
+        playerController = container.playerController,
     )
 
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
@@ -142,6 +145,12 @@ class HomeViewModel(
         val target = !isFav
         viewModelScope.launch {
             favoriteWriter.setFavorite(trackId, target)
+        }
+    }
+
+    fun playTracks(tracks: List<TrackEntity>, index: Int) {
+        viewModelScope.launch {
+            playerController?.playTracks(tracks, index)
         }
     }
 }
