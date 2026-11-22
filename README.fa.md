@@ -1,262 +1,141 @@
 <div dir="rtl">
 
-# MusicHub Enterprise
+<p align="center">
+  <h1 align="center">🎵 irpotify</h1>
+  <p align="center">
+    <strong>پلتفرم خودمیزبان پخش و مدیریت موسیقی با تجربه کاربری اورجینال اسپاتیفای</strong>
+  </p>
+  <p align="center">
+    <a href="https://github.com/mohsenk2159/irpotify/releases/latest"><img src="https://img.shields.io/github/v/release/mohsenk2159/irpotify?color=1DB954&label=نسخه&logo=github" alt="آخرین نسخه"></a>
+    <a href="https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk"><img src="https://img.shields.io/badge/اپلیکیشن%20اندروید-v1.0.0%20(4.7MB)-3DDC84?logo=android&logoColor=white" alt="دانلود اندروید"></a>
+    <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white" alt=".NET 10">
+    <img src="https://img.shields.io/badge/پایگاه%20داده-PostgreSQL%2017-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 17">
+    <img src="https://img.shields.io/badge/داکر-آماده%20اجرا-2496ED?logo=docker&logoColor=white" alt="Docker">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/مجوز-MIT-blue.svg" alt="License: MIT"></a>
+  </p>
+  <p align="center">
+    <a href="README.md"><strong>English</strong></a> · <a href="README.fa.md"><strong>فارسی</strong></a>
+  </p>
+</p>
 
-**پلتفرم خودمیزبانِ کتابخانه و پخش موسیقی، چندکاربره.**
+---
 
-[English](README.md) · **فارسی**
+## 📖 معرفی پروژه
 
-</div>
+**irpotify** یک اکوسیستم کامل، مدرن و خودمیزبان (Self-Hosted) برای نگهداری، مدیریت و پخش موزیک است. بر خلاف سرویس‌های شخص ثالث، تمامی فایل‌های صوتی، اطلاعات آلبوم‌ها و دیتابیس موسیقی شما روی سرور شخصی خودتان نگهداری شده و کنترل ۱۰۰٪ داده‌ها در اختیار شماست.
 
-MusicHub Enterprise یک پلتفرم موسیقی خودمیزبان و چندکاربره است. وابسته به Spotify یا هیچ
-کاتالوگ شخص ثالث نیست: موسیقی شما روی دیسک خودتان، روی سرور خودتان و زیر حساب‌های کاربری خودتان
-نگهداری می‌شود.
+این پلتفرم شامل یک **اپلیکیشن بومی اندروید با طراحی بازنویسی‌شده کاملاً منطبق بر Spotify**، یک **پلیر ویندوز مستقل**، **داشبورد وب مدیریتی تحت React** و **ربات هوشمند تلگرام برای دریافت خودکار آهنگ‌ها** می‌باشد.
 
-| بخش | چیست |
-| --- | --- |
-| **سرور / API** | ASP.NET Core (.NET 10)، EF Core، PostgreSQL، احراز هویت JWT، SignalR |
-| **Worker** | دریافت و انتشار از تلگرام، اسکن یکپارچگی، کارهای صف‌بندی‌شده، پاک‌سازی دوره‌ای |
-| **داشبورد مدیریت** | React + TypeScript + Vite، فارسی (راست‌به‌چپ) و انگلیسی، روشن و تیره |
-| **پلیر ویندوز** | WPF بومی، پخش با LibVLC، صف پخش، علاقه‌مندی‌ها، پلی‌لیست |
-| **کلاینت اندروید** | Kotlin + Compose + Media3، اتصال با QR، دانلود آفلاین |
-| **استقرار** | اسکریپت‌های ویندوز و Docker Compose، با پشتیبان‌گیری و بازیابی |
+---
 
-## دانلود
+## ✨ قابلیت‌های کلیدی
 
-آخرین نسخه را از صفحه‌ی [Releases](../../releases/latest) دریافت کنید.
+- 🎧 **تجربه کاربری دقیقاً مشابه Spotify اورجینال:** چیپ‌های دسته‌بندی نوین در بالای صفحه خانه (`همه`، `آهنگ‌ها`، `آلبوم‌ها`، `هنرمندان`، `علاقه‌مندی‌ها`) و بخش کتابخانه مدرن با کارت پین‌شده «آهنگ‌های پسندیده‌شده (Liked Songs)».
+- 📱 **ساخت پلی‌لیست‌های اختصاصی و محلی:** امکان ساخت، ویرایش و افزودن آهنگ به پلی‌لیست‌ها با ذخیره‌سازی ۱۰۰٪ محلی درون حافظه گوشی (Room Database) بدون هیچ وابستگی یا ترافیک سرور.
+- 🚀 **نصب فوق‌سریع با یک دستور در لینوکس:** اسکریپت جادویی که داکر، دیتابیس PostgreSQL 17، ابزارهای صوتی و گواهی SSL رایگان را ظرف کمتر از ۲ دقیقه راه‌اندازی می‌کند.
+- 🛠️ **ابزار مدیریت ترمینال (CLI):** بررسی وضعیت سرویس‌ها، مشاهده لاگ‌های زنده، ری‌استارت یا آپدیت سرور تنها با دستور `irpotify`.
+- 🤖 **دریافت خودکار آهنگ از تلگرام:** ارسال ساده فایل‌های صوتی به ربات اختصاصی سرور، استخراج خودکار متادیتا و کاور موزیک و ذخیره‌سازی در کتابخانه.
+- ⚡ **هسته قدرتمند و بهینه:** توسعه‌یافته با ASP.NET Core (.NET 10) Minimal API، پایگاه داده PostgreSQL 17 و موتور صوتی ExoPlayer Media3 در اندروید.
+- 🔒 **امنیت در سطح سازمانی:** ذخیره‌سازی امن توکن‌ها با Keystore اندروید، توکن‌های JWT چرخشی، فیلتر ضدبدافزار و دروازه امنیتی برای ادمین تلگرام.
 
-| پلتفرم | فایل | توضیح |
-| --- | --- | --- |
-| اندروید ۸ به بالا | `MusicHub-Android-<version>-release.apk` | نسخه‌ی امضاشده. نصب از منابع نامشخص را برای فایل‌منیجر فعال کنید. |
-| ویندوز ۱۰/۱۱ (x64) | `MusicHubPlayer-win-x64-<version>.zip` | خودکفا؛ نیازی به نصب .NET نیست. استخراج کنید و `MusicHub.Player.exe` را اجرا کنید. |
-| **سرور ویندوز** | `MusicHubServer-win-x64-<version>.zip` | **بسته‌ی کامل سرور**: PostgreSQL، API، Worker (ربات تلگرام) و داشبورد. بدون نیاز به .NET SDK، بدون داکر و بدون اتصال شبکه در زمان نصب. |
-| داکر (سرور) | `ghcr.io/<owner>/musichub-api:<version>` و `ghcr.io/<owner>/musichub-worker:<version>` | معماری‌های `linux/amd64` و `linux/arm64`. |
+---
 
-در هر انتشار فایل `SHA256SUMS.txt` و برای هر فایل یک `.sha256` منتشر می‌شود تا بتوانید پیش از
-نصب، صحت دانلود را بررسی کنید.
+## 📦 دانلود اپلیکیشن و کلاینت‌ها
 
-> فایل APK امضاشده، فایل ZIP پلیر و بسته‌ی سرور ویندوز، **ضمیمه‌ی Release** هستند و در مخزن گیت
-> ذخیره نمی‌شوند.
+| پلتفرم | لینک دانلود | توضیحات |
+| :--- | :--- | :--- |
+| **اندروید (۸.۰ به بالا)** | [📥 **دانلود فایل irpotify-android.apk** (نسخه ۱.۰.۰)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | نسخه رسمی امضاشده Release با حجم ۴.۷ مگابایت. پیاده‌سازی با Jetpack Compose، پخش آنلاین، دانلود آفلاین و اتصال با QR. |
+| **پلیر ویندوز** | [📥 **دانلود نسخه ویندوز دسکتاپ** (v1.0.0)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) | برنامه پرتابل دسکتاپ با موتور LibVLC (بدون نیاز به نصب پیش‌نیاز). |
+| **سرور ویندوز** | [📥 **دانلود پکیج سرور ویندوز** (v1.0.0)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) | بسته کامل شامل سرویس‌های سرور، دیتابیس و پنل مدیریت برای ویندوز سرور. |
+| **سرور لینوکس (داکر)** | فایل `deploy/docker/docker-compose.yml` | استقرار کانتینری بهینه برای معماری‌های x86_64 و ARM64. |
 
-## شروع سریع
+> 🔗 تمامی فایل‌ها و کدهای هش اعتبارسنجی در [صفحه رسمی انتشار (Releases)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) در دسترس هستند.
 
-### 🚀 نصب فوق‌سریع روی سرور لینوکس (تک‌دستور / One-Line Install)
+---
 
-تنها با اجرای یک دستور زیر در ترمینال سرور لینوکس، تمام پیش‌نیازها (داکر، پکیج‌ها، پایگاه داده و تنظیمات امنیتی) به طور خودکار آماده شده و پنل سرور راه‌اندازی می‌شود:
+## 🚀 راهنمای سریع راه‌اندازی
+
+### ۱. نصب سرور روی لینوکس (یک دستور خودکار)
+
+تنها دستور زیر را در ترمینال سرور لینوکس (Ubuntu, Debian یا هر توزیع دیگر) اجرا کنید:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mohsenk2159/irpotify/main/install.sh | sudo bash
 ```
 
-> **مدیریت آسان:** پس از نصب، در هر زمان برای مدیریت سرویس‌ها، مشاهده لاگ‌ها، ریستارت یا به‌روزرسانی، فقط کافیست در ترمینال کلمه `irpotify` را تایپ کنید.
+این اسکریپت تمام مراحل زیر را به صورت خودکار انجام می‌دهد:
+1. بررسی و نصب داکر و ابزارهای پردازش صدا (`ffmpeg`).
+2. ساخت کلیدهای رمزنگاری و توکن‌های تصادفی با امنیت بالا.
+3. راه‌اندازی Caddy با صدور خودکار SSL رایگان روی دامنه (یا IP سرور).
+4. اجرای کانتینرهای PostgreSQL 17، سرویس API، ورکر تلگرام و وب‌داشبورد.
+5. ایجاد ابزار خط فرمان اختصاصی `/usr/local/bin/irpotify`.
+
+#### 🎛️ مدیریت سرور با ترمینال:
+برای مدیریت سرور در هر زمان کافیست بنویسید:
+```bash
+sudo irpotify
+```
+یا از دستورات مستقیم استفاده کنید:
+```bash
+sudo irpotify status      # نمایش وضعیت کانتینرها
+sudo irpotify logs        # مشاهده لاگ‌های زنده سرور
+sudo irpotify restart     # راه‌اندازی مجدد سرویس‌ها
+sudo irpotify update      # به‌روزرسانی سرور به آخرین نسخه گیت‌هاب
+sudo irpotify credentials # مشاهده اطلاعات و توکن راه‌اندازی
+```
 
 ---
 
-### بسته‌ی سرور ویندوز (پیشنهادی برای سرور ویندوز)
+### ۲. اتصال اپلیکیشن اندروید
 
-فایل `MusicHubServer-win-x64-<version>.zip` را دانلود و استخراج کنید، سپس نصب‌کننده را از پوشه‌ی
-استخراج‌شده اجرا کنید. هیچ پیش‌نیازی روی سیستم لازم نیست:
+1. فایل [**irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) را روی گوشی خود نصب کنید.
+2. با باز کردن برنامه، آدرس سرور (یا اسکن کد QR موجود در داشبورد وب) را وارد کرده و وارد حساب کاربری خود شوید.
+3. از محیط شبیه به اسپاتیفای لذت ببرید و پلی‌لیست‌های اختصاصی خود را بسازید.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1
-```
+---
 
-نصب‌کننده آدرس شبکه‌ی محلی این دستگاه را تشخیص می‌دهد، می‌پرسد API روی کدام پورت گوش دهد،
-PostgreSQL را راه‌اندازی می‌کند، رمزها را می‌سازد، PostgreSQL و API و Worker (که ربات تلگرام را اجرا
-می‌کند) را بالا می‌آورد، سرویس‌ها را روی HTTP بررسی می‌کند و یک تسک زمان ورود ثبت می‌کند تا پس از
-ری‌استارت دوباره بالا بیایند. در پایان آدرس داشبورد را چاپ می‌کند.
+### ۳. راه‌اندازی ربات تلگرام برای آپلود موزیک
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Status
-powershell -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Start
-powershell -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Stop
-powershell -ExecutionPolicy Bypass -File .\deploy\windows\install.ps1 -Uninstall
-```
+برای اینکه بتوانید با فوروارد یا ارسال آهنگ به ربات تلگرام، آن را فوراً به سرور اضافه کنید:
+1. در تلگرام به [@BotFather](https://t.me/BotFather) رفته و با ساخت ربات، **توکن ربات (Bot Token)** را دریافت کنید.
+2. به ربات [@userinfobot](https://t.me/userinfobot) یک پیام بفرستید تا **شناسه عددی اکانت تلگرام شما (Id)** را به شما بدهد.
+3. وارد داشبورد وب سرور شده و در بخش **Settings** → **Telegram**:
+   - توکن ربات و شناسه عددی تلگرام خود را وارد کنید.
+   - گزینه **Ingestion** را فعال کرده و ذخیره کنید.
+4. اکنون هر آهنگ یا فایلی را به ربات بفرستید، بلافاصله پردازش شده و به سرور شما اضافه می‌شود!
 
-### داکر (پیشنهادی برای سرور)
+---
 
-```bash
-git clone <repository-url> musichub
-cd musichub
-cp .env.example .env
-```
-
-فایل `.env` را باز کنید و همه‌ی مقادیر `CHANGE_ME` را جایگزین کنید. رمزها را با یک مولّد
-رمزنگاری‌شده بسازید، نه دستی:
-
-```bash
-openssl rand -hex 32   # POSTGRES_PASSWORD
-openssl rand -hex 64   # MUSICHUB_JWT_SECRET
-openssl rand -hex 32   # MUSICHUB_BOOTSTRAP_TOKEN
-```
-
-سپس سرویس‌ها را بالا بیاورید:
-
-```bash
-docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d
-```
-
-یا بگذارید اسکریپت نصب همه‌ی این کارها را انجام دهد — رمزها را می‌سازد، آدرس شبکه‌ی محلی همین
-دستگاه را تشخیص می‌دهد، می‌پرسد داشبورد روی کدام پورت منتشر شود، و آدرسی را که باید باز کنید
-چاپ می‌کند:
-
-```powershell
-.\deploy\docker\install.ps1
-```
-
-### ویندوز از مخزن کد (توسعه)
-
-این مسیر برای توسعه است و به .NET 10 SDK و پوشه‌های `tools\pgsql` و `tools\ffmpeg` نیاز دارد که هر دو
-در گیت نادیده گرفته می‌شوند، پس یک clone تازه باید آن‌ها را فراهم کند. برای نصب روی سرور ویندوز
-بدون هیچ ابزار نصبی، از بسته‌ی سرور ویندوز در بالا استفاده کنید.
-
-```powershell
-# ۱. اعتبارنامه‌ی پایگاه داده. آدرس شبکه را تشخیص می‌دهد و پورت API را می‌پرسد.
-.\deploy\scripts\install-server.ps1
-
-# ۲. اجرای PostgreSQL و API و Worker (ربات تلگرام هم با Worker بالا می‌آید).
-.\deploy\scripts\start-dev.ps1 -BindLan
-
-# ۳. بررسی
-.\deploy\scripts\verify.ps1
-```
-
-در پایان، اسکریپت آدرس‌های دقیق را چاپ می‌کند:
+## 🏛️ معماری سیستم
 
 ```text
-  Access this server
-    This machine:      http://127.0.0.1:5080/index.html
-    Other devices:     http://192.168.1.20:5080/index.html
-    Server address for the Android and Windows apps:
-      http://192.168.1.20:5080
+                     پورت 80 / 443 (اینترنت یا شبکه محلی)
+                                   │
+                           ┌───────▼────────┐
+                           │   Caddy SSL    │   پروکسی معکوس و مدیریت خودکار HTTPS
+                           └───────┬────────┘
+                                   │ http://api:5080
+                           ┌───────▼────────┐
+                           │  API irpotify  │   سرویس وب .NET 10، احراز هویت، سوکت
+                           └───────┬────────┘
+                 ┌─────────────────┴─────────────────┐
+                 │                                   │
+         ┌───────▼────────┐                  ┌───────▼────────┐
+         │ PostgreSQL 17  │                  │ Worker Backend │   ربات تلگرام، وظایف پس‌زمینه
+         │ (شبکه خصوصی)   │                  │ (شبکه خصوصی)   │   اسکن و پاک‌سازی فایل‌ها
+         └────────────────┘                  └────────────────┘
 ```
 
-برای گوشی و پلیر ویندوز از آدرس **Other devices** استفاده کنید. هم آدرس و هم پورت در زمان نصب
-تشخیص داده می‌شوند، بنابراین همان اسکریپت‌ها روی هر دستگاهی کار می‌کنند و هیچ تداخل پورتی از پیش
-نادیده گرفته نمی‌شود.
+---
 
-### اولین مدیر
+## 🤝 مشارکت
 
-مقدار `MUSICHUB_BOOTSTRAP_TOKEN` باید تنظیم شده باشد. سپس:
+از هرگونه مشارکت، گزارش باگ یا پیشنهاد قابلیت‌های جدید استقبال می‌کنیم. می‌توانید پیشنهادات خود را در [بخش Issues](https://github.com/mohsenk2159/irpotify/issues) مطرح کنید.
 
-```bash
-curl -X POST http://127.0.0.1:5080/api/setup/initialize \
-  -H "Content-Type: application/json" \
-  -d '{"bootstrapToken":"<your token>","email":"admin@example.com","password":"<12+ characters>","displayName":"Administrator"}'
-```
+---
 
-پس از ساخته‌شدن حساب، توکن را از `.env` پاک کنید و API را دوباره ایجاد کنید تا bootstrap برای همیشه
-غیرفعال شود.
+## 📄 مجوز
 
-## چطور کار می‌کند
+این پروژه تحت مجوز **MIT** منتشر شده است. برای جزئیات به فایل [LICENSE](LICENSE) مراجعه کنید.
 
-```text
-                    :80 / :443
-                        │
-                    ┌───▼────┐   پایان TLS اینجاست (Caddy، گواهی واقعی)
-                    │ caddy  │
-                    └───┬────┘
-                        │ http://api:5080
-                    ┌───▼────┐
-                    │  api   │   مهاجرت‌ها را اعمال می‌کند، API و داشبورد را سرو می‌کند
-                    └───┬────┘
-          ┌─────────────┴──────────────┐
-    ┌─────▼─────┐                ┌─────▼─────┐
-    │ postgres  │                │  worker   │   فقط شبکه‌ی خصوصی
-    └───────────┘                └───────────┘
-```
-
-* فقط لبه‌ی TLS پورت میزبان را منتشر می‌کند. PostgreSQL و API و Worker فقط داخل شبکه‌ی compose
-  قابل دسترسی‌اند.
-* والیوم `musichub_data` به **هر دو** سرویس API و Worker متصل است. موسیقی، کاورها، ناحیه‌ی
-  قرنطینه و کلیدهای DataProtection اینجا هستند. اشتراک این کلیدها الزامی است: API توکن ربات
-  تلگرام را رمز می‌کند و Worker باید آن را باز کند.
-* لایه‌ی LAN (فایل `deploy/docker/docker-compose.lan.yml`) به‌صورت اختیاری داشبورد را روی یک آدرس
-  خصوصی و پورتی که کاربر انتخاب می‌کند منتشر می‌کند، تا گوشی در همان شبکه بدون نیاز به دامنه‌ی
-  عمومی و بدون تضعیف TLS به آن دسترسی داشته باشد.
-
-## ساختار مخزن
-
-```text
-src/server/MusicHub.Api            API، احراز هویت، endpointها، SignalR
-src/server/MusicHub.Worker         Worker پس‌زمینه (تلگرام، کارها، نگهداشت)
-src/server/MusicHub.Domain         موجودیت‌ها و enumها
-src/server/MusicHub.Application    لایه‌ی اپلیکیشن
-src/server/MusicHub.Infrastructure EF Core، ذخیره‌سازی، FFprobe، امنیت، تلگرام
-src/web/admin                      داشبورد مدیریت (React + Vite)
-src/desktop/MusicHub.Player        پلیر ویندوز (WPF + LibVLC)
-src/android                        کلاینت اندروید
-tests/server/MusicHub.Tests        تست‌های واحد و یکپارچگی بک‌اند
-deploy/scripts                     نصب، اجرا، بررسی، پشتیبان‌گیری، بازیابی در ویندوز
-deploy/docker                      توپولوژی کانتینر، Dockerfileها، اسکریپت نصب
-docs/                              معماری، قراردادها، وضعیت، runbookها
-tools/                             ابزارهای همراه (gitignored)
-storage/                           ریشه‌ی داده‌ی زمان اجرا (gitignored)
-```
-
-## پیکربندی
-
-| متغیر | الزامی | کاربرد |
-| --- | --- | --- |
-| `MUSICHUB_JWT_SECRET` | بله | کلید امضای HMAC، حداقل ۳۲ کاراکتر |
-| `MUSICHUB_BOOTSTRAP_TOKEN` | فقط بار اول | توکن یک‌بارمصرف برای ساخت اولین مدیر |
-| `POSTGRES_PASSWORD` | داکر | رمز نقش پایگاه داده |
-| `MUSICHUB_CONNECTION_STRING` | بومی | رشته‌ی اتصال PostgreSQL |
-| `MUSICHUB_PUBLIC_URL` | پیشنهادی | مبدأ مطلق برای بار داده‌ی اتصال اندروید و پلیر |
-| `MUSICHUB_PUBLIC_HOSTNAME` / `MUSICHUB_ACME_EMAIL` | داکر | نام میزبان گواهی Caddy و ایمیل ACME |
-| `MUSICHUB_DATA_ROOT` | پیشنهادی | مسیر مطلق موسیقی، کاور، قرنطینه، کلیدها |
-| `MUSICHUB_LAN_ADDRESS` / `MUSICHUB_LAN_PORT` | اختیاری | توسط `deploy/docker/install.ps1` نوشته می‌شود |
-| `MUSICHUB_FFPROBE_PATH` / `MUSICHUB_FFMPEG_PATH` | پیشنهادی | مسیر ابزارهای رسانه |
-| `MUSICHUB_REQUIRE_MALWARE_SCAN` / `MUSICHUB_CLAMAV_HOST` | اختیاری | الزام ClamAV |
-
-هرگز رمزها را commit نکنید. فایل `.env`، پوشه‌ی `storage/` (شامل `dev.secrets.ps1` و فایل رمز
-پایگاه داده) و کلید امضای اندروید در `.gitignore` هستند.
-
-## ساخت از سورس
-
-```powershell
-$env:PATH="$env:PATH;$env:LOCALAPPDATA\Microsoft\dotnet"
-dotnet build MusicHub.slnx
-dotnet test MusicHub.slnx
-
-npm --prefix src/web/admin install
-npm --prefix src/web/admin run build
-```
-
-ایمیج API خودش داشبورد را کامپایل می‌کند، پس ایمیج ساخته‌شده از قبل رابط کاربری را سرو می‌کند.
-برای اجرای بومی، بسته را در ریشه‌ی استاتیک کپی کنید:
-
-```powershell
-Copy-Item src\web\admin\dist\* src\server\MusicHub.Api\wwwroot\ -Recurse -Force
-```
-
-## امنیت
-
-احراز مجوز سمت سرور برای هر endpoint و برای پخش رسانه؛ توکن دسترسی JWT با refresh token چرخشی و
-تشخیص استفاده‌ی مجدد؛ bootstrap نیازمند توکن صریح است و هیچ رمز پیش‌فرضی وجود ندارد؛ آپلودها با
-پسوند، magic bytes و تجزیه‌ی FFprobe اعتبارسنجی می‌شوند، با اسکن بدافزار اختیاری؛ موسیقی با
-شناسه‌ی محتوایی ذخیره می‌شود و مسیرهایش هرگز به کلاینت برنمی‌گردد؛ توکن ربات تلگرام در حالت
-سکون رمز شده و از API برنمی‌گردد.
-
-جزئیات را در [`SECURITY.md`](SECURITY.md) ببینید.
-
-## مستندات
-
-| سند | محتوا |
-| --- | --- |
-| [`docs/INSTALL_AND_RUN.md`](docs/INSTALL_AND_RUN.md) | نصب نسخه ۱ روی ویندوز، اندروید و داکر |
-| [`deploy/docker/README.md`](deploy/docker/README.md) | runbook کانتینر: گزینه‌های انتشار، پشتیبان‌گیری، بازیابی، ارتقا |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | طراحی اجزا و جریان داده |
-| [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | قرارداد endpointها، همراه با `docs/openapi.json` |
-| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | جدول‌ها، روابط، ایندکس‌ها |
-| [`docs/TELEGRAM_BOT.md`](docs/TELEGRAM_BOT.md) | راه‌اندازی ربات، دستورها، دریافت و انتشار |
-| [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) | وضعیت مستندشده‌ی هر قابلیت |
-
-## مشارکت
-
-Issue و pull request پذیرفته می‌شود. پیش از گزارش هر چیزی که شبیه آسیب‌پذیری است،
-[`SECURITY.md`](SECURITY.md) را بخوانید و برای نقص امنیتی issue عمومی باز نکنید.
-
-## مجوز
-
-[MIT](LICENSE)
+</div>
