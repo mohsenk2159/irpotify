@@ -7,6 +7,7 @@ import { useUi } from './UiProvider';
 import { Icon, BrandLogo, type IconName } from './icons';
 import { Badge, IconButton } from './primitives';
 import { roleLabel } from './helpers';
+import { ThreeDIcon } from './ThreeDIcons';
 
 interface NavItem {
   to: string;
@@ -250,6 +251,55 @@ export function Layout() {
         <main id="main" className="app-main" tabIndex={-1}>
           <Outlet />
         </main>
+
+        {/* PWA Mobile Bottom Navigation Bar */}
+        <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+          <NavLink
+            to={isAdmin ? '/dashboard' : '/library/tracks'}
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="waves" size={24} />
+            <span>{isAdmin ? t('nav.dashboard') : t('nav.tracks')}</span>
+          </NavLink>
+          <NavLink
+            to="/library/albums"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="album" size={24} />
+            <span>{t('nav.albums')}</span>
+          </NavLink>
+          <NavLink
+            to="/library/artists"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="mic" size={24} />
+            <span>{t('nav.artists')}</span>
+          </NavLink>
+          <NavLink
+            to="/library/playlists"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="cassette" size={24} />
+            <span>{t('nav.playlists')}</span>
+          </NavLink>
+          {isAdmin ? (
+            <NavLink
+              to="/admin/users"
+              className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+            >
+              <ThreeDIcon type="users" size={24} />
+              <span>{t('nav.users')}</span>
+            </NavLink>
+          ) : (
+            <NavLink
+              to="/account/sessions"
+              className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+            >
+              <ThreeDIcon type="shield" size={24} />
+              <span>{t('nav.sessions')}</span>
+            </NavLink>
+          )}
+        </nav>
       </div>
     </div>
   );

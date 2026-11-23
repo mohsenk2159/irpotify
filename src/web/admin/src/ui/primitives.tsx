@@ -9,6 +9,7 @@ import { useId } from 'react';
 import { ApiError } from '../api/http';
 import { useUi } from './UiProvider';
 import { Icon, type IconName } from './icons';
+import { ThreeDIcon, type ThreeDIconType } from './ThreeDIcons';
 
 /* ------------------------------------------------------------------ */
 /* Buttons                                                             */
@@ -249,17 +250,33 @@ export function EmptyState({
   body,
   action,
   icon = 'music',
+  threeDType,
 }: {
   title: string;
   body?: string;
   action?: ReactNode;
   icon?: IconName;
+  threeDType?: ThreeDIconType;
 }) {
+  const icon3d =
+    threeDType ??
+    (icon === 'albums'
+      ? 'album'
+      : icon === 'artists'
+        ? 'mic'
+        : icon === 'folders'
+          ? 'folder'
+          : icon === 'playlists'
+            ? 'cassette'
+            : icon === 'upload'
+              ? 'cloud'
+              : 'vinyl');
+
   return (
     <div className="state-block empty-state">
-      <span className="state-icon" aria-hidden="true">
-        <Icon name={icon} size={28} />
-      </span>
+      <div style={{ marginBottom: 12 }}>
+        <ThreeDIcon type={icon3d} size={76} animated />
+      </div>
       <h3>{title}</h3>
       {body ? <p>{body}</p> : null}
       {action ? <div className="state-action">{action}</div> : null}

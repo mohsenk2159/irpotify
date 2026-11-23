@@ -2,20 +2,32 @@
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0d1220" />
-    <meta name="description" content="irpotify Enterprise Music Cloud administration dashboard" />
+    <meta name="theme-color" content="#0a0f1c" />
+    <meta name="description" content="irpotify Enterprise Music Cloud - Self-hosted Spotify experience" />
     <title>irpotify Cloud</title>
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='48' height='48' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='24' cy='24' r='19' fill='%23101018'/%3E%3Ccircle cx='24' cy='24' r='14' stroke='rgba(255,255,255,0.1)' stroke-width='1' fill='none'/%3E%3Crect x='14' y='21' width='3' height='6' rx='1.5' fill='%2310b981'/%3E%3Crect x='19' y='16' width='3' height='16' rx='1.5' fill='%2306b6d4'/%3E%3Crect x='24' y='12' width='3' height='24' rx='1.5' fill='%2338bdf8'/%3E%3Crect x='29' y='15' width='3' height='18' rx='1.5' fill='%23818cf8'/%3E%3Crect x='34' y='20' width='3' height='8' rx='1.5' fill='%23a78bfa'/%3E%3C/svg%3E"
-    />
-    <script type="module" crossorigin src="/assets/index-m6filaab.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-C-wiB9CT.css">
+
+    <!-- PWA & Mobile Web App Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="irpotify" />
+    <link rel="apple-touch-icon" href="/icon-512.svg" />
+
+    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+    <script type="module" crossorigin src="/assets/index-DxMVOjUa.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B-sg8mN_.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

@@ -7,6 +7,7 @@ import { Icon, type IconName } from '../ui/icons';
 import { useUi } from '../ui/UiProvider';
 import { usePlayer } from '../ui/Player';
 import { Artwork } from '../ui/Artwork';
+import { ThreeDIcon, type ThreeDIconType } from '../ui/ThreeDIcons';
 
 export function DashboardPage() {
   const { t, formatBytes, formatNumber, formatDate, locale } = useUi();
@@ -318,24 +319,39 @@ export function DashboardPage() {
   );
 }
 
+const ICON_TO_3D: Record<string, ThreeDIconType> = {
+  tracks: 'notes',
+  albums: 'album',
+  artists: 'mic',
+  users: 'users',
+  playlists: 'cassette',
+  folders: 'folder',
+  storage: 'disk',
+  monitoring: 'rocket',
+  shield: 'shield',
+  warning: 'shield',
+  cloud: 'cloud',
+};
+
 function StatCard({
   icon,
   label,
   value,
   hint,
   tone,
+  threeDType,
 }: {
   icon: IconName;
   label: string;
   value: string;
   hint?: string;
   tone?: 'success' | 'danger';
+  threeDType?: ThreeDIconType;
 }) {
+  const threeD = threeDType ?? ICON_TO_3D[icon] ?? 'vinyl';
   return (
-    <div className={`stat-card${tone ? ` stat-${tone}` : ''}`}>
-      <span className={`stat-icon stat-icon-${icon}`} aria-hidden="true">
-        <Icon name={icon} size={20} />
-      </span>
+    <div className={`stat-card stat-card-3d${tone ? ` stat-${tone}` : ''}`}>
+      <ThreeDIcon type={threeD} size={42} />
       <div className="stat-text">
         <span className="stat-label">{label}</span>
         <span className="stat-value">{value}</span>
@@ -364,27 +380,10 @@ function DashboardHeroBanner({ trackCount, albumCount }: { trackCount: number; a
           <span className="status-online">● {t('monitoring.connected')}</span>
         </div>
       </div>
-      <div className="hero-banner-art" aria-hidden="true">
-        <svg viewBox="0 0 160 80" className="hero-waves-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="hero-wave-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="50%" stopColor="#06b6d4" />
-              <stop offset="100%" stopColor="#6366f1" />
-            </linearGradient>
-          </defs>
-          <rect x="10" y="35" width="6" height="35" rx="3" fill="url(#hero-wave-grad)" opacity="0.6" />
-          <rect x="24" y="20" width="6" height="50" rx="3" fill="url(#hero-wave-grad)" opacity="0.75" />
-          <rect x="38" y="10" width="6" height="60" rx="3" fill="url(#hero-wave-grad)" opacity="0.9" />
-          <rect x="52" y="28" width="6" height="42" rx="3" fill="url(#hero-wave-grad)" opacity="0.7" />
-          <rect x="66" y="15" width="6" height="55" rx="3" fill="url(#hero-wave-grad)" opacity="0.85" />
-          <rect x="80" y="5" width="6" height="65" rx="3" fill="url(#hero-wave-grad)" />
-          <rect x="94" y="22" width="6" height="48" rx="3" fill="url(#hero-wave-grad)" opacity="0.8" />
-          <rect x="108" y="32" width="6" height="38" rx="3" fill="url(#hero-wave-grad)" opacity="0.75" />
-          <rect x="122" y="12" width="6" height="58" rx="3" fill="url(#hero-wave-grad)" opacity="0.85" />
-          <rect x="136" y="28" width="6" height="42" rx="3" fill="url(#hero-wave-grad)" opacity="0.7" />
-          <rect x="150" y="42" width="6" height="28" rx="3" fill="url(#hero-wave-grad)" opacity="0.6" />
-        </svg>
+      <div className="hero-banner-art" aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <ThreeDIcon type="headphones" size={68} />
+        <ThreeDIcon type="vinyl" size={82} animated />
+        <ThreeDIcon type="waves" size={54} animated />
       </div>
     </div>
   );
