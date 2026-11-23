@@ -41,7 +41,7 @@ print_banner() {
  ██║██████╔╝██████╔╝██║   ██║   ██║   ██║█████╗   ╚████╔╝ 
  ██║██╔══██╗██╔═══╝ ██║   ██║   ██║   ██║██╔══╝    ╚██╔╝  
  ██║██║  ██║██║     ╚██████╔╝   ██║   ██║██║        ██║   
- ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝    ╚══╝   ╚═╝╚═╝        ╚═╝   
+ ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝    ╚═╝   ╚═╝╚═╝        ╚═╝   
 EOF
     echo -e "${PURPLE}   === irpotify: Self-Hosted Music Streaming & Library Platform ===${NC}"
     echo -e "${BLUE}   === Modern, Secure, Multi-User Audio Cloud ===${NC}"
