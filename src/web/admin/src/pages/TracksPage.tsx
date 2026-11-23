@@ -66,7 +66,7 @@ function optionalNumber(value: string): number | undefined {
 }
 
 export function TracksPage() {
-  const { t } = useUi();
+  const { t, formatNumber } = useUi();
   const { isAdmin, canContribute } = useAuth();
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -92,9 +92,12 @@ export function TracksPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Track | null>(null);
   const [restoring, setRestoring] = useState<Track | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [debouncedQ, sort, favoritesOnly, includeDeleted, pageSize, presetGenre, presetAlbum, presetArtist, presetFolder]);
 
   const listQuery = useQuery({
@@ -176,6 +179,45 @@ export function TracksPage() {
       setRestoring(null);
     },
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => api.tracks.remove(id)));
+    },
+    onSuccess: (_, ids) => {
+      invalidateTracks();
+      notify(t('tracks.bulkDeleted', { count: formatNumber(ids.length) }), 'success');
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
+  const toggleSelectAll = () => {
+    const allSelected = rows.length > 0 && rows.every((tr) => selectedIds.has(tr.id));
+    if (allSelected) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of rows) next.delete(item.id);
+        return next;
+      });
+    } else {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of rows) next.add(item.id);
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const openEdit = (track: Track) => {
     setEditing(track);
@@ -276,6 +318,22 @@ export function TracksPage() {
       ) : null}
       {isAdmin && includeDeleted ? <div className="notice notice-warning">{t('tracks.includeDeletedHint')}</div> : null}
 
+      {isAdmin && !includeDeleted && selectedIds.size > 0 ? (
+        <div className="bulk-actions-bar">
+          <div className="bulk-actions-info">
+            <span>{t('common.selectedCount', { count: formatNumber(selectedIds.size) })}</span>
+          </div>
+          <div className="bulk-actions-btns">
+            <Button variant="danger" icon="trash" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+              {t('common.deleteSelected')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              {t('common.clearSelection')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {listQuery.isLoading ? <LoadingState /> : null}
       {listQuery.isError ? (
         <ErrorState error={listQuery.error} title={t('tracks.loadFailed')} onRetry={() => void listQuery.refetch()} />
@@ -285,6 +343,10 @@ export function TracksPage() {
         <>
           <TrackTable
             tracks={rows}
+            selectable={isAdmin && !includeDeleted}
+            selectedIds={selectedIds}
+            onToggleSelectOne={toggleSelectOne}
+            onToggleSelectAll={toggleSelectAll}
             actions={(track) => (
               <>
                 <IconButton
@@ -498,6 +560,18 @@ export function TracksPage() {
         onCancel={() => setRestoring(null)}
         onConfirm={() => {
           if (restoring) restoreMutation.mutate(restoring);
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={t('tracks.bulkDeleteTitle')}
+        body={t('tracks.bulkDeleteBody', { count: formatNumber(selectedIds.size) })}
+        confirmLabel={t('common.delete')}
+        busy={bulkDeleteMutation.isPending}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={() => {
+          bulkDeleteMutation.mutate(Array.from(selectedIds));
         }}
       />
 

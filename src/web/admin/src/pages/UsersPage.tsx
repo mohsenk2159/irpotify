@@ -119,6 +119,8 @@ export function UsersPage() {
   const [renewDate, setRenewDate] = useState<string>('');
   const [renewError, setRenewError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserSummary | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // QR Code fast pairing modal state
   const [qrUser, setQrUser] = useState<UserSummary | null>(null);
@@ -301,13 +303,63 @@ export function UsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.users.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
       setDeleteTarget(null);
       notify(t('users.deleted'), 'success');
     },
     onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => api.users.delete(id)));
+    },
+    onSuccess: (_, ids) => {
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      notify(t('users.bulkDeleted', { count: formatNumber(ids.length) }), 'success');
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
+  const selectableUsers = useMemo(
+    () => filtered.filter((u) => !u.isPrimaryAdmin && !isSelf(u)),
+    [filtered, currentUser],
+  );
+  const allSelected = selectableUsers.length > 0 && selectableUsers.every((u) => selectedIds.has(u.id));
+  const someSelected = selectableUsers.some((u) => selectedIds.has(u.id)) && !allSelected;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of selectableUsers) next.delete(item.id);
+        return next;
+      });
+    } else {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of selectableUsers) next.add(item.id);
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const openEdit = (target: UserSummary) => {
     setEditing(target);
@@ -401,6 +453,22 @@ export function UsersPage() {
         </span>
       </Toolbar>
 
+      {selectedIds.size > 0 ? (
+        <div className="bulk-actions-bar">
+          <span className="bulk-actions-info">
+            {t('common.selectedCount', { count: formatNumber(selectedIds.size) })}
+          </span>
+          <div className="bulk-actions-btns">
+            <Button variant="danger" icon="trash" onClick={() => setBulkDeleteOpen(true)}>
+              {t('common.deleteSelected')}
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              {t('common.clearSelection')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {usersQuery.isLoading ? <LoadingState /> : null}
       {usersQuery.isError ? (
         <ErrorState error={usersQuery.error} title={t('users.loadFailed')} onRetry={() => void usersQuery.refetch()} />
@@ -414,6 +482,17 @@ export function UsersPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th scope="col" className="col-select">
+                    <input
+                      type="checkbox"
+                      aria-label={t('common.selectAll')}
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected;
+                      }}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th scope="col">{t('users.displayName')}</th>
                   <th scope="col">{t('users.email')}</th>
                   <th scope="col">{t('users.role')}</th>
@@ -427,6 +506,16 @@ export function UsersPage() {
               <tbody>
                 {filtered.map((target) => (
                   <tr key={target.id}>
+                    <td className="col-select">
+                      {!target.isPrimaryAdmin && !isSelf(target) ? (
+                        <input
+                          type="checkbox"
+                          aria-label={target.displayName || target.email}
+                          checked={selectedIds.has(target.id)}
+                          onChange={() => toggleSelectOne(target.id)}
+                        />
+                      ) : null}
+                    </td>
                     <td>
                       <span>{target.displayName}</span>
                       {target.isPrimaryAdmin ? (
@@ -940,6 +1029,16 @@ export function UsersPage() {
           }
         }}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={t('users.bulkDeleteTitle', { count: formatNumber(selectedIds.size) })}
+        body={t('users.bulkDeleteBody', { count: formatNumber(selectedIds.size) })}
+        confirmLabel={t('common.deleteSelected')}
+        busy={bulkDeleteMutation.isPending}
+        onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+        onCancel={() => setBulkDeleteOpen(false)}
       />
 
     </div>

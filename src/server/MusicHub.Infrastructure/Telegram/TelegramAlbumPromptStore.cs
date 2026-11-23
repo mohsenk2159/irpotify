@@ -6,18 +6,25 @@ using MusicHub.Domain;
 
 namespace MusicHub.Infrastructure.Telegram;
 
-/// <summary>A track that is waiting for the operator to choose its album.</summary>
-/// <param name="TrackId">The track the question is about.</param>
+/// <summary>A track or collection of tracks that is waiting for the operator to choose its album.</summary>
+/// <param name="TrackId">The primary track the question is about.</param>
 /// <param name="TrackTitle">Shown in the picker header and the confirmation.</param>
 /// <param name="FileName">The uploaded file name, so two prompts for similar tracks differ.</param>
 /// <param name="AwaitingName">True once the operator chose "create a new album".</param>
 /// <param name="UpdatedAt">When the prompt was last touched; drives expiry.</param>
+/// <param name="TrackIds">All tracks grouped under this prompt (for media groups or batch imports).</param>
+/// <param name="MediaGroupId">The Telegram media_group_id if this prompt was created for a grouped message.</param>
 public sealed record TelegramAlbumPrompt(
     Guid TrackId,
     string TrackTitle,
     string FileName,
     bool AwaitingName,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    List<Guid>? TrackIds = null,
+    string? MediaGroupId = null)
+{
+    public IReadOnlyList<Guid> AllTrackIds => TrackIds is { Count: > 0 } ? TrackIds : [TrackId];
+}
 
 /// <summary>
 /// Pending per-file album questions, keyed by the bot message that asks them.
@@ -58,6 +65,11 @@ public sealed class TelegramAlbumPromptStore(
         + chatId.ToString(CultureInfo.InvariantCulture) + "."
         + messageId.ToString(CultureInfo.InvariantCulture);
 
+    public static string MediaGroupKeyFor(long chatId, string mediaGroupId) =>
+        KeyPrefix + "mg."
+        + chatId.ToString(CultureInfo.InvariantCulture) + "."
+        + mediaGroupId;
+
     /// <summary>Stores a prompt against the message that asks it.</summary>
     public async Task SaveAsync(
         long chatId,
@@ -66,10 +78,12 @@ public sealed class TelegramAlbumPromptStore(
         string trackTitle,
         string fileName,
         bool awaitingName,
-        CancellationToken ct)
+        CancellationToken ct,
+        List<Guid>? trackIds = null,
+        string? mediaGroupId = null)
     {
         var now = clock.GetUtcNow();
-        var prompt = new TelegramAlbumPrompt(trackId, trackTitle, fileName, awaitingName, now);
+        var prompt = new TelegramAlbumPrompt(trackId, trackTitle, fileName, awaitingName, now, trackIds, mediaGroupId);
         var serialized = JsonSerializer.Serialize(prompt, SerializerOptions);
         var key = KeyFor(chatId, messageId);
 
@@ -87,6 +101,48 @@ public sealed class TelegramAlbumPromptStore(
         else
         {
             row.Value = serialized;
+            row.UpdatedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Gets the prompt message id associated with an active media group, if any.</summary>
+    public async Task<long?> GetMessageIdForMediaGroupAsync(long chatId, string mediaGroupId, CancellationToken ct)
+    {
+        var key = MediaGroupKeyFor(chatId, mediaGroupId);
+        var row = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == key, ct);
+        if (row is null) return null;
+
+        if (clock.GetUtcNow() - row.UpdatedAt > Lifetime)
+        {
+            db.AppSettings.Remove(row);
+            await db.SaveChangesAsync(ct);
+            return null;
+        }
+
+        return long.TryParse(row.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var msgId) ? msgId : null;
+    }
+
+    /// <summary>Records the prompt message id for a media group so subsequent tracks map to the same prompt.</summary>
+    public async Task SetMessageIdForMediaGroupAsync(long chatId, string mediaGroupId, long messageId, CancellationToken ct)
+    {
+        var key = MediaGroupKeyFor(chatId, mediaGroupId);
+        var now = clock.GetUtcNow();
+        var row = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == key, ct);
+        if (row is null)
+        {
+            db.AppSettings.Add(new AppSetting
+            {
+                Key = key,
+                Value = messageId.ToString(CultureInfo.InvariantCulture),
+                IsSecret = false,
+                UpdatedAt = now
+            });
+        }
+        else
+        {
+            row.Value = messageId.ToString(CultureInfo.InvariantCulture);
             row.UpdatedAt = now;
         }
 
@@ -137,6 +193,20 @@ public sealed class TelegramAlbumPromptStore(
         var key = KeyFor(chatId, messageId);
         var row = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == key, ct);
         if (row is null) return false;
+
+        try
+        {
+            var prompt = JsonSerializer.Deserialize<TelegramAlbumPrompt>(row.Value, SerializerOptions);
+            if (!string.IsNullOrWhiteSpace(prompt?.MediaGroupId))
+            {
+                var mgKey = MediaGroupKeyFor(chatId, prompt.MediaGroupId);
+                var mgRow = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == mgKey, ct);
+                if (mgRow is not null) db.AppSettings.Remove(mgRow);
+            }
+        }
+        catch (JsonException)
+        {
+        }
 
         db.AppSettings.Remove(row);
         await db.SaveChangesAsync(ct);

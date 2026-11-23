@@ -563,6 +563,16 @@ public static class TelegramBotTexts
         Format(TelegramBotTextIds.AlbumPrompt, language, fileName) + "\n"
         + Get(TelegramBotTextIds.AlbumPromptHint, language);
 
+    /// <summary>The grouped album question for media groups (multiple audio files sent together).</summary>
+    public static string FormatAlbumPromptMulti(int count, string fileName, string? language = null)
+    {
+        var isFa = Normalize(language) == "fa";
+        var header = isFa
+            ? $"{count} قطعه صوتی (پیام گروهی) در کتابخانه ثبت شد."
+            : $"{count} audio tracks (grouped message) were added to the library.";
+        return header + "\n" + Get(TelegramBotTextIds.AlbumPromptHint, language);
+    }
+
     /// <summary>The album picker header. Names the track so several open pickers stay distinguishable.</summary>
     public static string FormatAlbumPicker(string trackTitle, int albumCount, string? language = null)
     {
@@ -578,8 +588,24 @@ public static class TelegramBotTexts
     public static string FormatAlbumAssigned(string trackTitle, string albumTitle, string? language = null) =>
         Format(TelegramBotTextIds.AlbumAssigned, language, trackTitle, albumTitle);
 
+    public static string FormatAlbumAssignedMulti(int count, string albumTitle, string? language = null)
+    {
+        var isFa = Normalize(language) == "fa";
+        return isFa
+            ? $"{count} قطعه در آلبوم «{albumTitle}» قرار گرفتند."
+            : $"{count} tracks were filed under \"{albumTitle}\".";
+    }
+
     public static string FormatAlbumSkipped(string trackTitle, string? language = null) =>
         Format(TelegramBotTextIds.AlbumSkipped, language, trackTitle);
+
+    public static string FormatAlbumSkippedMulti(int count, string? language = null)
+    {
+        var isFa = Normalize(language) == "fa";
+        return isFa
+            ? $"{count} قطعه بدون آلبوم ثبت شدند."
+            : $"{count} tracks were added without an album.";
+    }
 
     public static string FormatAlbumCreated(string albumTitle, string? language = null) =>
         Format(TelegramBotTextIds.AlbumCreated, language, albumTitle);

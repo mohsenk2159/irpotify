@@ -5,7 +5,7 @@ import type { ArtistSummary } from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { useDebounced } from '../ui/useDebounced';
-import { Modal, useToast } from '../ui/Modal';
+import { ConfirmDialog, Modal, useToast } from '../ui/Modal';
 import {
   Badge,
   Button,
@@ -48,9 +48,13 @@ export function ArtistsPage() {
   const [editing, setEditing] = useState<ArtistSummary | null>(null);
   const [form, setForm] = useState<ArtistForm>({ name: '', biography: '' });
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ArtistSummary | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [debouncedQ, pageSize]);
 
   const listQuery = useQuery({
@@ -85,6 +89,64 @@ export function ArtistsPage() {
     },
     onError: (error) => setFormError(errorMessage(error, t('common.error'))),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (artist: ArtistSummary) => api.artists.remove(artist.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['artists'] });
+      void queryClient.invalidateQueries({ queryKey: ['artist'] });
+      void queryClient.invalidateQueries({ queryKey: ['albums'] });
+      void queryClient.invalidateQueries({ queryKey: ['tracks'] });
+      notify(t('artists.deleted'), 'success');
+      setDeleting(null);
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => api.artists.remove(id)));
+    },
+    onSuccess: (_, ids) => {
+      void queryClient.invalidateQueries({ queryKey: ['artists'] });
+      void queryClient.invalidateQueries({ queryKey: ['artist'] });
+      void queryClient.invalidateQueries({ queryKey: ['albums'] });
+      void queryClient.invalidateQueries({ queryKey: ['tracks'] });
+      notify(t('artists.bulkDeleted', { count: formatNumber(ids.length) }), 'success');
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
+  const items = listQuery.data?.items ?? [];
+  const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
+  const someSelected = items.some((a) => selectedIds.has(a.id)) && !allSelected;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of items) next.delete(item.id);
+        return next;
+      });
+    } else {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of items) next.add(item.id);
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -152,7 +214,23 @@ export function ArtistsPage() {
         ) : null}
       </Toolbar>
 
-      <p className="muted small">{t('artists.noDelete')}</p>
+      {selectedIds.size > 0 ? (
+        <div className="bulk-actions-bar">
+          <div className="bulk-actions-info">
+            <span>{t('common.selectedCount', { count: formatNumber(selectedIds.size) })}</span>
+          </div>
+          <div className="bulk-actions-btns">
+            {canContribute ? (
+              <Button variant="danger" icon="trash" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                {t('common.deleteSelected')}
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              {t('common.clearSelection')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {listQuery.isLoading ? <LoadingState /> : null}
       {listQuery.isError ? (
@@ -179,6 +257,18 @@ export function ArtistsPage() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th scope="col" className="col-select">
+                      <input
+                        type="checkbox"
+                        className="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected;
+                        }}
+                        onChange={toggleSelectAll}
+                        aria-label={t('common.selectAll')}
+                      />
+                    </th>
                     <th scope="col">{t('common.name')}</th>
                     <th scope="col" className="col-narrow">
                       {t('nav.tracks')}
@@ -194,6 +284,15 @@ export function ArtistsPage() {
                 <tbody>
                   {listQuery.data.items.map((artist) => (
                     <tr key={artist.id}>
+                      <td className="col-select">
+                        <input
+                          type="checkbox"
+                          className="checkbox"
+                          checked={selectedIds.has(artist.id)}
+                          onChange={() => toggleSelectOne(artist.id)}
+                          aria-label={artist.name}
+                        />
+                      </td>
                       <td>
                         <div className="table-title-cell">
                           <Artwork url={artist.artworkUrl} alt="" size={34} />
@@ -212,7 +311,10 @@ export function ArtistsPage() {
                             <Icon name="tracks" size={18} />
                           </Link>
                           {canContribute ? (
-                            <IconButton icon="edit" label={t('common.edit')} onClick={() => openEdit(artist)} />
+                            <>
+                              <IconButton icon="edit" label={t('common.edit')} onClick={() => openEdit(artist)} />
+                              <IconButton icon="trash" label={t('common.delete')} onClick={() => setDeleting(artist)} />
+                            </>
                           ) : null}
                         </div>
                       </td>
@@ -270,7 +372,6 @@ export function ArtistsPage() {
               onChange={(event) => setForm((current) => ({ ...current, biography: event.target.value }))}
             />
           </Field>
-          <p className="muted small">{t('artists.noDelete')}</p>
         </form>
       </Modal>
 
@@ -319,6 +420,30 @@ export function ArtistsPage() {
           </div>
         ) : null}
       </Modal>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={t('artists.deleteTitle')}
+        body={t('artists.deleteBody', { name: deleting?.name ?? '' })}
+        confirmLabel={t('common.delete')}
+        busy={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleting) deleteMutation.mutate(deleting);
+        }}
+        onCancel={() => setDeleting(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={t('artists.bulkDeleteTitle')}
+        body={t('artists.bulkDeleteBody', { count: formatNumber(selectedIds.size) })}
+        confirmLabel={t('common.delete')}
+        busy={bulkDeleteMutation.isPending}
+        onConfirm={() => {
+          bulkDeleteMutation.mutate(Array.from(selectedIds));
+        }}
+        onCancel={() => setBulkDeleteOpen(false)}
+      />
     </div>
   );
 }

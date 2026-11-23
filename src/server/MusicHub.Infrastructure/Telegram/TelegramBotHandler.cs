@@ -355,25 +355,39 @@ public sealed class TelegramBotHandler(
 
                     // The shared service re-checks that both the album and the track still exist, so
                     // a stale button cannot resurrect a deleted album.
-                    var assigned = await albums.AssignTrackAsync(albumId, prompt.TrackId, null, ct);
-                    if (!assigned.Succeeded)
+                    var trackIds = prompt.AllTrackIds;
+                    var assignedSuccess = false;
+                    var albumTitle = string.Empty;
+                    foreach (var trackId in trackIds)
                     {
-                        await albumPrompts.DeleteAsync(callback.ChatId, callback.MessageId, ct);
+                        var assigned = await albums.AssignTrackAsync(albumId, trackId, null, ct);
+                        if (assigned.Succeeded)
+                        {
+                            assignedSuccess = true;
+                            albumTitle = assigned.AlbumTitle ?? albumTitle;
+                            await TelegramAudit.RecordAsync(db, callback.SenderId, callback.ChatId,
+                                "album.track.assign", "AlbumTrack", albumId.ToString("N"),
+                                new { albumId, trackId, albumTitle = assigned.AlbumTitle }, ct);
+                        }
+                    }
+
+                    await albumPrompts.DeleteAsync(callback.ChatId, callback.MessageId, ct);
+
+                    if (!assignedSuccess)
+                    {
                         await TryEditAsync(token, apiBase, callback.ChatId, callback.MessageId,
-                            TelegramBotTexts.FormatAlbumFailed(assigned.Error ?? string.Empty), null, ct);
+                            TelegramBotTexts.Get(TelegramBotTextIds.AlbumFailed), null, ct);
                         answer = TelegramBotTexts.Get(TelegramBotTextIds.AlbumFailed);
                         outcome = TelegramRouteOutcome.Handled;
                         return outcome;
                     }
 
-                    await albumPrompts.DeleteAsync(callback.ChatId, callback.MessageId, ct);
-                    await TelegramAudit.RecordAsync(db, callback.SenderId, callback.ChatId,
-                        "album.track.assign", "AlbumTrack", albumId.ToString("N"),
-                        new { albumId, trackId = prompt.TrackId, albumTitle = assigned.AlbumTitle }, ct);
-                    await TryEditAsync(token, apiBase, callback.ChatId, callback.MessageId,
-                        TelegramBotTexts.FormatAlbumAssigned(prompt.TrackTitle, assigned.AlbumTitle ?? string.Empty),
-                        null, ct);
-                    answer = TelegramBotTexts.FormatAlbumAssigned(prompt.TrackTitle, assigned.AlbumTitle ?? string.Empty);
+                    var replyText = trackIds.Count > 1
+                        ? TelegramBotTexts.FormatAlbumAssignedMulti(trackIds.Count, albumTitle)
+                        : TelegramBotTexts.FormatAlbumAssigned(prompt.TrackTitle, albumTitle);
+
+                    await TryEditAsync(token, apiBase, callback.ChatId, callback.MessageId, replyText, null, ct);
+                    answer = replyText;
                     outcome = TelegramRouteOutcome.Handled;
                     return outcome;
                 }
@@ -389,9 +403,12 @@ public sealed class TelegramBotHandler(
                     }
 
                     await albumPrompts.DeleteAsync(callback.ChatId, callback.MessageId, ct);
+                    var skipText = prompt.AllTrackIds.Count > 1
+                        ? TelegramBotTexts.FormatAlbumSkippedMulti(prompt.AllTrackIds.Count)
+                        : TelegramBotTexts.FormatAlbumSkipped(prompt.TrackTitle);
                     await TryEditAsync(token, apiBase, callback.ChatId, callback.MessageId,
-                        TelegramBotTexts.FormatAlbumSkipped(prompt.TrackTitle), null, ct);
-                    answer = TelegramBotTexts.FormatAlbumSkipped(prompt.TrackTitle);
+                        skipText, null, ct);
+                    answer = skipText;
                     outcome = TelegramRouteOutcome.Handled;
                     return outcome;
                 }
@@ -409,7 +426,7 @@ public sealed class TelegramBotHandler(
                     // Flip the same prompt into "waiting for a name" instead of creating a second
                     // row, so the track being filed is still the one this message asked about.
                     await albumPrompts.SaveAsync(callback.ChatId, callback.MessageId, prompt.TrackId,
-                        prompt.TrackTitle, prompt.FileName, awaitingName: true, ct);
+                        prompt.TrackTitle, prompt.FileName, awaitingName: true, ct, prompt.TrackIds, prompt.MediaGroupId);
                     await TryEditAsync(token, apiBase, callback.ChatId, callback.MessageId,
                         TelegramBotTexts.Get(TelegramBotTextIds.AlbumAskNewName), null, ct);
                     answer = TelegramBotTexts.Get(TelegramBotTextIds.AlbumAskNewName);

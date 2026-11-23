@@ -393,6 +393,26 @@ public static class LibraryEndpoints
             catch (DbUpdateException) { return Results.Conflict(new { error = "Artist name already exists." }); }
             return Results.NoContent();
         });
+
+        app.MapDelete("/api/artists/{id:guid}", [Authorize(Policy = "Admin")] async (Guid id, ClaimsPrincipal principal, MusicHubDbContext db, HttpContext http, CancellationToken ct) =>
+        {
+            var artist = await db.Artists.SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (artist is null) return Results.NotFound();
+
+            var albums = await db.Albums.Where(a => a.ArtistId == id).ToListAsync(ct);
+            foreach (var album in albums)
+            {
+                album.ArtistId = null;
+            }
+
+            var trackArtists = await db.TrackArtists.Where(ta => ta.ArtistId == id).ToListAsync(ct);
+            db.TrackArtists.RemoveRange(trackArtists);
+
+            db.Artists.Remove(artist);
+            AuditWriter.Add(db, principal, "artist.delete", "Artist", id.ToString(), null, RequestHelpers.Ip(http));
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
     }
 
     private static void MapFolders(IEndpointRouteBuilder app)

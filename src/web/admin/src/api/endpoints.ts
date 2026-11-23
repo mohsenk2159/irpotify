@@ -132,6 +132,7 @@ export const api = {
       http.request<{ id: string; name: string }>('/api/artists', { method: 'POST', json: payload }),
     update: (id: string, payload: { name?: string; biography?: string | null }) =>
       http.request<void>(`/api/artists/${id}`, { method: 'PATCH', json: payload }),
+    remove: (id: string) => http.request<void>(`/api/artists/${id}`, { method: 'DELETE' }),
   },
   folders: {
     list: () => http.request<FolderNode[]>('/api/folders'),

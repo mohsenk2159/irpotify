@@ -619,3 +619,49 @@ public class TelegramBotAdminGateTests
         Assert.Contains(888L, ids);
     }
 }
+
+public class TelegramAlbumMediaGroupTests
+{
+    [Fact]
+    public void TelegramAlbumPrompt_AllTrackIds_returns_single_track_when_list_is_null_or_empty()
+    {
+        var id = Guid.NewGuid();
+        var prompt1 = new TelegramAlbumPrompt(id, "Track 1", "track1.mp3", false, DateTimeOffset.UtcNow);
+        Assert.Single(prompt1.AllTrackIds);
+        Assert.Equal(id, prompt1.AllTrackIds[0]);
+
+        var prompt2 = new TelegramAlbumPrompt(id, "Track 1", "track1.mp3", false, DateTimeOffset.UtcNow, new List<Guid>());
+        Assert.Single(prompt2.AllTrackIds);
+        Assert.Equal(id, prompt2.AllTrackIds[0]);
+    }
+
+    [Fact]
+    public void TelegramAlbumPrompt_AllTrackIds_returns_multiple_tracks_when_provided()
+    {
+        var id1 = Guid.NewGuid();
+        var id2 = Guid.NewGuid();
+        var id3 = Guid.NewGuid();
+        var prompt = new TelegramAlbumPrompt(id1, "Track 1", "track1.mp3", false, DateTimeOffset.UtcNow, [id1, id2, id3], "mg-12345");
+        Assert.Equal(3, prompt.AllTrackIds.Count);
+        Assert.Contains(id1, prompt.AllTrackIds);
+        Assert.Contains(id2, prompt.AllTrackIds);
+        Assert.Contains(id3, prompt.AllTrackIds);
+        Assert.Equal("mg-12345", prompt.MediaGroupId);
+    }
+
+    [Fact]
+    public void Formats_multi_track_album_prompt_and_assignment_in_both_languages()
+    {
+        var enPrompt = TelegramBotTexts.FormatAlbumPromptMulti(5, "album.mp3", "en");
+        Assert.Contains("5 audio tracks", enPrompt);
+
+        var faPrompt = TelegramBotTexts.FormatAlbumPromptMulti(5, "album.mp3", "fa");
+        Assert.Contains("5 قطعه صوتی", faPrompt);
+
+        var enAssigned = TelegramBotTexts.FormatAlbumAssignedMulti(5, "Rock 2026", "en");
+        Assert.Contains("5 tracks were filed under \"Rock 2026\"", enAssigned);
+
+        var faAssigned = TelegramBotTexts.FormatAlbumAssignedMulti(5, "Rock 2026", "fa");
+        Assert.Contains("5 قطعه در آلبوم «Rock 2026» قرار گرفتند", faAssigned);
+    }
+}

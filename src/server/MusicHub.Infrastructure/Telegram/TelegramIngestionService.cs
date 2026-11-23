@@ -196,6 +196,9 @@ public sealed class TelegramIngestionService(
         }
 
         var media = ExtractAudio(message);
+        var mediaGroupId = message.TryGetProperty("media_group_id", out var mgElement) && mgElement.ValueKind == JsonValueKind.String
+            ? mgElement.GetString()
+            : null;
         if (media is null)
         {
             // A plain text message is normally a rejection, but one case is a legitimate answer:
@@ -319,18 +322,50 @@ public sealed class TelegramIngestionService(
             }
             if (result.Success)
             {
-                // Every file gets its own album question, keyed by the id of the message that asks
-                // it. That is what makes "ask separately for each file" true even when several
-                // tracks are forwarded in a row: the chat session holds a single state, so keying
-                // by message is the only way each open question keeps its own track.
-                var asked = await TryAskAlbumAsync(
-                    token, config, chatId, threadId, result.TrackId, media.FileName, ct);
-                if (!asked)
+                var attachedToExisting = false;
+                if (!string.IsNullOrWhiteSpace(mediaGroupId))
                 {
-                    // The track is already imported; a failed question must not turn that into a
-                    // failure. The operator still learns the file was accepted.
-                    await SafeReplyAsync(token, config, chatId, threadId, "Audio validated and added to the library.", ct);
+                    var existingMsgId = await albumPrompts.GetMessageIdForMediaGroupAsync(chatId, mediaGroupId, ct);
+                    if (existingMsgId is { } promptMsgId)
+                    {
+                        var prompt = await albumPrompts.LoadAsync(chatId, promptMsgId, ct);
+                        if (prompt is not null && result.TrackId is { } newTrackId)
+                        {
+                            var allTrackIds = prompt.AllTrackIds.ToList();
+                            if (!allTrackIds.Contains(newTrackId))
+                            {
+                                allTrackIds.Add(newTrackId);
+                            }
+
+                            await albumPrompts.SaveAsync(
+                                chatId, promptMsgId, prompt.TrackId, prompt.TrackTitle, prompt.FileName,
+                                prompt.AwaitingName, ct, allTrackIds, mediaGroupId);
+
+                            try
+                            {
+                                var promptText = TelegramBotTexts.FormatAlbumPromptMulti(allTrackIds.Count, prompt.FileName);
+                                await client.EditMessageTextAsync(token, ApiBase(config), chatId, promptMsgId, promptText, TelegramKeyboard.AlbumPrompt(), ct);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogDebug(ex, "Could not update album prompt message text for media group.");
+                            }
+
+                            attachedToExisting = true;
+                        }
+                    }
                 }
+
+                if (!attachedToExisting)
+                {
+                    var asked = await TryAskAlbumAsync(
+                        token, config, chatId, threadId, result.TrackId, media.FileName, mediaGroupId, ct);
+                    if (!asked)
+                    {
+                        await SafeReplyAsync(token, config, chatId, threadId, "Audio validated and added to the library.", ct);
+                    }
+                }
+
                 return IngestOutcome.Imported;
             }
 
@@ -450,44 +485,47 @@ public sealed class TelegramIngestionService(
             return true;
         }
 
-        var assigned = await albums.AssignTrackAsync(created.AlbumId!.Value, prompt.TrackId, null, ct);
-        await albumPrompts.DeleteAsync(chatId, promptMessageId, ct);
-
-        if (!assigned.Succeeded)
-        {
-            // The album exists but the track is gone: it was deleted between the prompt and this
-            // reply. Say so plainly instead of reporting a generic failure.
-            var reason = assigned.Error is not null
-                         && assigned.Error.Contains("track", StringComparison.OrdinalIgnoreCase)
-                ? TelegramBotTexts.Get(TelegramBotTextIds.AlbumTrackGone)
-                : TelegramBotTexts.FormatAlbumFailed(assigned.Error ?? string.Empty);
-            await SafeReplyAsync(token, config, chatId, threadId, reason, ct);
-            return true;
-        }
-
-        // Audit the two writes this typed name performed. The sender is the configured admin: a
-        // non-admin message was rejected by the gate long before this method could run.
+        var assignedSuccess = false;
         var auditUserId = message.TryGetProperty("from", out var from) && from.TryGetProperty("id", out var fromIdElement)
             ? fromIdElement.GetInt64()
             : (config.AdminTelegramUserId ?? 0);
 
-        if (auditUserId > 0)
+        if (auditUserId > 0 && existing is null)
         {
-            if (existing is null)
-            {
-                await TelegramAudit.RecordAsync(db, auditUserId, chatId,
-                    "album.create", "Album", created.AlbumId!.Value.ToString("N"),
-                    new { albumId = created.AlbumId, title = created.AlbumTitle }, ct);
-            }
             await TelegramAudit.RecordAsync(db, auditUserId, chatId,
-                "album.track.assign", "AlbumTrack", created.AlbumId!.Value.ToString("N"),
-                new { albumId = created.AlbumId, trackId = prompt.TrackId, albumTitle = created.AlbumTitle }, ct);
+                "album.create", "Album", created.AlbumId!.Value.ToString("N"),
+                new { albumId = created.AlbumId, title = created.AlbumTitle }, ct);
+        }
+
+        foreach (var trackId in prompt.AllTrackIds)
+        {
+            var assigned = await albums.AssignTrackAsync(created.AlbumId!.Value, trackId, null, ct);
+            if (assigned.Succeeded)
+            {
+                assignedSuccess = true;
+                if (auditUserId > 0)
+                {
+                    await TelegramAudit.RecordAsync(db, auditUserId, chatId,
+                        "album.track.assign", "AlbumTrack", created.AlbumId!.Value.ToString("N"),
+                        new { albumId = created.AlbumId, trackId, albumTitle = created.AlbumTitle }, ct);
+                }
+            }
+        }
+        await albumPrompts.DeleteAsync(chatId, promptMessageId, ct);
+
+        if (!assignedSuccess)
+        {
+            await SafeReplyAsync(token, config, chatId, threadId,
+                TelegramBotTexts.Get(TelegramBotTextIds.AlbumTrackGone), ct);
+            return true;
         }
 
         var reply = existing is null
             ? TelegramBotTexts.FormatAlbumCreated(created.AlbumTitle ?? name)
             : string.Empty;
-        var filed = TelegramBotTexts.FormatAlbumAssigned(prompt.TrackTitle, assigned.AlbumTitle ?? name);
+        var filed = prompt.AllTrackIds.Count > 1
+            ? TelegramBotTexts.FormatAlbumAssignedMulti(prompt.AllTrackIds.Count, created.AlbumTitle ?? name)
+            : TelegramBotTexts.FormatAlbumAssigned(prompt.TrackTitle, created.AlbumTitle ?? name);
         await SafeReplyAsync(token, config, chatId, threadId,
             reply.Length == 0 ? filed : reply + "\n" + filed, ct);
         return true;
@@ -509,6 +547,7 @@ public sealed class TelegramIngestionService(
         long? threadId,
         Guid? trackId,
         string fileName,
+        string? mediaGroupId,
         CancellationToken ct)
     {
         if (trackId is not { } id) return false;
@@ -532,7 +571,11 @@ public sealed class TelegramIngestionService(
                 return false;
             }
 
-            await albumPrompts.SaveAsync(chatId, messageId, id, title, fileName, awaitingName: false, ct);
+            await albumPrompts.SaveAsync(chatId, messageId, id, title, fileName, awaitingName: false, ct, [id], mediaGroupId);
+            if (!string.IsNullOrWhiteSpace(mediaGroupId))
+            {
+                await albumPrompts.SetMessageIdForMediaGroupAsync(chatId, mediaGroupId, messageId, ct);
+            }
             return true;
         }
         catch (Exception ex) when (ex is TelegramBotException or HttpRequestException or TaskCanceledException or DbUpdateException)

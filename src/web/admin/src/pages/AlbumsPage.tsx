@@ -69,9 +69,12 @@ export function AlbumsPage() {
   const [trackSearch, setTrackSearch] = useState('');
   const debouncedTrackSearch = useDebounced(trackSearch.trim(), 350);
   const [removingTrack, setRemovingTrack] = useState<Track | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [debouncedQ, pageSize]);
 
   const listQuery = useQuery({
@@ -127,6 +130,48 @@ export function AlbumsPage() {
       setDeleting(null);
     },
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => api.albums.remove(id)));
+    },
+    onSuccess: (_, ids) => {
+      invalidate();
+      notify(t('albums.bulkDeleted', { count: formatNumber(ids.length) }), 'success');
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      setDetailId(null);
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
+  });
+
+  const items = listQuery.data?.items ?? [];
+  const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of items) next.delete(item.id);
+        return next;
+      });
+    } else {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of items) next.add(item.id);
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const addTrackMutation = useMutation({
     mutationFn: ({ albumId, trackId }: { albumId: string; trackId: string }) => api.albums.addTrack(albumId, trackId),
@@ -234,7 +279,28 @@ export function AlbumsPage() {
             {t('common.clear')}
           </Button>
         ) : null}
+        {isAdmin && items.length > 0 ? (
+          <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+            {allSelected ? t('common.clearSelection') : t('common.selectAll')}
+          </Button>
+        ) : null}
       </Toolbar>
+
+      {isAdmin && selectedIds.size > 0 ? (
+        <div className="bulk-actions-bar">
+          <div className="bulk-actions-info">
+            <span>{t('common.selectedCount', { count: formatNumber(selectedIds.size) })}</span>
+          </div>
+          <div className="bulk-actions-btns">
+            <Button variant="danger" icon="trash" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+              {t('common.deleteSelected')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              {t('common.clearSelection')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <p className="muted small">{t('albums.artworkUnavailable')}</p>
 
@@ -273,6 +339,15 @@ export function AlbumsPage() {
                     </span>
                   </button>
                   <div className="album-card-actions">
+                    {isAdmin ? (
+                      <input
+                        type="checkbox"
+                        className="checkbox"
+                        checked={selectedIds.has(album.id)}
+                        onChange={() => toggleSelectOne(album.id)}
+                        aria-label={album.title}
+                      />
+                    ) : null}
                     {canContribute ? (
                       <IconButton icon="edit" label={t('common.edit')} onClick={() => void openEdit(album)} />
                     ) : null}
@@ -484,6 +559,18 @@ export function AlbumsPage() {
           if (removingTrack && detailId) {
             removeTrackMutation.mutate({ albumId: detailId, trackId: removingTrack.id });
           }
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={t('albums.bulkDeleteTitle')}
+        body={t('albums.bulkDeleteBody', { count: formatNumber(selectedIds.size) })}
+        confirmLabel={t('common.delete')}
+        busy={bulkDeleteMutation.isPending}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={() => {
+          bulkDeleteMutation.mutate(Array.from(selectedIds));
         }}
       />
     </div>

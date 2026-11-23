@@ -46,6 +46,8 @@ export function PlaylistsPage() {
   const debouncedAddSearch = useDebounced(addSearch.trim(), 300);
   const [removingTrackId, setRemovingTrackId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<PlaylistSummary | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
   const [form, setForm] = useState<PlaylistForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
@@ -141,6 +143,47 @@ export function PlaylistsPage() {
       setDeleting(null);
       notify(errorMessage(error, t('common.error')), 'error');
     },
+  });
+
+  const playlists = playlistsQuery.data ?? [];
+  const editablePlaylists = playlists.filter((p) => isAdmin || (user && p.ownerUserId === user.id));
+  const allSelected = editablePlaylists.length > 0 && editablePlaylists.every((p) => selectedIds.has(p.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(editablePlaylists.map((p) => p.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string, e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => api.playlists.remove(id)));
+    },
+    onSuccess: (_, ids) => {
+      for (const id of ids) {
+        queryClient.removeQueries({ queryKey: ['playlist', id] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['playlists'] });
+      notify(t('playlists.bulkDeleted', { count: formatNumber(ids.length) }), 'success');
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      if (selectedId && ids.includes(selectedId)) {
+        setSelectedId(null);
+      }
+    },
+    onError: (error) => notify(errorMessage(error, t('common.error')), 'error'),
   });
 
   const reorderMutation = useMutation({
@@ -259,24 +302,49 @@ export function PlaylistsPage() {
           <div className="split-layout">
             <section className="card playlist-list" aria-label={t('playlists.title')}>
               <div className="card-body">
+                {editablePlaylists.length > 0 ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+                    <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+                      {allSelected ? t('common.clearSelection') : t('common.selectAll')}
+                    </Button>
+                    {selectedIds.size > 0 ? (
+                      <Button variant="danger" icon="trash" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+                        {t('common.delete')} ({formatNumber(selectedIds.size)})
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
                 <ul className="select-list">
-                  {playlistsQuery.data.map((playlist) => (
-                    <li key={playlist.id}>
-                      <button
-                        type="button"
-                        className={`select-list-item${playlist.id === selectedId ? ' is-active' : ''}`}
-                        aria-current={playlist.id === selectedId ? 'true' : undefined}
-                        onClick={() => setSelectedId(playlist.id)}
-                      >
-                        <span className="select-list-title">{playlist.name}</span>
-                        <span className="select-list-meta">
-                          {t('playlists.trackCount', { count: formatNumber(playlist.trackCount) })}
-                          {playlist.isPublic ? <Badge tone="info">{t('playlists.public')}</Badge> : null}
-                          {playlist.isCollaborative ? <Badge tone="warning">{t('playlists.collaborative')}</Badge> : null}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
+                  {playlistsQuery.data.map((playlist) => {
+                    const canDeleteThis = isAdmin || (user && playlist.ownerUserId === user.id);
+                    return (
+                      <li key={playlist.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {canDeleteThis ? (
+                          <input
+                            type="checkbox"
+                            className="checkbox"
+                            checked={selectedIds.has(playlist.id)}
+                            onChange={(e) => toggleSelectOne(playlist.id, e)}
+                            aria-label={playlist.name}
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className={`select-list-item${playlist.id === selectedId ? ' is-active' : ''}`}
+                          style={{ flex: 1 }}
+                          aria-current={playlist.id === selectedId ? 'true' : undefined}
+                          onClick={() => setSelectedId(playlist.id)}
+                        >
+                          <span className="select-list-title">{playlist.name}</span>
+                          <span className="select-list-meta">
+                            {t('playlists.trackCount', { count: formatNumber(playlist.trackCount) })}
+                            {playlist.isPublic ? <Badge tone="info">{t('playlists.public')}</Badge> : null}
+                            {playlist.isCollaborative ? <Badge tone="warning">{t('playlists.collaborative')}</Badge> : null}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </section>
@@ -503,6 +571,18 @@ export function PlaylistsPage() {
         onCancel={() => setRemovingTrackId(null)}
         onConfirm={() => {
           if (removingTrackId) removeMutation.mutate(removingTrackId);
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={t('playlists.bulkDeleteTitle')}
+        body={t('playlists.bulkDeleteBody', { count: formatNumber(selectedIds.size) })}
+        confirmLabel={t('common.delete')}
+        busy={bulkDeleteMutation.isPending}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={() => {
+          bulkDeleteMutation.mutate(Array.from(selectedIds));
         }}
       />
     </div>

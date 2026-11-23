@@ -1259,6 +1259,47 @@ input[type="file"].input {
   font-variant-numeric: tabular-nums;
 }
 
+.col-select {
+  width: 38px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.col-select .checkbox,
+.col-select input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0 auto;
+  display: block;
+}
+
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-block-end: 14px;
+}
+
+.bulk-actions-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.bulk-actions-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .col-date {
   width: 1%;
   white-space: nowrap;

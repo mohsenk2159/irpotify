@@ -12,9 +12,23 @@ interface TrackTableProps {
   emptyTitle?: string;
   emptyBody?: string;
   showAdded?: boolean;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelectOne?: (id: string) => void;
+  onToggleSelectAll?: () => void;
 }
 
-export function TrackTable({ tracks, actions, emptyTitle, emptyBody, showAdded = true }: TrackTableProps) {
+export function TrackTable({
+  tracks,
+  actions,
+  emptyTitle,
+  emptyBody,
+  showAdded = true,
+  selectable = false,
+  selectedIds,
+  onToggleSelectOne,
+  onToggleSelectAll,
+}: TrackTableProps) {
   const { t, formatBytes, formatDate, formatDuration } = useUi();
   const { playTrack, current, status } = usePlayer();
 
@@ -22,11 +36,28 @@ export function TrackTable({ tracks, actions, emptyTitle, emptyBody, showAdded =
     return <EmptyState title={emptyTitle ?? t('tracks.empty')} body={emptyBody ?? t('tracks.emptyBody')} />;
   }
 
+  const allSelected = selectable && Boolean(selectedIds && tracks.length > 0 && tracks.every((tr) => selectedIds.has(tr.id)));
+  const someSelected = selectable && Boolean(selectedIds && tracks.some((tr) => selectedIds.has(tr.id)) && !allSelected);
+
   return (
     <div className="table-wrap">
       <table className="data-table">
         <thead>
           <tr>
+            {selectable ? (
+              <th scope="col" className="col-select">
+                <input
+                  type="checkbox"
+                  className="checkbox"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={onToggleSelectAll}
+                  aria-label={t('common.selectAll')}
+                />
+              </th>
+            ) : null}
             <th scope="col">{t('tracks.titleColumn')}</th>
             <th scope="col">{t('tracks.artist')}</th>
             <th scope="col">{t('tracks.album')}</th>
@@ -53,6 +84,17 @@ export function TrackTable({ tracks, actions, emptyTitle, emptyBody, showAdded =
             const isPlaying = isCurrent && status === 'playing';
             return (
               <tr key={track.id} className={isCurrent ? 'is-current' : undefined}>
+                {selectable ? (
+                  <td className="col-select">
+                    <input
+                      type="checkbox"
+                      className="checkbox"
+                      checked={Boolean(selectedIds?.has(track.id))}
+                      onChange={() => onToggleSelectOne?.(track.id)}
+                      aria-label={track.title}
+                    />
+                  </td>
+                ) : null}
                 <td>
                   <div className="table-title-cell">
                     <Artwork url={track.artworkUrl} alt="" size={34} />
