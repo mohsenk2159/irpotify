@@ -8,6 +8,7 @@ import { Icon, BrandLogo, type IconName } from './icons';
 import { Badge, IconButton } from './primitives';
 import { roleLabel } from './helpers';
 import { ThreeDIcon } from './ThreeDIcons';
+import { Modal } from './Modal';
 
 interface NavItem {
   to: string;
@@ -72,6 +73,33 @@ export function Layout() {
   const { user, isAdmin, canContribute, logout } = useAuth();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<{
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  } | null>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setInstallPrompt(e as any);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+    } else {
+      setShowInstallModal(true);
+    }
+  };
 
   useEffect(() => {
     setNavOpen(false);
@@ -229,6 +257,17 @@ export function Layout() {
             ) : null}
             <button
               type="button"
+              className="btn btn-ghost btn-sm install-button"
+              onClick={handleInstallClick}
+              aria-label={t('nav.installApp')}
+              title={t('nav.installApp')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <ThreeDIcon type="rocket" size={20} />
+              <span className="hide-on-mobile">{t('nav.installApp')}</span>
+            </button>
+            <button
+              type="button"
               className="btn btn-ghost btn-icon"
               onClick={toggleTheme}
               aria-label={theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}
@@ -300,6 +339,58 @@ export function Layout() {
             </NavLink>
           )}
         </nav>
+
+        {showInstallModal ? (
+          <Modal
+            open={showInstallModal}
+            title={t('install.title')}
+            onClose={() => setShowInstallModal(false)}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <ThreeDIcon type="rocket" size={48} animated />
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>irpotify Music Cloud</h4>
+                  <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem' }}>{t('install.subtitle')}</p>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#38bdf8' }}>
+                  <ThreeDIcon type="disk" size={20} />
+                  <span>{t('install.androidTitle')}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
+                  {t('install.androidStep')}
+                </p>
+              </div>
+
+              <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#c084fc' }}>
+                  <ThreeDIcon type="headphones" size={20} />
+                  <span>{t('install.iosTitle')}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
+                  {t('install.iosStep')}
+                </p>
+              </div>
+
+              <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#1ed760' }}>
+                  <ThreeDIcon type="waves" size={20} />
+                  <span>{t('install.desktopTitle')}</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
+                  {t('install.desktopStep')}
+                </p>
+              </div>
+
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', opacity: 0.65, lineHeight: 1.4, fontStyle: 'italic' }}>
+                {t('install.lanTip')}
+              </p>
+            </div>
+          </Modal>
+        ) : null}
       </div>
     </div>
   );

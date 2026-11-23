@@ -777,6 +777,16 @@ export const en = {
   'monitoring.measuredAtLabel': 'Measured at',
   'nav.contribute': 'Contribute',
   'users.unlimited': 'Unlimited',
+  'nav.installApp': 'Install App',
+  'install.title': 'Install irpotify App',
+  'install.subtitle': 'Install irpotify as a standalone app on your home screen or desktop',
+  'install.androidTitle': 'Android (Chrome)',
+  'install.androidStep': 'Open the 3-dots menu (⋮) at the top right and tap "Add to Home screen" or "Install app".',
+  'install.iosTitle': 'iPhone / iPad (Safari)',
+  'install.iosStep': 'Tap the Share icon at the bottom of the screen, scroll down, and select "Add to Home Screen".',
+  'install.desktopTitle': 'Desktop (Chrome / Edge)',
+  'install.desktopStep': 'Click the install icon in the address bar or open the browser menu and select "Install irpotify".',
+  'install.lanTip': 'Note: On local network (HTTP), mobile browsers do not display the automatic banner. Using the manual steps above installs the full standalone web app immediately.',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1558,6 +1568,16 @@ export const fa: TranslationDict = {
   'monitoring.measuredAtLabel': 'زمان اندازه‌گیری',
   'nav.contribute': 'مشارکت',
   'users.unlimited': 'نامحدود',
+  'nav.installApp': 'نصب اپلیکیشن',
+  'install.title': 'نصب برنامه irpotify',
+  'install.subtitle': 'نصب irpotify به عنوان برنامه مستقل در صفحه اصلی گوشی یا دسکتاپ',
+  'install.androidTitle': 'اندروید (کروم)',
+  'install.androidStep': 'منوی سه‌نقطه (⋮) در بالای مرورگر را باز کرده و گزینه «افزودن به صفحه اصلی» (Add to Home screen) یا «نصب برنامه» را لمس کنید.',
+  'install.iosTitle': 'آیفون و آیپد (سافاری)',
+  'install.iosStep': 'آیکون اشتراک‌گذاری (Share) در پایین صفحه سافاری را لمس کرده و سپس گزینه «Add to Home Screen» (افزودن به صفحه اصلی) را انتخاب کنید.',
+  'install.desktopTitle': 'کامپیوتر (Chrome / Edge)',
+  'install.desktopStep': 'روی آیکون نصب برنامه در نوار آدرس کلیک کنید یا از منوی ۳ نقطه گزینه «Install irpotify» را بزنید.',
+  'install.lanTip': 'نکته: در شبکه محلی (HTTP)، مرورگرها بنر خودکار را نشان نمی‌دهند. با استفاده از روش‌های دستی بالا، برنامه دقیقاً مثل یک اپلیکیشن مستقل نصب می‌شود.',
 };
 
 export const dictionaries: Record<'en' | 'fa', TranslationDict> = { en, fa };

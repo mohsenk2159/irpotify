@@ -2930,3 +2930,10 @@ html[dir="rtl"] .pager-double {
     transform: translateY(0) scale(1);
   }
 }
+
+@media (max-width: 640px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
