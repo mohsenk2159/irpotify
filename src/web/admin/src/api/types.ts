@@ -537,3 +537,23 @@ export interface VersionInfo {
   environment: string;
   utc: string;
 }
+
+export interface SystemNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  email: string | null;
+  userId: string | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationsResponse {
+  items: SystemNotification[];
+  totalCount: number;
+  unreadCount: number;
+  page: number;
+  pageSize: number;
+}

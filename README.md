@@ -60,32 +60,58 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 
 ### 1. Linux Server (One-Line Automated Install)
 
-Run this single command on Ubuntu, Debian, or any modern Linux VPS:
+#### 📋 Prerequisites & Server Preparation
+Before installing on Ubuntu, Debian, or any Linux server, run the following commands to update packages and install required tools:
+
+```bash
+# 1. Update and upgrade your system
+sudo apt update && sudo apt upgrade -y
+
+# 2. Install essential packages
+sudo apt install -y curl git ufw ca-certificates socat cron
+
+# 3. If using UFW firewall, allow standard SSL & custom ports:
+sudo ufw allow 80/tcp    # For Let's Encrypt SSL validation
+sudo ufw allow 443/tcp   # For HTTPS Web Traffic
+sudo ufw allow 5080/tcp  # Admin Management Dashboard
+sudo ufw allow 5081/tcp  # Player Web App
+```
+
+#### ⚡ One-Line Automated Install
+Run this command in your terminal to start the interactive setup wizard:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mohsenk2159/irpotify/main/install.sh | sudo bash
 ```
 
+The installer wizard prompts you for:
+1. **Admin Dashboard Port** (e.g. `5080`) — dedicated to administrators.
+2. **Player Web App Port** (e.g. `5081`) — dedicated to listeners and mobile clients.
+3. **Connection Mode** — Custom domain with free SSL/HTTPS or direct server IP.
+
 The script automatically:
 1. Installs Docker and required audio processing tools (`ffmpeg`, `ffprobe`).
 2. Generates cryptographically secure random secrets and credentials.
-3. Configures domain with free automatic SSL certificates (or local IP/LAN access).
-4. Spins up PostgreSQL 17, the API engine, Background Worker, and Web Dashboard.
+3. Configures both Web App ports independently without conflicts.
+4. Spins up PostgreSQL 17, the API engine, Background Worker, and Web Apps.
 5. Installs the `/usr/local/bin/irpotify` management command.
 
 #### 🎛️ Server Management CLI
-Manage your server anytime by running:
+Manage your server anytime by typing `irpotify` in the terminal:
 ```bash
 sudo irpotify
 ```
-Or use direct commands:
+Or use direct CLI shortcuts:
 ```bash
 sudo irpotify status      # Check running container health
 sudo irpotify logs        # Stream live real-time server logs
 sudo irpotify restart     # Graceful restart of all services
 sudo irpotify update      # Pull latest GitHub updates and rebuild
+sudo irpotify ports       # Change or reconfigure Dashboard & Player ports
+sudo irpotify ssl         # Domain & SSL Management (acme.sh / Caddy SSL)
 sudo irpotify credentials # Display bootstrap token and URLs
 sudo irpotify reset-password # Reset admin or user password via CLI
+sudo irpotify uninstall   # Completely and cleanly remove irpotify
 ```
 
 > [!IMPORTANT]

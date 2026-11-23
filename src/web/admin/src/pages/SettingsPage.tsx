@@ -249,6 +249,45 @@ export function SettingsPage() {
             </form>
           </Card>
 
+          {/* Web App Ports Configuration Card */}
+          <Card title="پورت‌های وب‌اپلیکیشن (Web App Ports)">
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
+              سامانه irpotify به صورت دو پورته اجرا می‌شود تا پنل مدیریت کاملاً از وب‌اپلیکیشن کاربران و پلیر موسیقی مجزا باشد:
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: 700, fontSize: '14px' }}>داشبورد مدیریت</span>
+                  <Badge tone="warning">مخصوص ادمین</Badge>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)', fontFamily: 'monospace' }}>
+                  پورت {window.location.port || '5080'}
+                </div>
+                <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  مسیر: <code>/index.html</code> (فقط دسترسی مدیران)
+                </p>
+              </div>
+
+              <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: 700, fontSize: '14px' }}>وب‌اپلیکیشن پلیر موسیقی</span>
+                  <Badge tone="success">عمومی / کاربران</Badge>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#22c55e', fontFamily: 'monospace' }}>
+                  پورت {String(Number(window.location.port || 5080) + 1)}
+                </div>
+                <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  مسیر: <code>/player/</code> (قابل استفاده توسط کلیه کاربران)
+                </p>
+              </div>
+            </div>
+
+            <div style={{ padding: '0.85rem', borderRadius: '8px', background: 'var(--surface-2)', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.6, border: '1px solid var(--border)' }}>
+              💡 <strong>نحوه تغییر پورت‌ها:</strong> جهت تغییر یا شخصی‌سازی هر یک از این دو پورت، می‌توانید از طریق منوی ترمینال irpotify (گزینه تنظیمات پورت) یا ویرایش متغیرهای <code>MUSICHUB_DASHBOARD_PORT</code> و <code>MUSICHUB_PLAYER_PORT</code> در فایل <code>.env</code> سرور اقدام فرمایید.
+            </div>
+          </Card>
+
           <Card title={t('settings.capabilities')}>
             {capabilities ? (
               <DefinitionList

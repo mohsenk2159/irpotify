@@ -477,6 +477,7 @@ app.MapDashboardEndpoints();
 app.MapPairingEndpoints();
 app.MapTelegramEndpoints();
 app.MapSettingsEndpoints();
+app.MapNotificationEndpoints();
 app.MapStorageEndpoints();
 
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))

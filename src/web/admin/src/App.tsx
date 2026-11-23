@@ -12,6 +12,7 @@ import { GenresPage } from './pages/GenresPage';
 import { PlaylistsPage } from './pages/PlaylistsPage';
 import { UploadPage } from './pages/UploadPage';
 import { UsersPage } from './pages/UsersPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TelegramPage } from './pages/TelegramPage';
 import { MonitoringPage } from './pages/MonitoringPage';
@@ -41,6 +42,7 @@ export function App() {
           <Route path="/library/playlists" element={<PlaylistsPage />} />
           <Route path="/library/upload" element={<RequireContributor><UploadPage /></RequireContributor>} />
 
+          <Route path="/admin/notifications" element={<RequireAdmin><NotificationsPage /></RequireAdmin>} />
           <Route path="/admin/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
           <Route path="/admin/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
           <Route path="/admin/telegram" element={<RequireAdmin><TelegramPage /></RequireAdmin>} />

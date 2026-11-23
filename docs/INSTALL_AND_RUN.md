@@ -281,6 +281,21 @@ Remove it with:
 Remove-NetFirewallRule -DisplayName 'MusicHub Dev 5080'
 ```
 
+## User Password Recovery & Admin Notifications
+
+1. **Self-Service Password Reset Request:**
+   Users on the Player Web App (`/player/` or port 5081) can click **"فراموشی رمز عبور؟" (Forgot Password?)** on the login page, enter their registered email, and submit.
+   The system securely records a `SystemNotification` (type `PasswordReset`) and displays:
+   `"درخواست تغییر رمز عبور شما برای مدیریت ارسال شد."`
+
+2. **Admin Notification Center:**
+   In the Admin Management Dashboard (`/index.html` or port 5080), administrators receive a visual red alert badge in the left sidebar under **"اعلانات" (Notifications)** and in the top navigation bar.
+   Inside the Notifications page:
+   - Notifications can be filtered by All, Unread, or Read.
+   - Notifications can be sorted by Newest, Oldest, or Unread first.
+   - Batch selection and deletion are supported.
+   - Clicking **"تغییر رمز عبور کاربر"** opens the password change modal with that user's email pre-filled, allowing the administrator to generate or set a new password and immediately resolve the request.
+
 ## Recovering a forgotten administrator password
 
 There is no "forgot password" email. The server stores a PBKDF2-SHA256 hash, so a password can only be

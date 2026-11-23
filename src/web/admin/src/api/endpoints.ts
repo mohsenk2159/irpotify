@@ -48,6 +48,7 @@ import type {
   UserSummary,
   UserUpdate,
   VersionInfo,
+  NotificationsResponse,
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -177,6 +178,17 @@ export const api = {
     updateSettings: (values: Record<string, string>) =>
       http.request<void>('/api/admin/settings', { method: 'PUT', json: values }),
     backups: () => http.request<BackupRecord[]>('/api/admin/backups'),
+  },
+  notifications: {
+    list: (query?: { status?: string; sort?: string; page?: number; pageSize?: number }) =>
+      http.request<NotificationsResponse>('/api/notifications', { query: query ? { ...query } : undefined }),
+    unreadCount: () => http.request<{ unreadCount: number }>('/api/notifications/unread-count'),
+    markRead: (id: string) =>
+      http.request<{ id: string; isRead: boolean; readAt: string }>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllRead: () => http.request<void>('/api/notifications/mark-all-read', { method: 'POST' }),
+    delete: (id: string) => http.request<void>(`/api/notifications/${id}`, { method: 'DELETE' }),
+    batchDelete: (ids: string[]) =>
+      http.request<void>('/api/notifications/batch-delete', { method: 'POST', json: { ids } }),
   },
   telegram: {
     get: () => http.request<TelegramSummary>('/api/admin/telegram'),

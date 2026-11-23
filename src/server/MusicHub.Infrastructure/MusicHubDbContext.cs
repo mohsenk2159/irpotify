@@ -48,6 +48,7 @@ public sealed class MusicHubDbContext(DbContextOptions<MusicHubDbContext> option
     public DbSet<SystemEvent> SystemEvents => Set<SystemEvent>();
     public DbSet<BackupHistory> BackupHistory => Set<BackupHistory>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+    public DbSet<SystemNotification> Notifications => Set<SystemNotification>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -341,6 +342,16 @@ public sealed class MusicHubDbContext(DbContextOptions<MusicHubDbContext> option
 
         b.Entity<BackupHistory>(e => e.HasIndex(x => x.StartedAt));
         b.Entity<FeatureFlag>(e => e.HasKey(x => x.Name));
+
+        b.Entity<SystemNotification>(e =>
+        {
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.IsRead);
+            e.Property(x => x.Type).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Email).HasMaxLength(320);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.SetNull);
+        });
 
         foreach (var entityType in b.Model.GetEntityTypes())
         {

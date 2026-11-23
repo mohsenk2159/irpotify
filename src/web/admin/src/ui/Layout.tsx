@@ -35,6 +35,7 @@ const NAV: NavGroup[] = [
     id: 'admin',
     labelKey: 'nav.administration',
     items: [
+      { to: '/admin/notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/admin/monitoring', labelKey: 'nav.monitoring', icon: 'monitoring' },
       { to: '/admin/users', labelKey: 'nav.users', icon: 'users' },
       { to: '/admin/settings', labelKey: 'nav.settings', icon: 'settings' },
@@ -61,6 +62,14 @@ export function Layout() {
   const { user, isAdmin, canContribute, logout } = useAuth();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+
+  const unreadQuery = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => api.notifications.unreadCount(),
+    enabled: !!user && isAdmin,
+    refetchInterval: 15000,
+  });
+  const unreadCount = unreadQuery.data?.unreadCount ?? 0;
   const [installPrompt, setInstallPrompt] = useState<{
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -165,6 +174,9 @@ export function Layout() {
                     <NavLink to={item.to} className={({ isActive }) => `nav-link${isActive ? ' is-active' : ''}`}>
                       <Icon name={item.icon} size={18} />
                       <span>{t(item.labelKey)}</span>
+                      {item.to === '/admin/notifications' && unreadCount > 0 ? (
+                        <span className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                      ) : null}
                     </NavLink>
                   </li>
                 ))}
@@ -238,6 +250,17 @@ export function Layout() {
             {user ? <span className="topbar-user">{t('nav.signedInAs', { name: user.displayName })}</span> : null}
           </div>
           <div className="topbar-actions">
+            {isAdmin && unreadCount > 0 ? (
+              <Link
+                to="/admin/notifications"
+                className="topbar-notification-alert"
+                title={`شما ${unreadCount} اعلان جدید دارید`}
+              >
+                <span className="notification-pulse" />
+                <Icon name="bell" size={16} />
+                <span className="hide-on-mobile">{unreadCount} اعلان</span>
+              </Link>
+            ) : null}
             {user?.lastLoginAt ? (
               <span className="topbar-login" title={t('common.lastLogin')}>
                 {formatDate(user.lastLoginAt)}

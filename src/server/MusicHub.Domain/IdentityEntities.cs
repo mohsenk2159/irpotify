@@ -135,3 +135,17 @@ public sealed class AuditLog
     public string? IpAddress { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+public sealed class SystemNotification
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Type { get; set; } = "PasswordReset";
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public Guid? UserId { get; set; }
+    public User? User { get; set; }
+    public bool IsRead { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ReadAt { get; set; }
+}

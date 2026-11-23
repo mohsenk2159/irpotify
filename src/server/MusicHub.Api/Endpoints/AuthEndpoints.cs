@@ -475,6 +475,34 @@ public static class UserEndpoints
 
             return Results.NoContent();
         });
+
+        app.MapPost("/api/auth/forgot-password", async (ForgotPasswordRequest request, MusicHubDbContext db, HttpContext http, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || !IsPlausibleEmail(request.Email.Trim()))
+            {
+                return Results.BadRequest(new { error = "لطفاً یک ایمیل معتبر وارد کنید." });
+            }
+
+            var cleanEmail = request.Email.Trim();
+            var normalizedEmail = cleanEmail.ToUpperInvariant();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
+
+            var notification = new SystemNotification
+            {
+                Type = "PasswordReset",
+                Title = $"درخواست تغییر رمز عبور: {cleanEmail}",
+                Message = $"کاربر با ایمیل {cleanEmail} درخواست بازیابی رمز عبور ثبت کرده است.",
+                Email = cleanEmail,
+                UserId = user?.Id,
+                IsRead = false,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            db.Notifications.Add(notification);
+            await db.SaveChangesAsync(ct);
+
+            return Results.Ok(new { message = "درخواست تغییر رمز عبور شما برای مدیریت ارسال شد." });
+        }).AllowAnonymous();
     }
 
     private static async Task<Dictionary<Guid, long>> StorageUsageAsync(MusicHubDbContext db, CancellationToken ct) =>
@@ -500,4 +528,5 @@ public static class UserEndpoints
     public sealed record CreateUserRequest(string? Email, string? Password, string? DisplayName, string? Role, long? QuotaBytes, bool? CanUsePlayer, DateTimeOffset? ExpiresAt, long? ListenQuotaSeconds);
     public sealed record UpdateUserRequest(string? DisplayName, string? Role, bool? IsActive, long? QuotaBytes, bool? CanUsePlayer, DateTimeOffset? ExpiresAt, bool? ClearExpiresAt, long? ListenQuotaSeconds, bool? ResetListenUsage);
     public sealed record ResetPasswordRequest(string? NewPassword);
+    public sealed record ForgotPasswordRequest(string? Email);
 }

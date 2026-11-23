@@ -20,12 +20,9 @@ INSTALL_DIR="/opt/irpotify"
 REPO_URL="https://github.com/mohsenk2159/irpotify.git"
 CLI_BIN="/usr/local/bin/irpotify"
 
-# Docker Compose wrapper that automatically passes the correct compose files and .env
+# Docker Compose wrapper that automatically passes the compose files and .env
 dc() {
-    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml")
-    if grep -q "MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null; then
-        compose_args+=(-f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
-    fi
+    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
     docker compose "${compose_args[@]}" "$@"
 }
 
@@ -44,7 +41,7 @@ print_banner() {
  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝    ╚═╝   ╚═╝╚═╝        ╚═╝   
 EOF
     echo -e "${PURPLE}   === irpotify: Self-Hosted Music Streaming & Library Platform ===${NC}"
-    echo -e "${BLUE}   === Modern, Secure, Multi-User Audio Cloud ===${NC}"
+    echo -e "${BLUE}   === Modern, Dual-Port, Multi-User Audio Cloud ===${NC}"
     echo ""
 }
 
@@ -77,13 +74,13 @@ install_dependencies() {
 
     if command -v apt-get >/dev/null 2>&1; then
         apt-get update -y -qq
-        apt-get install -y -qq curl git openssl ca-certificates >/dev/null 2>&1
+        apt-get install -y -qq curl git openssl ca-certificates socat cron >/dev/null 2>&1
     elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y -q curl git openssl ca-certificates >/dev/null 2>&1
+        dnf install -y -q curl git openssl ca-certificates socat crontabs >/dev/null 2>&1
     elif command -v yum >/dev/null 2>&1; then
-        yum install -y -q curl git openssl ca-certificates >/dev/null 2>&1
+        yum install -y -q curl git openssl ca-certificates socat crontabs >/dev/null 2>&1
     elif command -v pacman >/dev/null 2>&1; then
-        pacman -Sy --noconfirm curl git openssl ca-certificates >/dev/null 2>&1
+        pacman -Sy --noconfirm curl git openssl ca-certificates socat cronie >/dev/null 2>&1
     fi
     echo -e "${GREEN}✓${NC} System dependencies ready."
 }
@@ -107,6 +104,17 @@ install_docker_if_needed() {
 }
 
 # ------------------------------------------------------------------------------
+# Helper for validating port numbers
+# ------------------------------------------------------------------------------
+validate_port() {
+    local port="$1"
+    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; then
+        return 0
+    fi
+    return 1
+}
+
+# ------------------------------------------------------------------------------
 # Installation Logic
 # ------------------------------------------------------------------------------
 setup_irpotify() {
@@ -120,21 +128,57 @@ setup_irpotify() {
 
     echo ""
     echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
-    echo -e "${BOLD}irpotify Server Setup Wizard:${NC}"
+    echo -e "${BOLD}irpotify Server Setup Wizard (Two-Port Architecture):${NC}"
     echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
+    echo -e "این برنامه شامل ۲ وب‌اپلیکیشن مجزا با ۲ پورت اختصاصی است:"
+    echo -e "  1. ${YELLOW}داشبورد مدیریتی${NC} (منحصراً مخصوص مدیران سیستم)"
+    echo -e "  2. ${GREEN}وب‌اپلیکیشن پلیر موسیقی${NC} (مخصوص کاربران، شنوندگان و پخش موزیک)"
+    echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
     echo ""
 
     echo -e "Detected Server Public IP: ${YELLOW}${BOLD}${server_ip}${NC}"
     echo ""
+
+    # Mandatory prompt for Dashboard Port
+    local dashboard_port=""
+    while true; do
+        read -r -p "Enter Port for Admin Dashboard [e.g. 5080]: " dashboard_port </dev/tty
+        dashboard_port=$(echo "$dashboard_port" | tr -d '[:space:]')
+        if validate_port "$dashboard_port"; then
+            break
+        fi
+        echo -e "${RED}[ERROR] Invalid port. You must enter a number between 1024 and 65535.${NC}"
+    done
+
+    # Mandatory prompt for Player Web App Port
+    local player_port=""
+    while true; do
+        read -r -p "Enter Port for Player Web App [e.g. 5081]: " player_port </dev/tty
+        player_port=$(echo "$player_port" | tr -d '[:space:]')
+        if ! validate_port "$player_port"; then
+            echo -e "${RED}[ERROR] Invalid port. You must enter a number between 1024 and 65535.${NC}"
+            continue
+        fi
+        if [ "$player_port" -eq "$dashboard_port" ]; then
+            echo -e "${RED}[ERROR] Player port cannot be the same as Dashboard port ($dashboard_port). Choose a distinct port.${NC}"
+            continue
+        fi
+        break
+    done
+
+    echo ""
+    echo -e "Selected Ports: Dashboard=${YELLOW}${dashboard_port}${NC} | Player=${GREEN}${player_port}${NC}"
+    echo ""
+
     echo -e "Choose connection mode:"
-    echo -e "  ${GREEN}1)${NC} ${BOLD}Custom Domain with Automatic Free SSL/HTTPS${NC} (Recommended)"
-    echo -e "  ${GREEN}2)${NC} ${BOLD}Direct Server IP Address${NC} (For testing, LAN, or no domain)"
+    echo -e "  ${GREEN}1)${NC} ${BOLD}Custom Domain with Automatic Free SSL/HTTPS${NC} (Recommended for Internet)"
+    echo -e "  ${GREEN}2)${NC} ${BOLD}Direct Server IP Address${NC} (For LAN, direct IP, or no domain)"
     echo ""
 
     local choice
     while true; do
-        read -r -p "Select option (1 or 2) [Default: 1]: " choice </dev/tty || choice="1"
-        choice=${choice:-1}
+        read -r -p "Select option (1 or 2) [Default: 2]: " choice </dev/tty || choice="2"
+        choice=${choice:-2}
         if [[ "$choice" == "1" || "$choice" == "2" ]]; then
             break
         fi
@@ -143,7 +187,6 @@ setup_irpotify() {
 
     local domain=""
     local email=""
-    local port="5080"
     local use_domain=false
 
     if [ "$choice" == "1" ]; then
@@ -160,9 +203,6 @@ setup_irpotify() {
         read -r -p "Enter your email (for Let's Encrypt SSL registration): " email </dev/tty
         email=$(echo "$email" | tr -d '[:space:]')
         email=${email:-"admin@${domain}"}
-    else
-        read -r -p "Enter web dashboard port [Default: 5080]: " port </dev/tty || port="5080"
-        port=${port:-5080}
     fi
 
     echo ""
@@ -202,18 +242,33 @@ setup_irpotify() {
     sed -i "s|MUSICHUB_JWT_SECRET=.*|MUSICHUB_JWT_SECRET=${jwt_secret}|g" .env
     sed -i "s|MUSICHUB_BOOTSTRAP_TOKEN=.*|MUSICHUB_BOOTSTRAP_TOKEN=${bootstrap_token}|g" .env
 
+    # Dual port settings
+    if grep -q "MUSICHUB_DASHBOARD_PORT=" .env; then
+        sed -i "s|MUSICHUB_DASHBOARD_PORT=.*|MUSICHUB_DASHBOARD_PORT=${dashboard_port}|g" .env
+    else
+        echo "MUSICHUB_DASHBOARD_PORT=${dashboard_port}" >> .env
+    fi
+
+    if grep -q "MUSICHUB_PLAYER_PORT=" .env; then
+        sed -i "s|MUSICHUB_PLAYER_PORT=.*|MUSICHUB_PLAYER_PORT=${player_port}|g" .env
+    else
+        echo "MUSICHUB_PLAYER_PORT=${player_port}" >> .env
+    fi
+
+    if grep -q "MUSICHUB_LAN_ADDRESS=" .env; then
+        sed -i "s|MUSICHUB_LAN_ADDRESS=.*|MUSICHUB_LAN_ADDRESS=0.0.0.0|g" .env
+    else
+        echo "MUSICHUB_LAN_ADDRESS=0.0.0.0" >> .env
+    fi
+
     if [ "$use_domain" = true ]; then
         sed -i "s|MUSICHUB_PUBLIC_HOSTNAME=.*|MUSICHUB_PUBLIC_HOSTNAME=${domain}|g" .env
         sed -i "s|MUSICHUB_PUBLIC_URL=.*|MUSICHUB_PUBLIC_URL=https://${domain}|g" .env
         sed -i "s|MUSICHUB_ACME_EMAIL=.*|MUSICHUB_ACME_EMAIL=${email}|g" .env
-        sed -i "s|# MUSICHUB_LAN_ADDRESS=.*|MUSICHUB_LAN_ADDRESS=|g" .env
-        sed -i "s|# MUSICHUB_LAN_PORT=.*|MUSICHUB_LAN_PORT=|g" .env
     else
         sed -i "s|MUSICHUB_PUBLIC_HOSTNAME=.*|MUSICHUB_PUBLIC_HOSTNAME=localhost|g" .env
-        sed -i "s|MUSICHUB_PUBLIC_URL=.*|MUSICHUB_PUBLIC_URL=http://${server_ip}:${port}|g" .env
+        sed -i "s|MUSICHUB_PUBLIC_URL=.*|MUSICHUB_PUBLIC_URL=http://${server_ip}:${player_port}|g" .env
         sed -i "s|MUSICHUB_ACME_EMAIL=.*|MUSICHUB_ACME_EMAIL=admin@localhost|g" .env
-        echo "MUSICHUB_LAN_ADDRESS=0.0.0.0" >> .env
-        echo "MUSICHUB_LAN_PORT=${port}" >> .env
     fi
 
     chmod 600 .env
@@ -229,22 +284,30 @@ setup_irpotify() {
     echo -e "${GREEN}${BOLD}    🎉 Congratulations! irpotify server is up and running!         ${NC}"
     echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
     echo ""
+    echo -e "👑 ${YELLOW}${BOLD}Admin Management Dashboard (مدیران):${NC}"
     if [ "$use_domain" = true ]; then
-        echo -e "🌐 ${BOLD}Web Dashboard URL:${NC}  ${CYAN}${BOLD}https://${domain}${NC}"
+        echo -e "   URL:  ${CYAN}${BOLD}https://${domain}/index.html${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
     else
-        echo -e "🌐 ${BOLD}Web Dashboard URL:${NC}  ${CYAN}${BOLD}http://${server_ip}:${port}${NC}"
+        echo -e "   URL:  ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
+    fi
+    echo ""
+    echo -e "🎧 ${GREEN}${BOLD}Player Web App (پلیر کاربران و شنوندگان):${NC}"
+    if [ "$use_domain" = true ]; then
+        echo -e "   URL:  ${CYAN}${BOLD}https://${domain}/player/${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
+    else
+        echo -e "   URL:  ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
     fi
     echo ""
     echo -e "🔑 ${BOLD}One-Time Setup Token (Bootstrap Token):${NC}"
     echo -e "   ${YELLOW}${BOLD}${bootstrap_token}${NC}"
     echo ""
     echo -e "📌 ${BOLD}First-Time Setup Instructions:${NC}"
-    echo -e "   1. Open the Web Dashboard URL above in your browser."
+    echo -e "   1. Open the Admin Dashboard URL in your browser."
     echo -e "   2. Paste the ${BOLD}Bootstrap Token${NC} into the setup form."
-    echo -e "   3. Enter your email and password to create the Administrator account."
+    echo -e "   3. Set your admin email and password to create the primary administrator."
     echo ""
     echo -e "🛠️  ${BOLD}Server Management Command:${NC}"
-    echo -e "   Type ${GREEN}${BOLD}irpotify${NC} in your terminal anytime to manage this server."
+    echo -e "   Type ${GREEN}${BOLD}irpotify${NC} in your terminal anytime to manage ports, SSL, and server."
     echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 }
@@ -264,10 +327,7 @@ if [ ! -f "$CLI_SCRIPT" ]; then
 fi
 
 dc() {
-    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml")
-    if grep -q "MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null; then
-        compose_args+=(-f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
-    fi
+    local compose_args=(--env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml")
     docker compose "${compose_args[@]}" "$@"
 }
 
@@ -293,8 +353,17 @@ case "$1" in
         git fetch --all && git reset --hard origin/main
         dc up -d --build
         ;;
+    ports)
+        bash "$CLI_SCRIPT" --ports
+        ;;
+    ssl)
+        bash "$CLI_SCRIPT" --ssl
+        ;;
+    uninstall)
+        bash "$CLI_SCRIPT" --uninstall
+        ;;
     credentials|token)
-        grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_LAN_PORT" "$INSTALL_DIR/.env" 2>/dev/null || true
+        grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_DASHBOARD_PORT|MUSICHUB_PLAYER_PORT" "$INSTALL_DIR/.env" 2>/dev/null || true
         ;;
     reset-password)
         shift
@@ -322,9 +391,9 @@ case "$1" in
             payload=$(printf '{"bootstrapToken":"%s","newPassword":"%s"}' "$token" "$r_pwd")
         fi
         cd "$INSTALL_DIR"
-        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5080/api/setup/reset-password \
             -H "Content-Type: application/json" \
-            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5080/api/setup/reset-password \
             -H "Content-Type: application/json" \
             -d "$payload" 2>/dev/null)
         echo -e "\033[0;32m$resp\033[0m"
@@ -338,6 +407,274 @@ case "$1" in
 esac
 EOF
     chmod +x "$CLI_BIN"
+}
+
+# ------------------------------------------------------------------------------
+# Change Ports Feature
+# ------------------------------------------------------------------------------
+manage_ports() {
+    check_root
+    cd "$INSTALL_DIR" || exit 1
+
+    local current_d_port
+    local current_p_port
+    current_d_port=$(grep "^MUSICHUB_DASHBOARD_PORT=" .env | cut -d '=' -f2- | tr -d ' "\r\n')
+    current_p_port=$(grep "^MUSICHUB_PLAYER_PORT=" .env | cut -d '=' -f2- | tr -d ' "\r\n')
+    current_d_port=${current_d_port:-5080}
+    current_p_port=${current_p_port:-5081}
+
+    echo ""
+    echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}تنظیمات و تغییر پورت‌های سامانه irpotify:${NC}"
+    echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
+    echo -e "پورت فعلی داشبورد مدیریت : ${YELLOW}${current_d_port}${NC}"
+    echo -e "پورت فعلی وب‌اپلیکیشن پلیر: ${GREEN}${current_p_port}${NC}"
+    echo ""
+
+    local new_d_port=""
+    while true; do
+        read -r -p "پورت جدید داشبورد مدیریت را وارد کنید [$current_d_port]: " new_d_port </dev/tty || new_d_port="$current_d_port"
+        new_d_port=${new_d_port:-$current_d_port}
+        new_d_port=$(echo "$new_d_port" | tr -d '[:space:]')
+        if validate_port "$new_d_port"; then
+            break
+        fi
+        echo -e "${RED}پورت نامعتبر است. عددی بین 1024 تا 65535 وارد کنید.${NC}"
+    done
+
+    local new_p_port=""
+    while true; do
+        read -r -p "پورت جدید وب‌اپلیکیشن پلیر را وارد کنید [$current_p_port]: " new_p_port </dev/tty || new_p_port="$current_p_port"
+        new_p_port=${new_p_port:-$current_p_port}
+        new_p_port=$(echo "$new_p_port" | tr -d '[:space:]')
+        if ! validate_port "$new_p_port"; then
+            echo -e "${RED}پورت نامعتبر است. عددی بین 1024 تا 65535 وارد کنید.${NC}"
+            continue
+        fi
+        if [ "$new_p_port" -eq "$new_d_port" ]; then
+            echo -e "${RED}پورت پلیر نمی‌تواند با پورت داشبورد یکسان باشد.${NC}"
+            continue
+        fi
+        break
+    done
+
+    echo ""
+    echo -e "${BLUE}در حال به‌روزرسانی تنظیمات پورت در .env...${NC}"
+
+    if grep -q "MUSICHUB_DASHBOARD_PORT=" .env; then
+        sed -i "s|MUSICHUB_DASHBOARD_PORT=.*|MUSICHUB_DASHBOARD_PORT=${new_d_port}|g" .env
+    else
+        echo "MUSICHUB_DASHBOARD_PORT=${new_d_port}" >> .env
+    fi
+
+    if grep -q "MUSICHUB_PLAYER_PORT=" .env; then
+        sed -i "s|MUSICHUB_PLAYER_PORT=.*|MUSICHUB_PLAYER_PORT=${new_p_port}|g" .env
+    else
+        echo "MUSICHUB_PLAYER_PORT=${new_p_port}" >> .env
+    fi
+
+    # Update public url if it uses IP:old_port
+    local server_ip
+    server_ip=$(detect_public_ip)
+    if grep -q "MUSICHUB_PUBLIC_URL=http://${server_ip}:" .env; then
+        sed -i "s|MUSICHUB_PUBLIC_URL=http://${server_ip}:.*|MUSICHUB_PUBLIC_URL=http://${server_ip}:${new_p_port}|g" .env
+    fi
+
+    echo -e "${YELLOW}در حال اعمال پورت‌های جدید و راه‌اندازی مجدد کانتینرها...${NC}"
+    dc down
+    dc up -d --force-recreate
+
+    echo ""
+    echo -e "${GREEN}✓ پورت‌ها با موفقیت تغییر یافتند:${NC}"
+    echo -e "   👑 داشبورد مدیریت : ${CYAN}http://${server_ip}:${new_d_port}/index.html${NC}"
+    echo -e "   🎧 پلیر وب‌اپلیکیشن: ${CYAN}http://${server_ip}:${new_p_port}/index.html${NC}"
+    echo ""
+    read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+}
+
+# ------------------------------------------------------------------------------
+# Domain & SSL Management (Inspired by 3x-ui / acme.sh)
+# ------------------------------------------------------------------------------
+manage_domain_and_ssl() {
+    check_root
+    cd "$INSTALL_DIR" || exit 1
+
+    local server_ip
+    server_ip=$(detect_public_ip)
+    local cur_host
+    cur_host=$(grep "^MUSICHUB_PUBLIC_HOSTNAME=" .env | cut -d '=' -f2- | tr -d ' "\r\n')
+    local cur_url
+    cur_url=$(grep "^MUSICHUB_PUBLIC_URL=" .env | cut -d '=' -f2- | tr -d ' "\r\n')
+
+    while true; do
+        print_banner
+        echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
+        echo -e "${BOLD}مدیریت دامین، آی‌پی عمومی و گواهی امنیتی SSL (مشابه 3x-ui):${NC}"
+        echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
+        echo -e "آی‌پی عمومی شناسایی‌شده سرور: ${YELLOW}${server_ip}${NC}"
+        echo -e "دامنه فعال فعلی             : ${CYAN}${cur_host:-None}${NC}"
+        echo -e "آدرس عمومی فعلی (URL)       : ${GREEN}${cur_url:-None}${NC}"
+        echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+        echo -e "  ${GREEN}1)${NC} ${BOLD}تنظیم دامنه اینترنتی و فعال‌سازی SSL خودکار (Let's Encrypt / ZeroSSL)${NC}"
+        echo -e "  ${GREEN}2)${NC} ${BOLD}دریافت گواهی SSL از طریق acme.sh (Standalone HTTP-01 روی پورت 80)${NC}"
+        echo -e "  ${GREEN}3)${NC} ${BOLD}دریافت گواهی SSL با Cloudflare DNS API (دامنه پشت کلودفلر یا Wildcard)${NC}"
+        echo -e "  ${GREEN}4)${NC} ${BOLD}تغییر به آی‌پی مستقیم سرور (غیرفعال‌سازی دامنه)${NC}"
+        echo -e "  ${YELLOW}0)${NC} بازگشت به منوی اصلی"
+        echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+        echo ""
+
+        local ssl_op
+        read -r -p "یک گزینه را انتخاب کنید [0-4]: " ssl_op </dev/tty
+        echo ""
+
+        case "$ssl_op" in
+            1)
+                echo -e "${BOLD}تنظیم دامنه و فعال‌سازی SSL خودکار:${NC}"
+                read -r -p "نام دامنه یا ساب‌دامنه را وارد کنید (مثال: music.example.com): " d_name </dev/tty
+                d_name=$(echo "$d_name" | tr -d '[:space:]')
+                if [ -z "$d_name" ]; then
+                    echo -e "${RED}دامنه نمی‌تواند خالی باشد.${NC}"
+                    sleep 1
+                    continue
+                fi
+                read -r -p "ایمیل شما جهت ثبت در Let's Encrypt: " a_email </dev/tty
+                a_email=$(echo "$a_email" | tr -d '[:space:]')
+                a_email=${a_email:-"admin@${d_name}"}
+
+                sed -i "s|MUSICHUB_PUBLIC_HOSTNAME=.*|MUSICHUB_PUBLIC_HOSTNAME=${d_name}|g" .env
+                sed -i "s|MUSICHUB_PUBLIC_URL=.*|MUSICHUB_PUBLIC_URL=https://${d_name}|g" .env
+                sed -i "s|MUSICHUB_ACME_EMAIL=.*|MUSICHUB_ACME_EMAIL=${a_email}|g" .env
+
+                echo -e "${YELLOW}در حال راه‌اندازی مجدد سرویس‌ها با SSL دامنه...${NC}"
+                dc restart caddy
+                echo -e "${GREEN}✓ دامنه و SSL خودکار با موفقیت فعال شدند.${NC}"
+                echo -e "آدرس جدید: ${CYAN}https://${d_name}${NC}"
+                read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+                return
+                ;;
+            2)
+                echo -e "${BOLD}دریافت گواهی SSL از طریق acme.sh (Standalone):${NC}"
+                echo -e "${YELLOW}توجه: قبل از صدور، مطمئن شوید پورت 80 سرور باز است و دامنه به آی‌پی سرور اشاره دارد.${NC}"
+                read -r -p "نام دامنه: " acme_domain </dev/tty
+                acme_domain=$(echo "$acme_domain" | tr -d '[:space:]')
+                if [ -z "$acme_domain" ]; then
+                    echo -e "${RED}دامنه الزامی است.${NC}"
+                    sleep 1
+                    continue
+                fi
+
+                # Install acme.sh if missing
+                if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
+                    echo -e "${BLUE}در حال نصب acme.sh...${NC}"
+                    curl -s https://get.acme.sh | sh -s email="admin@${acme_domain}"
+                fi
+
+                echo -e "${BLUE}درخواست صدور گواهی SSL برای ${acme_domain}...${NC}"
+                "$HOME/.acme.sh/acme.sh" --issue -d "$acme_domain" --standalone --force
+
+                echo -e "${GREEN}✓ گواهی SSL صادر شد و در مسیر $HOME/.acme.sh/${acme_domain}_ecc/ قرار گرفت.${NC}"
+                read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+                ;;
+            3)
+                echo -e "${BOLD}دریافت گواهی SSL با Cloudflare DNS API (مشابه 3x-ui):${NC}"
+                read -r -p "نام دامنه: " cf_domain </dev/tty
+                cf_domain=$(echo "$cf_domain" | tr -d '[:space:]')
+                read -r -p "Cloudflare API Token یا Global API Key: " cf_key </dev/tty
+                cf_key=$(echo "$cf_key" | tr -d '[:space:]')
+                read -r -p "ایمیل حساب کلودفلر (اختیاری در صورت استفاده از Token): " cf_email </dev/tty
+                cf_email=$(echo "$cf_email" | tr -d '[:space:]')
+
+                if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
+                    echo -e "${BLUE}در حال نصب acme.sh...${NC}"
+                    curl -s https://get.acme.sh | sh -s email="${cf_email:-admin@${cf_domain}}"
+                fi
+
+                export CF_Token="$cf_key"
+                export CF_Key="$cf_key"
+                export CF_Email="$cf_email"
+
+                echo -e "${BLUE}در حال صدور گواهی از طریق Cloudflare DNS API...${NC}"
+                "$HOME/.acme.sh/acme.sh" --issue --dns dns_cf -d "$cf_domain" -d "*.${cf_domain}" --force
+                echo -e "${GREEN}✓ گواهی SSL با موفقیت از طریق Cloudflare دریافت شد.${NC}"
+                read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+                ;;
+            4)
+                echo -e "${YELLOW}در حال تغییر آدرس به آی‌پی مستقیم سرور...${NC}"
+                local p_port
+                p_port=$(grep "^MUSICHUB_PLAYER_PORT=" .env | cut -d '=' -f2- | tr -d ' "\r\n')
+                p_port=${p_port:-5081}
+
+                sed -i "s|MUSICHUB_PUBLIC_HOSTNAME=.*|MUSICHUB_PUBLIC_HOSTNAME=localhost|g" .env
+                sed -i "s|MUSICHUB_PUBLIC_URL=.*|MUSICHUB_PUBLIC_URL=http://${server_ip}:${p_port}|g" .env
+                sed -i "s|MUSICHUB_ACME_EMAIL=.*|MUSICHUB_ACME_EMAIL=admin@localhost|g" .env
+
+                dc restart
+                echo -e "${GREEN}✓ دامنه غیرفعال شد و اتصال مستقیم با آی‌پی برقرار شد.${NC}"
+                read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+                return
+                ;;
+            0)
+                return
+                ;;
+            *)
+                echo -e "${RED}گزینه نامعتبر.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Complete Clean Uninstall Feature
+# ------------------------------------------------------------------------------
+uninstall_irpotify() {
+    check_root
+    echo -e "${RED}${BOLD}========================================================================${NC}"
+    echo -e "${RED}${BOLD}                     حذف کامل سامانه irpotify                           ${NC}"
+    echo -e "${RED}${BOLD}========================================================================${NC}"
+    echo ""
+    read -r -p "آیا از حذف کامل و توقف کلیه کانتینرهای irpotify اطمینان دارید؟ (y/N): " confirm </dev/tty
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}عملیات حذف لغو شد.${NC}"
+        read -r -p "برای ادامه Enter را فشار دهید..." </dev/tty
+        return
+    fi
+
+    echo -e "${YELLOW}در حال متوقف‌سازی و پاک‌سازی کانتینرها، شبکه‌ها و ولوم‌های داکر...${NC}"
+    if [ -d "$INSTALL_DIR" ]; then
+        cd "$INSTALL_DIR"
+        dc down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans 2>/dev/null || true
+    fi
+
+    # Remove CLI command
+    rm -f "$CLI_BIN"
+
+    echo ""
+    echo -e "${YELLOW}آیا مایلید فایل‌های موزیک آپلودشده نیز به طور کامل حذف شوند؟${NC}"
+    echo -e "  - وارد کردن ${BOLD}y${NC}: همه چیز شامل فایل‌های موزیک کاملاً حذف خواهد شد."
+    echo -e "  - وارد کردن ${BOLD}n${NC}: فایل‌های موزیک در مسیر ${GREEN}/opt/irpotify_music_backup${NC} ذخیره خواهند ماند."
+    echo ""
+    read -r -p "انتخاب شما (y/N): " purge </dev/tty
+
+    if [[ "$purge" =~ ^[Yy]$ ]]; then
+        rm -rf "$INSTALL_DIR"
+        echo -e "${GREEN}✓ تمام فایل‌ها، کانتینرها و دیتابیس irpotify با موفقیت و به طور کامل حذف شدند.${NC}"
+    else
+        echo -e "${BLUE}در حال پشتیبان‌گیری و نگهداری فایل‌های موزیک...${NC}"
+        mkdir -p /opt/irpotify_music_backup
+        if [ -d "$INSTALL_DIR/storage/music" ]; then
+            cp -r "$INSTALL_DIR/storage/music"/* /opt/irpotify_music_backup/ 2>/dev/null || true
+        fi
+        rm -rf "$INSTALL_DIR"
+        echo -e "${GREEN}✓ سرویس irpotify کاملاً پاک شد.${NC}"
+        echo -e "${GREEN}✓ فایل‌های موزیک شما در مسیر زیر سالم باقی ماندند:${NC}"
+        echo -e "   📂 ${BOLD}/opt/irpotify_music_backup${NC}"
+    fi
+
+    echo ""
+    echo -e "${CYAN}اکنون در صورت اجرای مجدد دستور نصب، سرور از ابتدا و به صورت تازه نصب خواهد شد.${NC}"
+    echo ""
+    exit 0
 }
 
 # ------------------------------------------------------------------------------
@@ -360,13 +697,15 @@ show_menu() {
         echo -e "  ${GREEN}6)${NC} ${BOLD}Update to Latest GitHub Version (Update)${NC}"
         echo -e "  ${GREEN}7)${NC} ${BOLD}View Credentials & Bootstrap Token (Credentials)${NC}"
         echo -e "  ${GREEN}8)${NC} ${BOLD}Reset Account Password (Reset Password)${NC}"
-        echo -e "  ${RED}9)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Uninstall)${NC}"
+        echo -e "  ${PURPLE}9)${NC} ${BOLD}Change Listening Ports (تنظیم و تعویض پورت‌ها)${NC}"
+        echo -e "  ${CYAN}10)${NC} ${BOLD}Domain & SSL Management (مدیریت دامنه، آی‌پی و SSL مشابه 3x-ui)${NC}"
+        echo -e "  ${RED}11)${NC} ${RED}${BOLD}Completely Uninstall irpotify (حذف کامل و تمیز)${NC}"
         echo -e "  ${YELLOW}0)${NC} Exit"
         echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
         echo ""
 
         local op
-        read -r -p "Select an option [0-9]: " op </dev/tty
+        read -r -p "Select an option [0-11]: " op </dev/tty
         echo ""
 
         case "$op" in
@@ -411,7 +750,7 @@ show_menu() {
             7)
                 echo -e "${BOLD}${CYAN}Server Configuration (.env):${NC}"
                 echo -e "────────────────────────────────────────────────────────────"
-                grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_LAN_PORT" .env || true
+                grep -E "MUSICHUB_PUBLIC_URL|MUSICHUB_PUBLIC_HOSTNAME|MUSICHUB_BOOTSTRAP_TOKEN|MUSICHUB_DASHBOARD_PORT|MUSICHUB_PLAYER_PORT" .env || true
                 echo -e "────────────────────────────────────────────────────────────"
                 echo ""
                 read -r -p "Press Enter to continue..." </dev/tty
@@ -434,9 +773,9 @@ show_menu() {
                         else
                             payload=$(printf '{"bootstrapToken":"%s","newPassword":"%s"}' "$token" "$r_pwd")
                         fi
-                        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+                        resp=$(dc exec -T api curl -s -k -X POST http://localhost:5080/api/setup/reset-password \
                             -H "Content-Type: application/json" \
-                            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5000/api/setup/reset-password \
+                            -d "$payload" 2>/dev/null || curl -s -k -X POST http://localhost:5080/api/setup/reset-password \
                             -H "Content-Type: application/json" \
                             -d "$payload" 2>/dev/null)
                         echo -e "${GREEN}$resp${NC}"
@@ -446,20 +785,13 @@ show_menu() {
                 read -r -p "Press Enter to continue..." </dev/tty
                 ;;
             9)
-                read -r -p "Are you sure you want to completely uninstall irpotify? (y/N): " confirm </dev/tty
-                if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                    dc down -v || true
-                    rm -f "$CLI_BIN"
-                    echo -e "${YELLOW}Do you also want to delete all music files and database in $INSTALL_DIR? (y/N): ${NC}"
-                    read -r -p "" purge </dev/tty
-                    if [[ "$purge" =~ ^[Yy]$ ]]; then
-                        rm -rf "$INSTALL_DIR"
-                        echo -e "${GREEN}✓ All files and services completely removed.${NC}"
-                        exit 0
-                    fi
-                    echo -e "${GREEN}✓ Containers removed (data in $INSTALL_DIR preserved).${NC}"
-                    exit 0
-                fi
+                manage_ports
+                ;;
+            10)
+                manage_domain_and_ssl
+                ;;
+            11)
+                uninstall_irpotify
                 ;;
             0)
                 echo -e "${GREEN}Goodbye!${NC}"
@@ -478,6 +810,12 @@ show_menu() {
 # ------------------------------------------------------------------------------
 if [ "$1" == "--menu" ]; then
     show_menu
+elif [ "$1" == "--ports" ]; then
+    manage_ports
+elif [ "$1" == "--ssl" ]; then
+    manage_domain_and_ssl
+elif [ "$1" == "--uninstall" ]; then
+    uninstall_irpotify
 elif [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.env" ]; then
     if [ -d "$INSTALL_DIR/.git" ]; then
         ( cd "$INSTALL_DIR" && git fetch --all >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1 ) || true
