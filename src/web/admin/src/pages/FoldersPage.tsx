@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, uploadTracks } from '../api/endpoints';
 import { ApiError } from '../api/http';
-import type { FolderNode, Track } from '../api/types';
+import type { FolderNode, Track, TrackQuery } from '../api/types';
+import type { TranslationKey } from '../i18n/translations';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { useDebounced } from '../ui/useDebounced';
@@ -28,6 +29,14 @@ import { Icon } from '../ui/icons';
 
 const MAX_FILES = 25;
 const AUDIO_ACCEPT = '.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,audio/*';
+
+const FOLDER_TRACK_SORT_OPTIONS: { value: NonNullable<TrackQuery['sort']>; labelKey: TranslationKey }[] = [
+  { value: 'title', labelKey: 'folders.sortTitle' },
+  { value: 'artist', labelKey: 'folders.sortArtist' },
+  { value: 'duration', labelKey: 'folders.sortDuration' },
+  { value: 'newest', labelKey: 'folders.sortNewest' },
+  { value: 'oldest', labelKey: 'folders.sortOldest' },
+];
 
 interface FolderForm {
   name: string;
@@ -63,6 +72,7 @@ export function FoldersPage() {
   const queryClient = useQueryClient();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [folderSort, setFolderSort] = useState<NonNullable<TrackQuery['sort']>>('title');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<FolderNode | null>(null);
   const [form, setForm] = useState<FolderForm>(EMPTY_FORM);
@@ -97,8 +107,8 @@ export function FoldersPage() {
   }, [foldersQuery.data, selectedId]);
 
   const tracksQuery = useQuery({
-    queryKey: ['tracks', 'folder', selectedId],
-    queryFn: () => api.tracks.list({ folderId: selectedId!, pageSize: 200, sort: 'title' }),
+    queryKey: ['tracks', 'folder', selectedId, folderSort],
+    queryFn: () => api.tracks.list({ folderId: selectedId!, pageSize: 200, sort: folderSort }),
     enabled: Boolean(selectedId),
   });
 
@@ -363,7 +373,19 @@ export function FoldersPage() {
                         {selected.description ? ` · ${selected.description}` : ''}
                       </p>
                     </div>
-                    <div className="row-actions">
+                    <div className="row-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <Select
+                        value={folderSort}
+                        onChange={(e) => setFolderSort(e.target.value as NonNullable<TrackQuery['sort']>)}
+                        aria-label={t('folders.sort')}
+                        style={{ width: 'auto', minWidth: '130px', fontSize: '0.85rem', padding: '4px 8px' }}
+                      >
+                        {FOLDER_TRACK_SORT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(opt.labelKey)}
+                          </option>
+                        ))}
+                      </Select>
                       {canContribute ? (
                         <>
                           <Button

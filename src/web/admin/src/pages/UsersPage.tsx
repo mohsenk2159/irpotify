@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
 import type { RoleName, UserSummary } from '../api/types';
+import type { TranslationKey } from '../i18n/translations';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { ConfirmDialog, Modal, useToast } from '../ui/Modal';
@@ -24,6 +25,15 @@ import { errorMessage, roleLabel } from '../ui/helpers';
 import { Icon } from '../ui/icons';
 
 const ROLES: RoleName[] = ['Administrator', 'Contributor', 'Listener'];
+
+const USER_SORT_OPTIONS: { value: 'name' | 'name_desc' | 'email' | 'role' | 'newest' | 'last_login'; labelKey: TranslationKey }[] = [
+  { value: 'name', labelKey: 'users.sortName' },
+  { value: 'name_desc', labelKey: 'users.sortNameDesc' },
+  { value: 'email', labelKey: 'users.sortEmail' },
+  { value: 'role', labelKey: 'users.sortRole' },
+  { value: 'newest', labelKey: 'users.sortNewest' },
+  { value: 'last_login', labelKey: 'users.sortLastLogin' },
+];
 
 interface CreateForm {
   email: string;
@@ -105,6 +115,7 @@ export function UsersPage() {
   const queryClient = useQueryClient();
 
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'name' | 'name_desc' | 'email' | 'role' | 'newest' | 'last_login'>('name');
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_CREATE);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -199,12 +210,43 @@ export function UsersPage() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const users = usersQuery.data ?? [];
-    if (!needle) return users;
-    return users.filter(
-      (user) => user.email.toLowerCase().includes(needle) || user.displayName.toLowerCase().includes(needle),
-    );
-  }, [usersQuery.data, query]);
+    let users = usersQuery.data ?? [];
+    if (needle) {
+      users = users.filter(
+        (user) => user.email.toLowerCase().includes(needle) || user.displayName.toLowerCase().includes(needle),
+      );
+    }
+    const sorted = [...users];
+    switch (sort) {
+      case 'name':
+        sorted.sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, undefined, { numeric: true, sensitivity: 'base' }),
+        );
+        break;
+      case 'name_desc':
+        sorted.sort((a, b) =>
+          b.displayName.localeCompare(a.displayName, undefined, { numeric: true, sensitivity: 'base' }),
+        );
+        break;
+      case 'email':
+        sorted.sort((a, b) => a.email.localeCompare(b.email, undefined, { numeric: true, sensitivity: 'base' }));
+        break;
+      case 'role':
+        sorted.sort((a, b) => (a.roles[0] ?? '').localeCompare(b.roles[0] ?? ''));
+        break;
+      case 'newest':
+        sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+      case 'last_login':
+        sorted.sort((a, b) => {
+          const ta = a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0;
+          const tb = b.lastLoginAt ? new Date(b.lastLoginAt).getTime() : 0;
+          return tb - ta;
+        });
+        break;
+    }
+    return sorted;
+  }, [usersQuery.data, query, sort]);
 
   const isSelf = (user: UserSummary) => currentUser?.id === user.id;
 
@@ -444,6 +486,17 @@ export function UsersPage() {
             aria-label={t('users.search')}
           />
         </div>
+        <Select
+          value={sort}
+          onChange={(event) => setSort(event.target.value as any)}
+          aria-label={t('users.sort')}
+        >
+          {USER_SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </option>
+          ))}
+        </Select>
         <span className="muted small">
           {t('common.showing', {
             from: formatNumber(filtered.length === 0 ? 0 : 1),

@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
-import type { ArtistSummary } from '../api/types';
+import type { ArtistQuery, ArtistSummary } from '../api/types';
+import type { TranslationKey } from '../i18n/translations';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { useDebounced } from '../ui/useDebounced';
@@ -17,6 +18,7 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Select,
   Textarea,
   Toolbar,
 } from '../ui/primitives';
@@ -26,6 +28,15 @@ import { TrackTable } from '../ui/TrackTable';
 import { Link } from 'react-router-dom';
 import { errorMessage } from '../ui/helpers';
 import { Icon } from '../ui/icons';
+
+const SORT_OPTIONS: { value: NonNullable<ArtistQuery['sort']>; labelKey: TranslationKey }[] = [
+  { value: 'name', labelKey: 'artists.sortName' },
+  { value: 'name_desc', labelKey: 'artists.sortNameDesc' },
+  { value: 'trackCount', labelKey: 'artists.sortTrackCount' },
+  { value: 'albumCount', labelKey: 'artists.sortAlbumCount' },
+  { value: 'newest', labelKey: 'artists.sortNewest' },
+  { value: 'oldest', labelKey: 'artists.sortOldest' },
+];
 
 interface ArtistForm {
   name: string;
@@ -40,6 +51,7 @@ export function ArtistsPage() {
 
   const [q, setQ] = useState('');
   const debouncedQ = useDebounced(q.trim(), 350);
+  const [sort, setSort] = useState<NonNullable<ArtistQuery['sort']>>('name');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -55,11 +67,11 @@ export function ArtistsPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [debouncedQ, pageSize]);
+  }, [debouncedQ, sort, pageSize]);
 
   const listQuery = useQuery({
-    queryKey: ['artists', { q: debouncedQ, page, pageSize }],
-    queryFn: () => api.artists.list({ q: debouncedQ || undefined, page, pageSize }),
+    queryKey: ['artists', { q: debouncedQ, sort, page, pageSize }],
+    queryFn: () => api.artists.list({ q: debouncedQ || undefined, sort, page, pageSize }),
     placeholderData: (previous) => previous,
   });
 
@@ -176,6 +188,12 @@ export function ArtistsPage() {
   };
 
   const detail = detailQuery.data;
+  const sortedDetailTracks = useMemo(() => {
+    if (!detail?.tracks) return [];
+    return [...detail.tracks].sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }),
+    );
+  }, [detail?.tracks]);
 
   return (
     <div className="page">
@@ -207,6 +225,17 @@ export function ArtistsPage() {
             aria-label={t('common.search')}
           />
         </div>
+        <Select
+          value={sort}
+          onChange={(event) => setSort(event.target.value as NonNullable<ArtistQuery['sort']>)}
+          aria-label={t('artists.sort')}
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </option>
+          ))}
+        </Select>
         {q ? (
           <Button variant="ghost" size="sm" onClick={() => setQ('')}>
             {t('common.clear')}
@@ -415,7 +444,7 @@ export function ArtistsPage() {
               )}
             </Card>
             <Card title={t('tracks.title')}>
-              <TrackTable tracks={detail.tracks} showAdded={false} />
+              <TrackTable tracks={sortedDetailTracks} showAdded={false} />
             </Card>
           </div>
         ) : null}

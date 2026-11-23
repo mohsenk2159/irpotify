@@ -122,17 +122,19 @@ export interface SelectOption {
 }
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  options: SelectOption[];
+  options?: SelectOption[];
 }
 
-export function Select({ options, className, ...rest }: SelectProps) {
+export function Select({ options, className, children, ...rest }: SelectProps) {
   return (
     <select className={['input select', className ?? ''].filter(Boolean).join(' ')} {...rest}>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
+      {options
+        ? options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))
+        : children}
     </select>
   );
 }

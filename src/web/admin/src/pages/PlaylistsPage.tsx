@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
 import type { PlaylistSummary } from '../api/types';
+import type { TranslationKey } from '../i18n/translations';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { useDebounced } from '../ui/useDebounced';
@@ -17,12 +18,20 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Select,
   Textarea,
   Toolbar,
 } from '../ui/primitives';
 import { TrackTable } from '../ui/TrackTable';
 import { errorMessage, shortId } from '../ui/helpers';
 import { Icon } from '../ui/icons';
+
+const PLAYLIST_SORT_OPTIONS: { value: 'updated' | 'name' | 'name_desc' | 'trackCount'; labelKey: TranslationKey }[] = [
+  { value: 'updated', labelKey: 'playlists.sortUpdated' },
+  { value: 'name', labelKey: 'playlists.sortName' },
+  { value: 'name_desc', labelKey: 'playlists.sortNameDesc' },
+  { value: 'trackCount', labelKey: 'playlists.sortTrackCount' },
+];
 
 interface PlaylistForm {
   name: string;
@@ -40,6 +49,7 @@ export function PlaylistsPage() {
   const queryClient = useQueryClient();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [playlistSort, setPlaylistSort] = useState<'updated' | 'name' | 'name_desc' | 'trackCount'>('updated');
   const [order, setOrder] = useState<string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addSearch, setAddSearch] = useState('');
@@ -71,6 +81,26 @@ export function PlaylistsPage() {
     [playlistsQuery.data, selectedId],
   );
 
+  const sortedPlaylists = useMemo(() => {
+    const list = playlistsQuery.data ?? [];
+    const sorted = [...list];
+    switch (playlistSort) {
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        break;
+      case 'name_desc':
+        sorted.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
+        break;
+      case 'trackCount':
+        sorted.sort((a, b) => b.trackCount - a.trackCount);
+        break;
+      default:
+        sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        break;
+    }
+    return sorted;
+  }, [playlistsQuery.data, playlistSort]);
+
   useEffect(() => {
     if (!selectedId && playlistsQuery.data && playlistsQuery.data.length > 0) {
       setSelectedId(playlistsQuery.data[0]?.id ?? null);
@@ -89,6 +119,18 @@ export function PlaylistsPage() {
   }, [detailTracks, order]);
   const orderDirty =
     detailTracks.length === order.length && detailTracks.some((track, index) => track.id !== order[index]);
+
+  const sortTracksBy = (mode: 'title' | 'artist' | 'duration') => {
+    const sorted = [...orderedTracks];
+    if (mode === 'title') {
+      sorted.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+    } else if (mode === 'artist') {
+      sorted.sort((a, b) => a.artist.localeCompare(b.artist, undefined, { numeric: true, sensitivity: 'base' }));
+    } else if (mode === 'duration') {
+      sorted.sort((a, b) => b.durationSeconds - a.durationSeconds);
+    }
+    setOrder(sorted.map((t) => t.id));
+  };
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['playlists'] });
@@ -302,6 +344,20 @@ export function PlaylistsPage() {
           <div className="split-layout">
             <section className="card playlist-list" aria-label={t('playlists.title')}>
               <div className="card-body">
+                <div style={{ marginBottom: '10px' }}>
+                  <Select
+                    value={playlistSort}
+                    onChange={(e) => setPlaylistSort(e.target.value as any)}
+                    aria-label={t('playlists.sort')}
+                    style={{ width: '100%', fontSize: '0.85rem' }}
+                  >
+                    {PLAYLIST_SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {t(opt.labelKey)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 {editablePlaylists.length > 0 ? (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
                     <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
@@ -315,7 +371,7 @@ export function PlaylistsPage() {
                   </div>
                 ) : null}
                 <ul className="select-list">
-                  {playlistsQuery.data.map((playlist) => {
+                  {sortedPlaylists.map((playlist) => {
                     const canDeleteThis = isAdmin || (user && playlist.ownerUserId === user.id);
                     return (
                       <li key={playlist.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -404,6 +460,22 @@ export function PlaylistsPage() {
                           >
                             {t('playlists.addTrack')}
                           </Button>
+                          {canEdit && orderedTracks.length > 1 ? (
+                            <Select
+                              aria-label={t('playlists.sortTracks')}
+                              onChange={(e) => {
+                                const val = e.target.value as 'title' | 'artist' | 'duration';
+                                if (val) sortTracksBy(val);
+                              }}
+                              defaultValue=""
+                              style={{ width: 'auto', minWidth: '130px', fontSize: '0.85rem' }}
+                            >
+                              <option value="" disabled>{t('playlists.sortTracks')}</option>
+                              <option value="title">{t('playlists.sortTitle')}</option>
+                              <option value="artist">{t('playlists.sortArtist')}</option>
+                              <option value="duration">{t('playlists.sortDuration')}</option>
+                            </Select>
+                          ) : null}
                           <Button
                             icon="refresh"
                             disabled={!canEdit || !orderDirty || reorderMutation.isPending}

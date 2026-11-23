@@ -111,12 +111,15 @@ fun LibraryScreen(
     // If an album is opened, show album tracks
     val currentAlbum = openAlbum
     if (currentAlbum != null) {
+        val sortedAlbum = remember(currentAlbum) {
+            currentAlbum.copy(tracks = currentAlbum.tracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }))
+        }
         AlbumTrackList(
-            state = currentAlbum,
+            state = sortedAlbum,
             container = container,
             onBack = viewModel::closeAlbum,
             onPlay = { index ->
-                viewModel.playTracks(currentAlbum.tracks, index)
+                viewModel.playTracks(sortedAlbum.tracks, index)
                 onPlayTracks()
             },
             onToggleFavorite = viewModel::toggleFavorite,

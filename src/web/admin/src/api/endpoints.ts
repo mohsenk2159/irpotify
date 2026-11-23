@@ -4,9 +4,11 @@ import { getAccessToken } from './session';
 import type {
   AdminMetrics,
   AlbumDetail,
+  AlbumQuery,
   AlbumSummary,
   AlbumWrite,
   ArtistDetail,
+  ArtistQuery,
   ArtistSummary,
   AuditEntry,
   AuthSession,
@@ -113,8 +115,8 @@ export const api = {
     streamToken: (id: string) => http.request<StreamToken>(`/api/tracks/${id}/stream-token`, { method: 'POST' }),
   },
   albums: {
-    list: (query: { q?: string; page?: number; pageSize?: number }) =>
-      http.request<Paged<AlbumSummary>>('/api/albums', { query }),
+    list: (query: AlbumQuery) =>
+      http.request<Paged<AlbumSummary>>('/api/albums', { query: { ...query } }),
     get: (id: string) => http.request<AlbumDetail>(`/api/albums/${id}`),
     create: (payload: AlbumWrite) => http.request<{ id: string; title: string }>('/api/albums', { method: 'POST', json: payload }),
     update: (id: string, payload: AlbumWrite) => http.request<void>(`/api/albums/${id}`, { method: 'PATCH', json: payload }),
@@ -125,8 +127,8 @@ export const api = {
       http.request<void>(`/api/albums/${id}/tracks/${trackId}`, { method: 'DELETE' }),
   },
   artists: {
-    list: (query: { q?: string; page?: number; pageSize?: number }) =>
-      http.request<Paged<ArtistSummary>>('/api/artists', { query }),
+    list: (query: ArtistQuery) =>
+      http.request<Paged<ArtistSummary>>('/api/artists', { query: { ...query } }),
     get: (id: string) => http.request<ArtistDetail>(`/api/artists/${id}`),
     create: (payload: { name: string; biography?: string | null }) =>
       http.request<{ id: string; name: string }>('/api/artists', { method: 'POST', json: payload }),

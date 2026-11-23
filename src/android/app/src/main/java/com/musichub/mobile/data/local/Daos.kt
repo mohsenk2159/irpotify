@@ -83,13 +83,13 @@ interface AlbumDao {
 
     @Query(
         "SELECT t.* FROM tracks t INNER JOIN album_tracks at ON t.id = at.trackId " +
-            "WHERE at.albumId = :albumId ORDER BY at.position",
+            "WHERE at.albumId = :albumId ORDER BY t.title COLLATE NOCASE, at.position",
     )
     fun observeAlbumTracks(albumId: String): Flow<List<TrackEntity>>
 
     @Query(
         "SELECT t.* FROM tracks t INNER JOIN album_tracks at ON t.id = at.trackId " +
-            "WHERE at.albumId = :albumId ORDER BY at.position",
+            "WHERE at.albumId = :albumId ORDER BY t.title COLLATE NOCASE, at.position",
     )
     suspend fun getAlbumTracks(albumId: String): List<TrackEntity>
 

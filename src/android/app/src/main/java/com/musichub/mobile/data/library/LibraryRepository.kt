@@ -208,9 +208,10 @@ class LibraryRepository(
             val response = runApi { api().album(id) }
             val album = cacheAlbum(response.album)
             val tracks = cacheTracks(response.tracks)
+            val sortedTracks = tracks.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
             database.albums().clearAlbumTracks(id)
-            database.albums().insertAlbumTracks(tracks.mapIndexed { index, track -> AlbumTrackEntity(id, track.id, index) })
-            Result.success(AlbumDetailData(album, tracks, fromCache = false))
+            database.albums().insertAlbumTracks(sortedTracks.mapIndexed { index, track -> AlbumTrackEntity(id, track.id, index) })
+            Result.success(AlbumDetailData(album, sortedTracks, fromCache = false))
         } catch (exception: ApiCallException) {
             if (exception.statusCode == 404) {
                 database.albums().delete(id)
@@ -219,7 +220,8 @@ class LibraryRepository(
             }
             val album = database.albums().get(id)
                 ?: return Result.failure(exception)
-            Result.success(AlbumDetailData(album, database.albums().getAlbumTracks(id), fromCache = true))
+            val cachedTracks = database.albums().getAlbumTracks(id).sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+            Result.success(AlbumDetailData(album, cachedTracks, fromCache = true))
         }
     }
 

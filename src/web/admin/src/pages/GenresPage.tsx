@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api/endpoints';
+import type { TranslationKey } from '../i18n/translations';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { Modal, useToast } from '../ui/Modal';
@@ -13,9 +14,17 @@ import {
   Input,
   LoadingState,
   PageHeader,
+  Select,
+  Toolbar,
 } from '../ui/primitives';
 import { errorMessage } from '../ui/helpers';
 import { Icon } from '../ui/icons';
+
+const GENRE_SORT_OPTIONS: { value: 'name' | 'name_desc' | 'trackCount'; labelKey: TranslationKey }[] = [
+  { value: 'name', labelKey: 'genres.sortName' },
+  { value: 'name_desc', labelKey: 'genres.sortNameDesc' },
+  { value: 'trackCount', labelKey: 'genres.sortTracks' },
+];
 
 export function GenresPage() {
   const { t, formatNumber } = useUi();
@@ -23,11 +32,31 @@ export function GenresPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
 
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'name' | 'name_desc' | 'trackCount'>('name');
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const genresQuery = useQuery({ queryKey: ['genres'], queryFn: api.genres.list });
+
+  const filteredGenres = useMemo(() => {
+    const list = genresQuery.data ?? [];
+    const term = q.trim().toLowerCase();
+    const filtered = term ? list.filter((g) => g.name.toLowerCase().includes(term)) : [...list];
+    switch (sort) {
+      case 'name':
+        filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        break;
+      case 'name_desc':
+        filtered.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
+        break;
+      case 'trackCount':
+        filtered.sort((a, b) => b.trackCount - a.trackCount);
+        break;
+    }
+    return filtered;
+  }, [genresQuery.data, q, sort]);
 
   const createMutation = useMutation({
     mutationFn: (value: string) => api.genres.create(value),
@@ -71,13 +100,42 @@ export function GenresPage() {
       <div className={`notice ${isAdmin ? 'notice-info' : 'notice-warning'}`}>{t('genres.readOnly')}</div>
       {!isAdmin ? <div className="notice notice-info">{t('genres.adminOnly')}</div> : null}
 
+      <Toolbar>
+        <div className="search-field">
+          <Icon name="search" size={18} />
+          <Input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t('genres.search')}
+            aria-label={t('genres.search')}
+          />
+        </div>
+        <Select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as any)}
+          aria-label={t('genres.sort')}
+        >
+          {GENRE_SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {t(opt.labelKey)}
+            </option>
+          ))}
+        </Select>
+        {q ? (
+          <Button variant="ghost" size="sm" onClick={() => setQ('')}>
+            {t('common.clear')}
+          </Button>
+        ) : null}
+      </Toolbar>
+
       {genresQuery.isLoading ? <LoadingState /> : null}
       {genresQuery.isError ? (
         <ErrorState error={genresQuery.error} title={t('genres.loadFailed')} onRetry={() => void genresQuery.refetch()} />
       ) : null}
 
       {genresQuery.data ? (
-        genresQuery.data.length === 0 ? (
+        filteredGenres.length === 0 ? (
           <EmptyState
             title={t('genres.empty')}
             body={t('genres.emptyBody')}
@@ -105,7 +163,7 @@ export function GenresPage() {
                 </tr>
               </thead>
               <tbody>
-                {genresQuery.data.map((genre) => (
+                {filteredGenres.map((genre) => (
                   <tr key={genre.id}>
                     <td>{genre.name}</td>
                     <td className="col-narrow mono">{formatNumber(genre.trackCount)}</td>

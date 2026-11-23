@@ -830,7 +830,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     DetailSubtitle = detail.Album.Subtitle;
                     DetailKind = CardKind.Album;
                     _detailPlaylistId = null;
-                    foreach (var track in detail.Tracks) DetailTracks.Add(track);
+                    foreach (var track in detail.Tracks.OrderBy(x => x.Title, StringComparer.OrdinalIgnoreCase)) DetailTracks.Add(track);
                     break;
                 }
                 case CardKind.Artist:

@@ -60,12 +60,16 @@ public static class LibraryEndpoints
             // Every ordering ends with Id so a page boundary can never repeat or drop a row when
             // several rows share the sort key (a bulk import writes many identical CreatedAt
             // values, and PostgreSQL does not guarantee tie order) (CR-017).
-            query = sort switch
+            var effectiveSort = sort ?? (albumId is not null ? "title" : "newest");
+            query = effectiveSort switch
             {
                 "title" => query.OrderBy(x => x.NormalizedTitle).ThenBy(x => x.Id),
+                "title_desc" => query.OrderByDescending(x => x.NormalizedTitle).ThenByDescending(x => x.Id),
                 "artist" => query.OrderBy(x => x.ArtistDisplay).ThenBy(x => x.NormalizedTitle).ThenBy(x => x.Id),
+                "artist_desc" => query.OrderByDescending(x => x.ArtistDisplay).ThenByDescending(x => x.NormalizedTitle).ThenByDescending(x => x.Id),
                 "oldest" => query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id),
                 "duration" => query.OrderByDescending(x => x.DurationSeconds).ThenByDescending(x => x.Id),
+                "duration_asc" => query.OrderBy(x => x.DurationSeconds).ThenBy(x => x.Id),
                 _ => query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
             };
 
@@ -182,7 +186,7 @@ public static class LibraryEndpoints
 
     private static void MapAlbums(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/albums", [Authorize] async (string? q, int? page, int? pageSize, MusicHubDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/albums", [Authorize] async (string? q, string? sort, int? page, int? pageSize, MusicHubDbContext db, CancellationToken ct) =>
         {
             var (p, size) = RequestHelpers.Page(page, pageSize);
             var query = db.Albums.AsNoTracking().Where(x => !x.IsDeleted);
@@ -190,7 +194,17 @@ public static class LibraryEndpoints
             var total = await query.CountAsync(ct);
             // Id tie-breaker: album titles repeat across artists and a bulk import writes many
             // identical NormalizedTitle values (CR-017).
-            var rows = await query.OrderBy(x => x.NormalizedTitle).ThenBy(x => x.Id).Skip((p - 1) * size).Take(size)
+            query = sort switch
+            {
+                "title_desc" => query.OrderByDescending(x => x.NormalizedTitle).ThenByDescending(x => x.Id),
+                "newest" => query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id),
+                "oldest" => query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id),
+                "year" => query.OrderByDescending(x => x.Year).ThenBy(x => x.NormalizedTitle).ThenBy(x => x.Id),
+                "year_asc" => query.OrderBy(x => x.Year).ThenBy(x => x.NormalizedTitle).ThenBy(x => x.Id),
+                "artist" => query.OrderBy(x => x.AlbumArtist).ThenBy(x => x.NormalizedTitle).ThenBy(x => x.Id),
+                _ => query.OrderBy(x => x.NormalizedTitle).ThenBy(x => x.Id)
+            };
+            var rows = await query.Skip((p - 1) * size).Take(size)
                 .Select(x => new
                 {
                     x.Id,
@@ -238,16 +252,16 @@ public static class LibraryEndpoints
             var album = await db.Albums.AsNoTracking().Include(x => x.Artist).Include(x => x.AlbumTracks).ThenInclude(x => x.Track).ThenInclude(x => x.Genre).Include(x => x.AlbumTracks).ThenInclude(x => x.Track).ThenInclude(x => x.AudioAsset).ThenInclude(x => x.FileHash)
                 .SingleOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
             if (album is null) return Results.NotFound();
-            var trackIds = album.AlbumTracks.Select(x => x.TrackId).ToList();
+            var trackIds = album.AlbumTracks.Where(x => !x.Track.IsDeleted).Select(x => x.TrackId).ToList();
             var favorites = trackIds.Count == 0
                 ? []
                 : await db.Favorites.AsNoTracking().Where(x => x.UserId == principal.GetUserId() && trackIds.Contains(x.TrackId)).Select(x => x.TrackId).ToListAsync(ct);
             var set = favorites.ToHashSet();
-            var artworkPath = album.ArtworkPath ?? album.AlbumTracks.Select(x => x.Track.ArtworkPath).FirstOrDefault(x => x is not null);
+            var artworkPath = album.ArtworkPath ?? album.AlbumTracks.Where(x => !x.Track.IsDeleted).Select(x => x.Track.ArtworkPath).FirstOrDefault(x => x is not null);
             return Results.Ok(new
             {
                 album = new { album.Id, album.Title, album.AlbumArtist, album.ArtistId, ArtistName = album.Artist?.Name, album.Year, album.Genre, album.Description, album.CreatedAt, artworkUrl = artworkPath is null ? null : $"/api/albums/{album.Id}/artwork" },
-                tracks = album.AlbumTracks.OrderBy(x => x.Position).Select(x => DtoMapper.Track(x.Track, set.Contains(x.TrackId)))
+                tracks = album.AlbumTracks.Where(x => !x.Track.IsDeleted).OrderBy(x => x.Track.NormalizedTitle).ThenBy(x => x.Track.Id).Select(x => DtoMapper.Track(x.Track, set.Contains(x.TrackId)))
             });
         });
 
@@ -360,13 +374,22 @@ public static class LibraryEndpoints
 
     private static void MapArtists(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/artists", [Authorize] async (string? q, int? page, int? pageSize, MusicHubDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/artists", [Authorize] async (string? q, string? sort, int? page, int? pageSize, MusicHubDbContext db, CancellationToken ct) =>
         {
             var (p, size) = RequestHelpers.Page(page, pageSize);
             var query = db.Artists.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.Name, $"%{q.Trim()}%"));
             var total = await query.CountAsync(ct);
-            var items = await query.OrderBy(x => x.NormalizedName).ThenBy(x => x.Id).Skip((p - 1) * size).Take(size)
+            query = sort switch
+            {
+                "name_desc" => query.OrderByDescending(x => x.NormalizedName).ThenByDescending(x => x.Id),
+                "newest" => query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id),
+                "oldest" => query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id),
+                "trackCount" => query.OrderByDescending(x => x.TrackArtists.Count).ThenBy(x => x.NormalizedName).ThenBy(x => x.Id),
+                "albumCount" => query.OrderByDescending(x => x.Albums.Count(a => !a.IsDeleted)).ThenBy(x => x.NormalizedName).ThenBy(x => x.Id),
+                _ => query.OrderBy(x => x.NormalizedName).ThenBy(x => x.Id)
+            };
+            var items = await query.Skip((p - 1) * size).Take(size)
                 .Select(x => new { x.Id, x.Name, x.Biography, TrackCount = x.TrackArtists.Count, AlbumCount = x.Albums.Count(a => !a.IsDeleted), artworkUrl = (string?)null })
                 .ToListAsync(ct);
             return Results.Ok(new PagedResult<object>(items.Cast<object>().ToList(), p, size, total));

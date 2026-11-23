@@ -89,7 +89,21 @@ export interface TrackQuery {
   genreId?: string;
   favorites?: boolean;
   includeDeleted?: boolean;
-  sort?: 'newest' | 'title' | 'artist' | 'oldest' | 'duration';
+  sort?: 'newest' | 'title' | 'title_desc' | 'artist' | 'artist_desc' | 'oldest' | 'duration' | 'duration_asc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AlbumQuery {
+  q?: string;
+  sort?: 'title' | 'title_desc' | 'newest' | 'oldest' | 'year' | 'year_asc' | 'artist';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ArtistQuery {
+  q?: string;
+  sort?: 'name' | 'name_desc' | 'newest' | 'oldest' | 'trackCount' | 'albumCount';
   page?: number;
   pageSize?: number;
 }
