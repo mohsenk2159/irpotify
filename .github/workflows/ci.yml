@@ -180,6 +180,44 @@ jobs:
       - name: Build player
         run: dotnet build src/desktop/MusicHub.Player/MusicHub.Player.csproj --configuration Release
 
+  ios:
+    name: iOS app build
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build app
+        working-directory: src/ios
+        run: |
+          xcodebuild clean build \
+            -project irpotify.xcodeproj \
+            -scheme irpotify \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package IPA
+        working-directory: src/ios
+        run: |
+          mkdir -p out/Payload
+          cp -r build/Build/Products/Release-iphoneos/irpotify.app out/Payload/
+          cd out
+          zip -r irpotify-ios.ipa Payload
+          shasum -a 256 irpotify-ios.ipa > irpotify-ios.ipa.sha256
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: src/ios/out/*.ipa*
+          if-no-files-found: warn
+
   compose:
     name: Compose and installer validation
     runs-on: ubuntu-latest

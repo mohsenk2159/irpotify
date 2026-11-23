@@ -1,0 +1,67 @@
+name: iOS
+
+# Build the native Swift/SwiftUI iOS app and produce an unsigned IPA artifact.
+# Can be sideloaded directly using AltStore, Sideloadly, or TrollStore.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/ios/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'src/ios/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode Version
+        run: xcodebuild -version
+
+      - name: Build Application Bundle
+        working-directory: src/ios
+        run: |
+          xcodebuild clean build \
+            -project irpotify.xcodeproj \
+            -scheme irpotify \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package IPA
+        working-directory: src/ios
+        run: |
+          mkdir -p out/Payload
+          cp -r build/Build/Products/Release-iphoneos/irpotify.app out/Payload/
+          cd out
+          zip -r irpotify-ios.ipa Payload
+          shasum -a 256 irpotify-ios.ipa > irpotify-ios.ipa.sha256
+          ls -lh
+
+      - name: Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: irpotify-ios-ipa
+          path: |
+            src/ios/out/irpotify-ios.ipa
+            src/ios/out/irpotify-ios.ipa.sha256
+          if-no-files-found: error

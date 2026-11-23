@@ -47,6 +47,7 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 | Platform | Download | Description |
 | :--- | :--- | :--- |
 | **Android (8.0+)** | [📥 **irpotify-android.apk** (4.9 MB)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | Official signed release APK. Spotify UI, offline downloads, instant QR pairing. |
+| **iOS (iPhone / iPad)** | [📱 **irpotify-ios.ipa**](https://github.com/mohsenk2159/irpotify/releases/latest) | Native Swift/SwiftUI client. Background audio, Lock Screen controls, QR scanner. Sideload via Sideloadly / AltStore / TrollStore. |
 | **Windows Player (Setup)** | [💿 **irpotify-player-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe) | Official 1-click Windows Setup installer with Desktop & Start Menu shortcuts. |
 | **Server for Windows (Host Setup)** | [💿 **irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | Complete 1-click installer to host your personal music cloud server on any Windows PC (10/11): PostgreSQL 17, API, Worker & Dashboard. |
 | **Docker (Linux/ARM)** | `deploy/docker/docker-compose.yml` | Multi-arch production topology with automatic SSL by Caddy. |
@@ -128,7 +129,24 @@ docker compose --env-file .env -f deploy/docker/docker-compose.yml up -d --build
 
 ---
 
-### 4. Configuring the Telegram Ingestion Bot (Multi-Admin Supported)
+### 4. Setting Up the iOS App (iPhone & iPad)
+
+The iOS client is written natively in **Swift & SwiftUI** with full background audio playback, lock screen media controls, and instant QR pairing:
+
+1. **Download the IPA:** Download `irpotify-ios.ipa` from the [Releases](https://github.com/mohsenk2159/irpotify/releases) page.
+2. **Sideload via Sideloadly (Windows / Mac - Recommended):**
+   - Connect your iPhone to your PC via USB cable.
+   - Launch [Sideloadly](https://sideloadly.io/), drag and drop `irpotify-ios.ipa`.
+   - Enter your Apple ID and click **Start** to install.
+   - On iOS: Go to **Settings > General > VPN & Device Management**, tap your developer certificate, and select **Trust**.
+3. **Alternatively via AltStore or TrollStore:**
+   - On AltStore: open `irpotify-ios.ipa` in AltStore and tap install.
+   - On devices with TrollStore (iOS 14.0–17.0): tap `irpotify-ios.ipa` to install permanently without 7-day re-signing.
+4. **Log in:** Open **irpotify** on your iPhone, tap **Scan Server QR Code**, and scan the user QR code generated in the Web Dashboard.
+
+---
+
+### 5. Configuring the Telegram Ingestion Bot (Multi-Admin Supported)
 
 irpotify allows you to upload songs directly via Telegram:
 1. Create a bot using [@BotFather](https://t.me/BotFather) and copy your **Bot Token**.

@@ -289,11 +289,52 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  ios:
+    name: Build iOS app (IPA)
+    needs: verify
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build application bundle
+        working-directory: src/ios
+        run: |
+          xcodebuild clean build \
+            -project irpotify.xcodeproj \
+            -scheme irpotify \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package IPA
+        working-directory: src/ios
+        run: |
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          mkdir -p out/Payload
+          cp -r build/Build/Products/Release-iphoneos/irpotify.app out/Payload/
+          cd out
+          zip -r "irpotify-ios-$VERSION.ipa" Payload
+          shasum -a 256 "irpotify-ios-$VERSION.ipa" > "irpotify-ios-$VERSION.ipa.sha256"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: src/ios/out/*.ipa*
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: [images, android, windows-player]
+    needs: [images, android, windows-player, ios]
     # A skipped Android job must not block the release when it was deliberately skipped.
-    if: ${{ always() && needs.images.result == 'success' && needs.windows-player.result == 'success' }}
+    if: ${{ always() && needs.images.result == 'success' && needs.windows-player.result == 'success' && needs.ios.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -353,6 +394,7 @@ jobs:
             | --- | --- |
             | Android | `MusicHub-Android-${{ steps.version.outputs.version }}-release.apk` |
             | Windows | `MusicHubPlayer-win-x64-${{ steps.version.outputs.version }}.zip` |
+            | iOS (iPhone/iPad) | `irpotify-ios-${{ steps.version.outputs.version }}.ipa` |
 
             Verify a download with the matching `.sha256` file, or with `SHA256SUMS.txt`.
 

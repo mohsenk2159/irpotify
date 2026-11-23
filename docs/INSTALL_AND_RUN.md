@@ -81,6 +81,25 @@ Cleartext must be allowed in the app's connection settings — `LocalNetworkPoli
 Self-contained: the .NET runtime does not need to be installed. The zip is not an MSI; the
 repository has no WiX/Inno/MSIX project.
 
+## iOS client (iPhone & iPad)
+
+The native iOS client is built in **Swift and SwiftUI** (`src/ios`) and targets iOS 16.0+:
+
+### Features
+- Native audio engine (`AVPlayer`) with continuous background playback (`UIBackgroundModes: audio`).
+- System Lock Screen & Control Center controls with real-time seeking, duration, and cover art (`MPRemoteCommandCenter` & `MPNowPlayingInfoCenter`).
+- Instant QR code pairing via camera scanner (`AVCaptureSession`).
+- Home, Search, Library (with 0-9 / A-Z alphabetical sort), Album, Artist, Folder, and Settings views matching Spotify's dark aesthetic.
+
+### Installation
+1. Obtain the `irpotify-ios.ipa` binary from the [Releases](https://github.com/mohsenk2159/irpotify/releases) page or the GitHub Actions `iOS` workflow artifact.
+2. Sideload onto iPhone or iPad using:
+   - **Sideloadly** (Windows / Mac) with a free personal Apple ID.
+   - **AltStore** / **AltServer**.
+   - **TrollStore** (for devices on iOS 14.0–17.0) for permanent installation.
+3. Trust the developer profile under iOS **Settings > General > VPN & Device Management**.
+4. Open **irpotify** and scan the pairing QR code from the admin dashboard to start streaming!
+
 ## Server and Telegram bot
 
 Three processes must be running. They are started and kept alive by the Scheduled Task

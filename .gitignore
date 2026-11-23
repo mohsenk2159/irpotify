@@ -19,6 +19,15 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Xcode / iOS
+*.xcuserstate
+project.xcworkspace/xcuserdata/
+*.xcuserdatad
+*.ipa
+*.dSYM.zip
+*.dSYM
+DerivedData/
+
 # Runtime data and secrets.
 #
 # The leading slash anchors `storage/` and `artifacts/` to the repository root. Without it,
