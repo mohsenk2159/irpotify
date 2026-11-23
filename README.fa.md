@@ -50,7 +50,7 @@
 | :--- | :--- | :--- |
 | **اندروید (۸.۰ به بالا)** | [📥 **دانلود فایل irpotify-android.apk**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | نسخه رسمی امضاشده Release با حجم ۴.۹ مگابایت. رابط کاربری اسپاتیفای، دانلود آفلاین و اتصال با QR. |
 | **نرم‌افزار نصبی پلیر ویندوز** | [💿 **دانلود irpotify-player-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe) | اینستالر نصبی یک‌کلیکه ویندوز با ساخت آیکون دسکتاپ، منوی استارت و بدون نیاز به نصب هیچ پیش‌نیاز. |
-| **نرم‌افزار نصبی سرور ویندوز** | [💿 **دانلود irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | برنامه نصب خودکار سرور روی ویندوز شامل دیتابیس PostgreSQL 17، بک‌اند، ورکر، داشبورد و اجرای خودکار. |
+| **سرور اختصاصی برای ویندوز (Host Setup)** | [💿 **دانلود irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | برنامه نصب خودکار و ۱-کلیکه جهت راه‌اندازی سرور اختصاصی موزیک روی هر کامپیوتر ویندوزی (۱۰ و ۱۱): شامل دیتابیس PostgreSQL 17، بک‌اند، ورکر، داشبورد و اجرای خودکار. |
 | **سرور لینوکس (داکر)** | فایل `deploy/docker/docker-compose.yml` | استقرار کانتینری بهینه برای معماری‌های x86_64 و ARM64. |
 
 > 🔗 تمامی فایل‌ها و کدهای هش اعتبارسنجی در [صفحه رسمی انتشار (Releases)](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0) در دسترس هستند.

@@ -11,7 +11,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo ====================================================
-echo        irpotify Windows Server Setup Wizard
+echo      irpotify Server for Windows - Setup Wizard
 echo ====================================================
 echo.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0deploy\windows\install.ps1" %*

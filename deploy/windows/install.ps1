@@ -3,7 +3,7 @@
     Install MusicHub Enterprise server on Windows from this package.
 
 .DESCRIPTION
-    One-command install for the self-contained Windows server package. No .NET SDK, no Docker and no
+    One-command install for the self-contained Server for Windows package. No .NET SDK, no Docker and no
     network connection are required: the package carries a private .NET runtime, portable PostgreSQL,
     ffmpeg/ffprobe and the published hosts.
 
@@ -293,7 +293,7 @@ function Wait-ForApi([int]$Port, [int]$Seconds) {
 }
 
 Write-Host ''
-Write-Host 'MusicHub Enterprise - Windows server install' -ForegroundColor Cyan
+Write-Host 'irpotify Server for Windows - install' -ForegroundColor Cyan
 
 # -------------------------------------------------------------------------------------------
 # Read-only verbs

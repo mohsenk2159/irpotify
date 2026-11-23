@@ -48,7 +48,7 @@ Featuring a native **Android client redesigned with the original Spotify aesthet
 | :--- | :--- | :--- |
 | **Android (8.0+)** | [📥 **irpotify-android.apk** (4.9 MB)](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk) | Official signed release APK. Spotify UI, offline downloads, instant QR pairing. |
 | **Windows Player (Setup)** | [💿 **irpotify-player-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe) | Official 1-click Windows Setup installer with Desktop & Start Menu shortcuts. |
-| **Windows Server (Setup)** | [💿 **irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | Complete 1-click Windows Server Setup installer: PostgreSQL 17, API, Worker & Dashboard. |
+| **Server for Windows (Host Setup)** | [💿 **irpotify-server-win-x64-1.0.0-setup.exe**](https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-server-win-x64-1.0.0-setup.exe) | Complete 1-click installer to host your personal music cloud server on any Windows PC (10/11): PostgreSQL 17, API, Worker & Dashboard. |
 | **Docker (Linux/ARM)** | `deploy/docker/docker-compose.yml` | Multi-arch production topology with automatic SSL by Caddy. |
 
 > 🔗 All binaries and checksums are verified and hosted on the [GitHub Releases Page](https://github.com/mohsenk2159/irpotify/releases/tag/v1.0.0).

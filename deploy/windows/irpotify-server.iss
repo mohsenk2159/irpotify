@@ -1,4 +1,4 @@
-; Script for irpotify Windows Server Setup
+; Script for irpotify Server for Windows Setup
 #define MyAppName "irpotify Server"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "irpotify"
@@ -24,7 +24,7 @@ PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=Complete Self-Hosted Windows Server for irpotify
+VersionInfoDescription=Complete Self-Hosted Server for Windows (irpotify)
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -313,7 +313,7 @@ The install artifacts are gitignored by design and must be attached to the GitHu
 | --- | --- | --- |
 | `artifacts/installers/MusicHub-Android-1.0.0-release.apk` | 13.17 MB | Android client (minified, signed) |
 | `artifacts/installers/MusicHubPlayer-win-x64.zip` | 104.89 MB | WPF player (self-contained win-x64) |
-| `artifacts/installers/MusicHubServer-win-x64-1.0.0.zip` | 181.7 MB | **Windows server package**: API + Worker + dashboard + private .NET runtime + trimmed portable PostgreSQL 17 + ffmpeg/ffprobe |
+| `artifacts/installers/MusicHubServer-win-x64-1.0.0.zip` | 181.7 MB | **Server for Windows package (Host)**: API + Worker + dashboard + private .NET runtime + trimmed portable PostgreSQL 17 + ffmpeg/ffprobe |
 
 The server package is self-contained: no .NET SDK, no Docker and no network connection are needed at
 install time. Install it with:

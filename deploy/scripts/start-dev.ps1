@@ -401,7 +401,7 @@ try {
         $script:sdkAvailable = $false
     }
     else {
-        throw "No .NET SDK was found at $dotnet, and this run needs one to build the solution. Install the .NET 10 SDK, or install from the Windows server package (which ships prebuilt assemblies and a private runtime)."
+        throw "No .NET SDK was found at $dotnet, and this run needs one to build the solution. Install the .NET 10 SDK, or install from the Server for Windows package (which ships prebuilt assemblies and a private runtime)."
     }
 
     Write-MusicHubStep '2/6 Network address and listening port'

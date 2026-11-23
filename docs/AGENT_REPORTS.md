@@ -2827,11 +2827,11 @@ Security implications:
 
 Next actions: none for this task. The recovery path is live and documented.
 
-## R-025 - Self-contained Windows server package and automatic stack start (2026-11-21)
+## R-025 - Self-contained Server for Windows package and automatic stack start (2026-11-21)
 
 Task ID: W-044 / B-085 .. B-091
 
-Objective: Produce a real, self-contained Windows server installer package for MusicHub Enterprise and
+Objective: Produce a real, self-contained Server for Windows installer package for MusicHub Enterprise and
 prove that installing it starts the whole stack (PostgreSQL, API, Worker/Telegram bot) with no .NET SDK,
 no Docker and no network connection at install time - and that it comes back by itself after a reboot.
 
@@ -2900,7 +2900,7 @@ Files created or modified:
 - `docs/INSTALL_AND_RUN.md` (package install section, `verify.ps1` caveat, artifact row, readiness rows)
 - `docs/PROJECT_MAP.md` (deployment table lists the three new files)
 - `docs/RELEASE_REPORT.md` (artifact table row and the `gh release upload` command)
-- `README.md`, `README.fa.md` (Download row, new "Windows server package" quick start, source-checkout
+- `README.md`, `README.fa.md` (Download row, new "Server for Windows package" quick start, source-checkout
   heading retitled)
 
 Commands executed (exact):

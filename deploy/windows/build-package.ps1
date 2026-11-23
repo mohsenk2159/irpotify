@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Build the self-contained MusicHub Enterprise Windows server package.
+    Build the self-contained irpotify Server for Windows package.
 
 .DESCRIPTION
     Produces artifacts/installers/MusicHubServer-win-x64-<version>.zip: a directory tree that can be
@@ -83,7 +83,7 @@ function Get-TreeSize([string]$Path) {
 }
 
 Write-Host ''
-Write-Host "MusicHub Enterprise - Windows server package $Version" -ForegroundColor Cyan
+Write-Host "irpotify Server for Windows package $Version" -ForegroundColor Cyan
 
 $dotnet = Initialize-MusicHubDotnet
 
@@ -346,7 +346,7 @@ $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stagi
 Write-MusicHubInfo '  package.json written'
 
 $readme = @"
-MusicHub Enterprise - Windows server package $Version
+irpotify Server for Windows package $Version
 =====================================================
 
 Install (no .NET SDK, no Docker, no network required). Run this from the folder this file is in:

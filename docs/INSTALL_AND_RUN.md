@@ -22,7 +22,7 @@ contract, see below); installing and starting means the bot starts with it.
 | `artifacts\installers\MusicHub-Android-1.0.0-release.apk` | 13.17 MB | Signed release build, versionCode 2 |
 | `artifacts\installers\MusicHub-Android-1.0.0-release.apk.sha256` | — | SHA-256 of the APK above |
 | `artifacts\installers\MusicHubPlayer-win-x64.zip` | 104.9 MB | Self-contained win-x64 player |
-| `artifacts\installers\MusicHubServer-win-x64-1.0.0.zip` | 181.7 MB | Self-contained Windows server package: API + Worker + dashboard + private .NET runtime + trimmed portable PostgreSQL 17 + ffmpeg/ffprobe |
+| `artifacts\installers\MusicHubServer-win-x64-1.0.0.zip` | 181.7 MB | Self-contained Server for Windows package (Host): API + Worker + dashboard + private .NET runtime + trimmed portable PostgreSQL 17 + ffmpeg/ffprobe |
 | `deploy\docker\docker-compose.yml` + `Caddyfile` + `Dockerfile.api` + `Dockerfile.worker` | - | Version 1 container install (postgres + api + worker + caddy); built images `musichub/api:local`, `musichub/worker:local`, `postgres:17.11-bookworm`, `caddy:2.11.9-alpine` |
 
 ## Install artifact readiness by platform (version 1)
