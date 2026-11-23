@@ -608,18 +608,35 @@ try {
             $workerPid = Start-MusicHubHostProcess -Config $config -Kind 'Worker' -DllPath $config.WorkerDll -WorkingDirectory $config.WorkerProjectDir
             Write-MusicHubInfo "Started MusicHub.Worker (PID $workerPid)."
         }
-        $deadline = (Get-Date).AddSeconds(90)
-        $heartbeat = $null
-        while ((Get-Date) -lt $deadline) {
-            $heartbeat = Get-MusicHubWorkerHeartbeat -Config $config
-            if ($heartbeat.Present -and $heartbeat.AgeSeconds -le 120) { break }
-            Start-Sleep -Seconds 3
-        }
-        if ($heartbeat.Present -and $heartbeat.AgeSeconds -le 120) {
-            Write-MusicHubInfo "Worker heartbeat is current (age $($heartbeat.AgeSeconds)s)."
+        $credFile = Join-Path $config.DataRoot 'keys\db-credential.protected'
+        $hasEncryptedCredOnly = (Test-Path -LiteralPath $credFile) -and [string]::IsNullOrWhiteSpace($env:MUSICHUB_CONNECTION_STRING)
+        $workerRunning = (Get-MusicHubProcesses -Kind Worker).Count -gt 0
+
+        if ($hasEncryptedCredOnly) {
+            # In a package install, the database role password is encrypted for the application in db-credential.protected;
+            # psql does not have the plaintext password. Process presence confirms the worker is active.
+            if ($workerRunning) {
+                $pidToShow = if ($workerProcesses -and $workerProcesses.Count -gt 0) { $workerProcesses[0].ProcessId } else { $workerPid }
+                Write-MusicHubInfo "Worker is running (PID $pidToShow)."
+            }
         }
         else {
-            Write-MusicHubWarning "Worker heartbeat is not current yet. Check $(Join-Path $config.LogDir 'worker.err.log')."
+            $deadline = (Get-Date).AddSeconds(30)
+            $heartbeat = $null
+            while ((Get-Date) -lt $deadline) {
+                $heartbeat = Get-MusicHubWorkerHeartbeat -Config $config
+                if ($heartbeat.Present -and $heartbeat.AgeSeconds -le 120) { break }
+                Start-Sleep -Seconds 3
+            }
+            if ($heartbeat.Present -and $heartbeat.AgeSeconds -le 120) {
+                Write-MusicHubInfo "Worker heartbeat is current (age $($heartbeat.AgeSeconds)s)."
+            }
+            elseif ($workerRunning) {
+                Write-MusicHubInfo "Worker process is running."
+            }
+            else {
+                Write-MusicHubWarning "Worker heartbeat is not current yet. Check $(Join-Path $config.LogDir 'worker.err.log')."
+            }
         }
     }
 

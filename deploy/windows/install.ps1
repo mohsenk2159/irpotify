@@ -512,14 +512,21 @@ try {
     $ruleName = "MusicHub Server $port"
     $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
     if (-not $existingRule) {
-        try {
-            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP `
-                -LocalPort $port -RemoteAddress LocalSubnet -Action Allow -ErrorAction Stop | Out-Null
-            Write-Info "Firewall rule '$ruleName' created (TCP $port from LocalSubnet)."
+        $devRule = Get-NetFirewallRule -DisplayName "*$port*" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
+        if ($devRule) {
+            Write-Info "Firewall already allows TCP $port ($($devRule[0].DisplayName))."
         }
-        catch {
-            Write-Warn "Could not create the firewall rule (needs an elevated shell): $($_.Exception.Message)"
-            Write-Warn "Other devices will not reach the server until you allow TCP $port from your LAN."
+        else {
+            try {
+                New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP `
+                    -LocalPort $port -RemoteAddress LocalSubnet -Action Allow -ErrorAction Stop | Out-Null
+                Write-Info "Firewall rule '$ruleName' created (TCP $port from LocalSubnet)."
+            }
+            catch {
+                Write-Warn "Could not create the firewall rule (needs an elevated shell): $($_.Exception.Message)"
+                Write-Warn "Other devices will not reach the server until you allow TCP $port from your LAN."
+            }
         }
     }
     else { Write-Info "Firewall rule '$ruleName' already exists." }
