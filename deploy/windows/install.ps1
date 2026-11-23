@@ -72,6 +72,7 @@ param(
     [switch]$Start,
     [switch]$Stop,
     [switch]$Status,
+    [switch]$Credentials,
     [switch]$Uninstall,
     [switch]$PurgeData,
     [switch]$NoScheduledTask
@@ -152,6 +153,16 @@ function Get-Endpoint {
     try { return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } catch { return $null }
 }
 
+function Get-BootstrapToken {
+    $secretsPath = Join-Path $installRoot 'storage\dev.secrets.ps1'
+    if (-not (Test-Path -LiteralPath $secretsPath)) { return $null }
+    $content = Get-Content -LiteralPath $secretsPath -Raw -ErrorAction SilentlyContinue
+    if ($content -match '\$env:MUSICHUB_BOOTSTRAP_TOKEN\s*=\s*[''"]([^''"]+)[''"]') {
+        return $matches[1]
+    }
+    return $null
+}
+
 function Write-ServerSecrets {
     <#
         Generate storage\dev.secrets.ps1 for a package install.
@@ -223,7 +234,7 @@ function Write-ServerSecrets {
     Set-Content -LiteralPath $secretsPath -Value $lines -Encoding UTF8
     try { & icacls.exe $secretsPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" 2>&1 | Out-Null }
     catch { Write-Warn "Could not tighten the ACL on $secretsPath; restrict it to your account manually." }
-    Write-Info "Secrets written to $secretsPath (not printed)."
+    Write-Info "Secrets written to $secretsPath."
     return $secretsPath
 }
 
@@ -287,9 +298,39 @@ Write-Host 'MusicHub Enterprise - Windows server install' -ForegroundColor Cyan
 # -------------------------------------------------------------------------------------------
 # Read-only verbs
 # -------------------------------------------------------------------------------------------
+if ($Credentials) {
+    $endpoint = Get-Endpoint
+    $port = if ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $lan = if ($endpoint -and $endpoint.LanAddress) { $endpoint.LanAddress } else { '127.0.0.1' }
+    $token = Get-BootstrapToken
+
+    Write-Host ''
+    Write-Host '========================================================================' -ForegroundColor Cyan
+    Write-Host '                    irpotify Server Credentials                         ' -ForegroundColor Cyan
+    Write-Host '========================================================================' -ForegroundColor Cyan
+    Write-Host ''
+    if ($token) {
+        Write-Host '  Bootstrap Token (Master Setup Key):' -ForegroundColor Yellow
+        Write-Host "  $token" -ForegroundColor Green
+        Write-Host ''
+        Write-Host '  Use this Bootstrap Token on the first-run setup page at /setup' -ForegroundColor White
+        Write-Host '  or in the login dialog to recover / reset account passwords.' -ForegroundColor White
+    } else {
+        Write-Host '  Bootstrap Token: (Not found in storage\dev.secrets.ps1)' -ForegroundColor Red
+    }
+    Write-Host ''
+    Write-Host "  Dashboard (Local) : http://127.0.0.1:$port/index.html"
+    Write-Host "  Dashboard (LAN)   : http://${lan}:$port/index.html"
+    Write-Host "  Setup Page        : http://127.0.0.1:$port/setup"
+    Write-Host '========================================================================' -ForegroundColor Cyan
+    Write-Host ''
+    exit 0
+}
+
 if ($Status) {
     $manifest = Get-PackageManifest
     $state = Get-StackState
+    $token = Get-BootstrapToken
     Write-Host ''
     Write-Host "Install root : $installRoot"
     if ($manifest) { Write-Host "Version      : $($manifest.version) ($($manifest.platform))" }
@@ -300,6 +341,10 @@ if ($Status) {
     Write-Host ("Worker       : " + $(if ($state.WorkerRunning) { 'running' } else { 'not running' }))
     $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Write-Host ("Logon task   : " + $(if ($task) { $task.State } else { 'not registered' }))
+    if ($token) {
+        Write-Host ''
+        Write-Host "Bootstrap Token : $token" -ForegroundColor Yellow
+    }
     Write-Host ''
     Write-Host "Dashboard    : http://$($state.LanAddress):$($state.Port)/index.html"
     exit 0
@@ -479,15 +524,35 @@ try {
     }
     else { Write-Info "Firewall rule '$ruleName' already exists." }
 
+    $token = Get-BootstrapToken
+
     Write-Host ''
-    Write-Host 'Server install completed.' -ForegroundColor Green
+    Write-Host '========================================================================' -ForegroundColor Green
+    Write-Host '                irpotify Server Installation Completed                  ' -ForegroundColor Green
+    Write-Host '========================================================================' -ForegroundColor Green
     Write-Host ''
-    Write-Host "  Dashboard (this machine) : http://127.0.0.1:$port/index.html"
-    Write-Host "  Dashboard (other devices): http://$($endpoint.LanAddress):$port/index.html"
-    Write-Host "  Server address for the Android and Windows apps: http://$($endpoint.LanAddress):$port"
+    Write-Host "  Dashboard (Local) : http://127.0.0.1:$port/index.html"
+    Write-Host "  Dashboard (LAN)   : http://$($endpoint.LanAddress):$port/index.html"
+    Write-Host "  Server API URL    : http://$($endpoint.LanAddress):$port"
     Write-Host ''
-    Write-Host '  Next: open the dashboard and complete the first-run setup to create the administrator.'
-    Write-Host '  Then provision the Telegram bot token and admin id in the dashboard (Admin -> Telegram).'
+    Write-Host '========================================================================' -ForegroundColor Yellow
+    Write-Host '                 ONE-TIME SETUP TOKEN (BOOTSTRAP TOKEN)                 ' -ForegroundColor Yellow
+    Write-Host '========================================================================' -ForegroundColor Yellow
+    Write-Host ''
+    if ($token) {
+        Write-Host "  $token" -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host '  IMPORTANT SETUP INSTRUCTIONS:' -ForegroundColor Yellow
+        Write-Host "  1. Copy the Bootstrap Token shown above." -ForegroundColor White
+        Write-Host "  2. Open the dashboard in your browser: http://127.0.0.1:$port/index.html" -ForegroundColor White
+        Write-Host "  3. Paste this Bootstrap Token into the setup form to create the primary administrator." -ForegroundColor White
+        Write-Host ''
+        Write-Host '  (This token is also stored in storage\dev.secrets.ps1 and can be viewed' -ForegroundColor Gray
+        Write-Host '   at any time by running credentials.bat or status.bat)' -ForegroundColor Gray
+    } else {
+        Write-Host '  Warning: Bootstrap token could not be read from storage\dev.secrets.ps1' -ForegroundColor Red
+    }
+    Write-Host '========================================================================' -ForegroundColor Yellow
     Write-Host ''
     exit 0
 }

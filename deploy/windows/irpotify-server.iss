@@ -41,6 +41,7 @@ Name: "{autoprograms}\{#MyAppName}\Web Dashboard"; Filename: "{app}\dashboard.ba
 Name: "{autoprograms}\{#MyAppName}\Start Server"; Filename: "{app}\start.bat"
 Name: "{autoprograms}\{#MyAppName}\Stop Server"; Filename: "{app}\stop.bat"
 Name: "{autoprograms}\{#MyAppName}\Server Status"; Filename: "{app}\status.bat"
+Name: "{autoprograms}\{#MyAppName}\Server Credentials"; Filename: "{app}\credentials.bat"
 Name: "{autoprograms}\{#MyAppName}\Setup & Reconfigure"; Filename: "{app}\install.bat"
 Name: "{autodesktop}\irpotify Web Dashboard"; Filename: "{app}\dashboard.bat"; Tasks: desktopicon
 
