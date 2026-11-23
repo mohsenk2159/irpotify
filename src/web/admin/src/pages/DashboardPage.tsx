@@ -349,12 +349,13 @@ function StatCard({
   threeDType?: ThreeDIconType;
 }) {
   const threeD = threeDType ?? ICON_TO_3D[icon] ?? 'vinyl';
+  const isWord = value.length > 5 || /[a-zA-Z\u0600-\u06FF]/.test(value);
   return (
     <div className={`stat-card stat-card-3d${tone ? ` stat-${tone}` : ''}`}>
-      <ThreeDIcon type={threeD} size={42} />
+      <ThreeDIcon type={threeD} size={34} />
       <div className="stat-text">
         <span className="stat-label">{label}</span>
-        <span className="stat-value">{value}</span>
+        <span className={`stat-value${isWord ? ' stat-value-text' : ''}`}>{value}</span>
         {hint ? <span className="stat-hint">{hint}</span> : null}
       </div>
     </div>
@@ -380,10 +381,10 @@ function DashboardHeroBanner({ trackCount, albumCount }: { trackCount: number; a
           <span className="status-online">● {t('monitoring.connected')}</span>
         </div>
       </div>
-      <div className="hero-banner-art" aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <ThreeDIcon type="headphones" size={68} />
-        <ThreeDIcon type="vinyl" size={82} animated />
-        <ThreeDIcon type="waves" size={54} animated />
+      <div className="hero-banner-art" aria-hidden="true" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <ThreeDIcon type="headphones" size={46} />
+        <ThreeDIcon type="vinyl" size={56} animated />
+        <ThreeDIcon type="waves" size={38} animated />
       </div>
     </div>
   );
