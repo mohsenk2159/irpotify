@@ -83,6 +83,7 @@ export interface TrackDetail {
 export interface TrackQuery {
   q?: string;
   folderId?: string;
+  withoutFolder?: boolean;
   albumId?: string;
   artistId?: string;
   genreId?: string;

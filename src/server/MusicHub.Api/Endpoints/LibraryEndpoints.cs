@@ -31,7 +31,7 @@ public static class LibraryEndpoints
 
     private static void MapTracks(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/tracks", [Authorize] async (string? q, Guid? folderId, Guid? albumId, Guid? artistId, Guid? genreId, bool? favorites, bool? includeDeleted, string? sort, int? page, int? pageSize, ClaimsPrincipal principal, MusicHubDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/tracks", [Authorize] async (string? q, Guid? folderId, bool? withoutFolder, Guid? albumId, Guid? artistId, Guid? genreId, bool? favorites, bool? includeDeleted, string? sort, int? page, int? pageSize, ClaimsPrincipal principal, MusicHubDbContext db, CancellationToken ct) =>
         {
             var (p, size) = RequestHelpers.Page(page, pageSize);
             var userId = principal.GetUserId();
@@ -51,6 +51,7 @@ public static class LibraryEndpoints
                 query = query.Where(x => EF.Functions.ILike(x.Title, term) || EF.Functions.ILike(x.ArtistDisplay, term) || EF.Functions.ILike(x.AlbumDisplay, term));
             }
             if (folderId is not null) query = query.Where(x => x.FolderTracks.Any(f => f.FolderId == folderId));
+            if (withoutFolder == true) query = query.Where(x => !x.FolderTracks.Any());
             if (albumId is not null) query = query.Where(x => x.AlbumTracks.Any(a => a.AlbumId == albumId));
             if (artistId is not null) query = query.Where(x => x.TrackArtists.Any(a => a.ArtistId == artistId));
             if (genreId is not null) query = query.Where(x => x.GenreId == genreId);

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/endpoints';
+import { api, uploadTracks } from '../api/endpoints';
 import { ApiError } from '../api/http';
 import type { FolderNode, Track } from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
@@ -26,6 +26,9 @@ import { TrackTable } from '../ui/TrackTable';
 import { errorMessage } from '../ui/helpers';
 import { Icon } from '../ui/icons';
 
+const MAX_FILES = 25;
+const AUDIO_ACCEPT = '.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,audio/*';
+
 interface FolderForm {
   name: string;
   parentId: string;
@@ -43,8 +46,18 @@ function flattenFolders(nodes: FolderNode[], depth = 0): { node: FolderNode; dep
   return result;
 }
 
+function getFolderPath(nodes: FolderNode[], targetId: string, currentPath: string[] = []): string[] | null {
+  for (const node of nodes) {
+    const nextPath = [...currentPath, node.name];
+    if (node.id === targetId) return nextPath;
+    const childPath = getFolderPath(node.children, targetId, nextPath);
+    if (childPath) return childPath;
+  }
+  return null;
+}
+
 export function FoldersPage() {
-  const { t, formatNumber } = useUi();
+  const { t, formatBytes, formatNumber } = useUi();
   const { isAdmin, canContribute } = useAuth();
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -55,7 +68,19 @@ export function FoldersPage() {
   const [form, setForm] = useState<FolderForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<FolderNode | null>(null);
+
+  // Upload to folder state
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadDragging, setUploadDragging] = useState(false);
+
+  // Add tracks to folder state
   const [addTracksOpen, setAddTracksOpen] = useState(false);
+  const [showAllTracks, setShowAllTracks] = useState(false);
   const [trackSearch, setTrackSearch] = useState('');
   const debouncedTrackSearch = useDebounced(trackSearch.trim(), 350);
   const [checkedTracks, setCheckedTracks] = useState<Set<string>>(new Set());
@@ -65,6 +90,12 @@ export function FoldersPage() {
   const flatFolders = useMemo(() => flattenFolders(foldersQuery.data ?? []), [foldersQuery.data]);
   const selected = flatFolders.find((entry) => entry.node.id === selectedId)?.node ?? null;
 
+  const selectedFolderPath = useMemo(() => {
+    if (!selectedId || !foldersQuery.data) return '';
+    const path = getFolderPath(foldersQuery.data, selectedId);
+    return path ? path.join(' / ') : '';
+  }, [foldersQuery.data, selectedId]);
+
   const tracksQuery = useQuery({
     queryKey: ['tracks', 'folder', selectedId],
     queryFn: () => api.tracks.list({ folderId: selectedId!, pageSize: 200, sort: 'title' }),
@@ -72,8 +103,14 @@ export function FoldersPage() {
   });
 
   const searchQuery = useQuery({
-    queryKey: ['tracks', 'folder-add', debouncedTrackSearch],
-    queryFn: () => api.tracks.list({ q: debouncedTrackSearch || undefined, pageSize: 20, sort: 'title' }),
+    queryKey: ['tracks', 'folder-add', debouncedTrackSearch, showAllTracks],
+    queryFn: () =>
+      api.tracks.list({
+        q: debouncedTrackSearch || undefined,
+        withoutFolder: !showAllTracks ? true : undefined,
+        pageSize: 50,
+        sort: 'title',
+      }),
     enabled: addTracksOpen,
   });
 
@@ -137,6 +174,73 @@ export function FoldersPage() {
       notify(errorMessage(error, t('common.error')), 'error');
       setRemovingTrack(null);
     },
+  });
+
+  const addUploadFiles = (files: FileList | File[]) => {
+    const incoming = Array.from(files);
+    if (incoming.length === 0) return;
+    setUploadError(null);
+    setUploadQueue((current) => {
+      const next = [...current];
+      for (const file of incoming) {
+        if (next.length >= MAX_FILES) break;
+        if (!next.some((existing) => existing.name === file.name && existing.size === file.size)) next.push(file);
+      }
+      if (current.length + incoming.length > MAX_FILES) notify(t('upload.tooMany'), 'error');
+      return next;
+    });
+  };
+
+  const onUploadDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setUploadDragging(false);
+    addUploadFiles(event.dataTransfer.files);
+  };
+
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected) return null;
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+      setUploadProgress(0);
+      try {
+        return await uploadTracks(uploadQueue, {
+          folderId: selected.id,
+          onProgress: setUploadProgress,
+          signal: controller.signal,
+        });
+      } finally {
+        uploadAbortRef.current = null;
+      }
+    },
+    onSuccess: (response) => {
+      if (!response) return;
+      const ok = response.results.filter((result) => result.success && !result.duplicate).length;
+      const duplicates = response.results.filter((result) => result.success && result.duplicate).length;
+      const failed = response.results.filter((result) => !result.success).length;
+      setUploadQueue([]);
+      setUploadOpen(false);
+      invalidate();
+      if (failed > 0) {
+        notify(t('upload.done', { ok, duplicates, failed }), 'error');
+      } else {
+        notify(
+          t('folders.uploadSuccess', {
+            name: selected?.name ?? '',
+            count: formatNumber(ok + duplicates),
+          }),
+          'success',
+        );
+      }
+    },
+    onError: (error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        notify(t('upload.cancelled'), 'info');
+      } else {
+        setUploadError(errorMessage(error, t('common.error')));
+      }
+    },
+    onSettled: () => setUploadProgress(null),
   });
 
   useEffect(() => {
@@ -254,15 +358,40 @@ export function FoldersPage() {
                     <div>
                       <h2>{t('folders.tracksIn', { name: selected.name })}</h2>
                       <p className="muted small">
+                        {selectedFolderPath ? `${selectedFolderPath} · ` : ''}
                         {t('folders.trackCount', { count: formatNumber(selected.trackCount) })}
                         {selected.description ? ` · ${selected.description}` : ''}
                       </p>
                     </div>
                     <div className="row-actions">
                       {canContribute ? (
-                        <Button size="sm" icon="plus" onClick={() => { setCheckedTracks(new Set()); setAddTracksOpen(true); }}>
-                          {t('folders.addTracks')}
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon="upload"
+                            onClick={() => {
+                              setUploadQueue([]);
+                              setUploadError(null);
+                              setUploadProgress(null);
+                              setUploadOpen(true);
+                            }}
+                          >
+                            {t('folders.uploadMusic')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            icon="plus"
+                            onClick={() => {
+                              setCheckedTracks(new Set());
+                              setTrackSearch('');
+                              setShowAllTracks(false);
+                              setAddTracksOpen(true);
+                            }}
+                          >
+                            {t('folders.addTracks')}
+                          </Button>
+                        </>
                       ) : null}
                       {canContribute ? (
                         <IconButton icon="edit" label={t('common.edit')} onClick={() => openEdit(selected)} />
@@ -277,16 +406,52 @@ export function FoldersPage() {
                     <ErrorState error={tracksQuery.error} onRetry={() => void tracksQuery.refetch()} />
                   ) : null}
                   {tracksQuery.data ? (
-                    <TrackTable
-                      tracks={tracksQuery.data.items}
-                      showAdded={false}
-                      emptyTitle={t('folders.noTracks')}
-                      actions={(track) =>
-                        canContribute ? (
-                          <IconButton icon="trash" label={t('folders.removeTrack')} onClick={() => setRemovingTrack(track)} />
-                        ) : null
-                      }
-                    />
+                    tracksQuery.data.items.length === 0 ? (
+                      <EmptyState
+                        title={t('folders.noTracks')}
+                        icon="tracks"
+                        action={
+                          canContribute ? (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              <Button
+                                variant="primary"
+                                icon="upload"
+                                onClick={() => {
+                                  setUploadQueue([]);
+                                  setUploadError(null);
+                                  setUploadProgress(null);
+                                  setUploadOpen(true);
+                                }}
+                              >
+                                {t('folders.uploadMusic')}
+                              </Button>
+                              <Button
+                                icon="plus"
+                                onClick={() => {
+                                  setCheckedTracks(new Set());
+                                  setTrackSearch('');
+                                  setShowAllTracks(false);
+                                  setAddTracksOpen(true);
+                                }}
+                              >
+                                {t('folders.addTracks')}
+                              </Button>
+                            </div>
+                          ) : undefined
+                        }
+                      />
+                    ) : (
+                      <TrackTable
+                        tracks={tracksQuery.data.items}
+                        showAdded={false}
+                        emptyTitle={t('folders.noTracks')}
+                        actions={(track) =>
+                          canContribute ? (
+                            <IconButton icon="trash" label={t('folders.removeTrack')} onClick={() => setRemovingTrack(track)} />
+                          ) : null
+                        }
+                      />
+                    )
                   ) : null}
                 </>
               ) : (
@@ -353,6 +518,147 @@ export function FoldersPage() {
         </form>
       </Modal>
 
+      {/* Upload to Folder Modal */}
+      <Modal
+        open={uploadOpen && selected !== null}
+        title={t('folders.uploadTitle', { name: selected?.name ?? '' })}
+        onClose={() => {
+          if (!uploadMutation.isPending) {
+            setUploadOpen(false);
+            setUploadQueue([]);
+            setUploadError(null);
+          }
+        }}
+        size="lg"
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                if (uploadMutation.isPending) {
+                  uploadAbortRef.current?.abort();
+                } else {
+                  setUploadOpen(false);
+                  setUploadQueue([]);
+                  setUploadError(null);
+                }
+              }}
+            >
+              {uploadMutation.isPending ? t('upload.cancel') : t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              icon="upload"
+              disabled={uploadQueue.length === 0 || uploadMutation.isPending}
+              loading={uploadMutation.isPending}
+              onClick={() => uploadMutation.mutate()}
+            >
+              {uploadMutation.isPending
+                ? t('folders.uploading', { percent: uploadProgress ?? 0 })
+                : t('upload.start', { count: formatNumber(uploadQueue.length) })}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'grid', gap: '16px' }}>
+          {selectedFolderPath ? (
+            <div className="card-sub" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Icon name="folders" size={16} />
+              <span>
+                <strong>{t('folders.uploadDestination')}:</strong> {selectedFolderPath}
+              </span>
+            </div>
+          ) : null}
+
+          {uploadError ? (
+            <div className="notice notice-error" role="alert">
+              {uploadError}
+            </div>
+          ) : null}
+
+          {uploadProgress !== null ? (
+            <div className="progress-block">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span>{t('folders.uploading', { percent: uploadProgress })}</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="progress" role="progressbar" aria-valuenow={uploadProgress} aria-valuemin={0} aria-valuemax={100}>
+                <span style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className={`dropzone${uploadDragging ? ' is-dragging' : ''}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setUploadDragging(true);
+            }}
+            onDragLeave={() => setUploadDragging(false)}
+            onDrop={onUploadDrop}
+          >
+            <span className="dropzone-icon" aria-hidden="true">
+              <Icon name="upload" size={28} />
+            </span>
+            <p className="dropzone-title">{t('upload.dropzone')}</p>
+            <p className="muted small">{t('folders.uploadHint')}</p>
+            <Button
+              variant="secondary"
+              icon="upload"
+              disabled={uploadMutation.isPending}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              {t('upload.browse')}
+            </Button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              multiple
+              accept={AUDIO_ACCEPT}
+              className="sr-only"
+              aria-label={t('upload.browse')}
+              onChange={(event) => {
+                if (event.target.files) addUploadFiles(event.target.files);
+                event.target.value = '';
+              }}
+            />
+          </div>
+
+          {uploadQueue.length > 0 ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span className="muted small">
+                  {t('folders.uploadFilesSelected', { count: formatNumber(uploadQueue.length) })} (max {MAX_FILES})
+                </span>
+                {!uploadMutation.isPending ? (
+                  <Button size="sm" onClick={() => setUploadQueue([])}>
+                    {t('upload.clear')}
+                  </Button>
+                ) : null}
+              </div>
+              <ul className="upload-queue" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {uploadQueue.map((file, index) => (
+                  <li key={`${file.name}-${file.size}-${index}`}>
+                    <Icon name="music" size={16} />
+                    <span className="upload-file-name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <span className="muted small">{formatBytes(file.size)}</span>
+                    {!uploadMutation.isPending ? (
+                      <IconButton
+                        icon="trash"
+                        label={t('upload.remove')}
+                        onClick={() => setUploadQueue((prev) => prev.filter((_, i) => i !== index))}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </Modal>
+
+      {/* Add Existing Tracks to Folder Modal */}
       <Modal
         open={addTracksOpen && selected !== null}
         title={t('folders.addTracksTitle', { name: selected?.name ?? '' })}
@@ -369,7 +675,9 @@ export function FoldersPage() {
                 if (selected) addTracksMutation.mutate({ folderId: selected.id, trackIds: [...checkedTracks] });
               }}
             >
-              {t('folders.addTracks')}
+              {checkedTracks.size > 0
+                ? `${t('folders.addTracks')} (${formatNumber(checkedTracks.size)})`
+                : t('folders.addTracks')}
             </Button>
           </>
         }
@@ -384,40 +692,86 @@ export function FoldersPage() {
             aria-label={t('folders.searchTracks')}
           />
         </div>
+
+        <div style={{ marginBlock: '10px' }}>
+          <Checkbox
+            label={t('folders.showAllTracks')}
+            description={t('folders.showAllTracksHint')}
+            checked={showAllTracks}
+            onChange={(event) => {
+              setShowAllTracks(event.target.checked);
+              setCheckedTracks(new Set());
+            }}
+          />
+        </div>
+
         {searchQuery.isLoading ? <LoadingState /> : null}
         {searchQuery.isError ? (
           <ErrorState error={searchQuery.error} onRetry={() => void searchQuery.refetch()} />
         ) : null}
         {searchQuery.data ? (
           addableTracks.length === 0 ? (
-            <p className="muted">{t('common.noResults')}</p>
+            <p className="muted" style={{ padding: '16px 0', textAlign: 'center' }}>
+              {t('common.noResults')}
+            </p>
           ) : (
-            <ul className="select-list">
-              {addableTracks.map((track) => (
-                <li key={track.id} className="select-row">
-                  <Checkbox
-                    label=""
-                    aria-label={track.title}
-                    checked={checkedTracks.has(track.id)}
-                    onChange={(event) => {
-                      setCheckedTracks((current) => {
-                        const next = new Set(current);
-                        if (event.target.checked) next.add(track.id);
-                        else next.delete(track.id);
-                        return next;
-                      });
-                    }}
-                  />
-                  <Artwork url={track.artworkUrl} alt="" size={34} />
-                  <div className="select-row-text">
-                    <span className="table-title">{track.title}</span>
-                    <span className="table-sub">
-                      {track.artist || '—'} · {track.album || '—'}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '6px 4px',
+                  borderBottom: '1px solid var(--border)',
+                  marginBottom: '8px',
+                }}
+              >
+                <Checkbox
+                  label={
+                    checkedTracks.size === addableTracks.length && addableTracks.length > 0
+                      ? t('common.none')
+                      : t('common.selectAll')
+                  }
+                  checked={addableTracks.length > 0 && checkedTracks.size === addableTracks.length}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      setCheckedTracks(new Set(addableTracks.map((tr) => tr.id)));
+                    } else {
+                      setCheckedTracks(new Set());
+                    }
+                  }}
+                />
+                <span className="muted small">
+                  {t('common.selectedCount', { count: formatNumber(checkedTracks.size) })} / {formatNumber(addableTracks.length)}
+                </span>
+              </div>
+              <ul className="select-list" style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                {addableTracks.map((track) => (
+                  <li key={track.id} className="select-row">
+                    <Checkbox
+                      label=""
+                      aria-label={track.title}
+                      checked={checkedTracks.has(track.id)}
+                      onChange={(event) => {
+                        setCheckedTracks((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) next.add(track.id);
+                          else next.delete(track.id);
+                          return next;
+                        });
+                      }}
+                    />
+                    <Artwork url={track.artworkUrl} alt="" size={34} />
+                    <div className="select-row-text">
+                      <span className="table-title">{track.title}</span>
+                      <span className="table-sub">
+                        {track.artist || '—'} · {track.album || '—'}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )
         ) : null}
       </Modal>
