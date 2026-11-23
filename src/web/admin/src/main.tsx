@@ -5,7 +5,6 @@ import { HashRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthProvider';
 import { ToastProvider } from './ui/Modal';
-import { PlayerProvider } from './ui/Player';
 import { UiProvider } from './ui/UiProvider';
 import './styles.css';
 
@@ -32,9 +31,7 @@ createRoot(container).render(
         <ToastProvider>
           <AuthProvider>
             <HashRouter>
-              <PlayerProvider>
-                <App />
-              </PlayerProvider>
+              <App />
             </HashRouter>
           </AuthProvider>
         </ToastProvider>

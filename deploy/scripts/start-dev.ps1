@@ -469,9 +469,19 @@ try {
     # The generated secrets file is only a default. An existing file keeps the port it was written
     # with, so the values this run actually uses are forced into the child environment: otherwise a
     # re-run with a new port would start the API on the old one while printing the new URL.
-    $env:ASPNETCORE_URLS = "http://${bindHost}:$ApiPort"
-    $env:MUSICHUB_PUBLIC_URL = "http://${publicHost}:$ApiPort"
-    $config.ApiBaseUrl = "http://${bindHost}:$ApiPort"
+    # Support Dual-Port hosting if configured
+    if ($env:MUSICHUB_DASHBOARD_PORT -and $env:MUSICHUB_PLAYER_PORT) {
+        $dPort = $env:MUSICHUB_DASHBOARD_PORT
+        $pPort = $env:MUSICHUB_PLAYER_PORT
+        $env:ASPNETCORE_URLS = "http://${bindHost}:$dPort;http://${bindHost}:$pPort"
+        $env:MUSICHUB_ADMIN_URL = "http://${publicHost}:$dPort"
+        $env:MUSICHUB_PUBLIC_URL = "http://${publicHost}:$pPort"
+        $config.ApiBaseUrl = "http://${bindHost}:$pPort"
+    } else {
+        $env:ASPNETCORE_URLS = "http://${bindHost}:$ApiPort"
+        $env:MUSICHUB_PUBLIC_URL = "http://${publicHost}:$ApiPort"
+        $config.ApiBaseUrl = "http://${bindHost}:$ApiPort"
+    }
     Write-MusicHubInfo "Secrets loaded from $secretsPath (values not printed)."
     Write-MusicHubInfo "Connection target: $($config.Host):$($config.Port)/$($config.Database) as $($config.Username)"
     Write-MusicHubInfo "Data root: $($config.DataRoot)"

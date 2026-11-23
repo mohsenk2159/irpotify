@@ -25,6 +25,22 @@ public static class AuthEndpoints
             {
                 return Results.Json(new { error = outcome.Error ?? "Login failed." }, statusCode: outcome.Locked ? StatusCodes.Status423Locked : StatusCodes.Status401Unauthorized);
             }
+
+            // Role gating for Admin Dashboard:
+            // Only users with role Administrator can sign in to the Admin Dashboard.
+            var dashboardPort = int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT"), out var dPort) ? dPort : 5080;
+            var isDashboardAccess = clientType.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
+                                    clientType.Equals("dashboard", StringComparison.OrdinalIgnoreCase) ||
+                                    (http.Connection.LocalPort == dashboardPort);
+
+            if (isDashboardAccess && !outcome.User.Roles.Contains(RoleNames.Administrator))
+            {
+                return Results.Json(new
+                {
+                    error = "دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است. لطفاً از وب‌اپلیکیشن پخش موسیقی یا اپلیکیشن‌های موبایل استفاده کنید."
+                }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
             return Results.Ok(new { accessToken = outcome.Tokens.AccessToken, accessTokenExpiresAt = outcome.Tokens.AccessTokenExpiresAt, refreshToken = outcome.Tokens.RefreshToken, refreshTokenExpiresAt = outcome.Tokens.RefreshTokenExpiresAt, user = outcome.User });
         }).RequireRateLimiting("login").AllowAnonymous();
 

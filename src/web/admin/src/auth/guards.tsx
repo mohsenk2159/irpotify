@@ -40,19 +40,13 @@ export function RequireAuth() {
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { isAdmin } = useAuth();
-  const location = useLocation();
   if (!isAdmin) {
-    if (location.pathname === '/dashboard') {
-      return <Navigate to="/library/tracks" replace />;
-    }
     return <AccessDenied />;
   }
   return <>{children}</>;
 }
 
 export function RequireContributor({ children }: { children: ReactNode }) {
-  // Keeping the helper name avoids churning every caller, but "contributor" now means
-  // administrator: only administrators may write library content (CR-004).
   const { canContribute } = useAuth();
   if (!canContribute) return <AccessDenied />;
   return <>{children}</>;
@@ -60,19 +54,19 @@ export function RequireContributor({ children }: { children: ReactNode }) {
 
 export function AccessDenied() {
   const { t } = useUi();
-  const navigate = useNavigate();
+  const { logout } = useAuth();
   return (
     <div className="access-denied" style={{ padding: '2rem 1rem', textAlign: 'center', maxWidth: 480, margin: '2rem auto' }}>
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
         <ThreeDIcon type="shield" size={64} animated />
       </div>
-      <ErrorState error={t('errors.forbiddenBody')} title={t('errors.forbidden')} />
-      <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <Button variant="primary" onClick={() => navigate('/library/tracks')}>
-          {t('nav.tracks')}
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/account/sessions')}>
-          {t('nav.sessions')}
+      <h3 style={{ color: '#ef4444', marginBottom: '0.75rem' }}>{t('errors.forbidden')}</h3>
+      <p style={{ opacity: 0.85, lineHeight: 1.6, marginBottom: '1.5rem' }}>
+        دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است. لطفاً از وب‌اپلیکیشن پلیر یا برنامه موبایل استفاده کنید.
+      </p>
+      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+        <Button variant="danger" onClick={() => void logout()}>
+          {t('nav.signOut')}
         </Button>
       </div>
     </div>
@@ -80,25 +74,24 @@ export function AccessDenied() {
 }
 
 export function SetupRoute({ children }: { children: ReactNode }) {
-  const { status, setup, bootError, isAdmin } = useAuth();
+  const { status, setup, bootError } = useAuth();
   if (status === 'booting') return <BootScreen error={bootError} />;
   if (setup?.initialized) {
-    return <Navigate to={status === 'authenticated' ? (isAdmin ? '/dashboard' : '/library/tracks') : '/login'} replace />;
+    return <Navigate to={status === 'authenticated' ? '/dashboard' : '/login'} replace />;
   }
   return <>{children}</>;
 }
 
 export function LoginRoute({ children }: { children: ReactNode }) {
-  const { status, setup, bootError, isAdmin } = useAuth();
+  const { status, setup, bootError } = useAuth();
   if (status === 'booting') return <BootScreen error={bootError} />;
   if (setup && !setup.initialized) return <Navigate to="/setup" replace />;
-  if (status === 'authenticated') return <Navigate to={isAdmin ? '/dashboard' : '/library/tracks'} replace />;
+  if (status === 'authenticated') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
 export function NotFoundPage() {
   const { t } = useUi();
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
   return (
     <div className="state-block empty-state">
@@ -107,8 +100,8 @@ export function NotFoundPage() {
       </span>
       <h2>{t('notFound.title')}</h2>
       <p>{t('notFound.body')}</p>
-      <Button variant="primary" onClick={() => navigate(isAdmin ? '/dashboard' : '/library/tracks')}>
-        {isAdmin ? t('errors.backToDashboard') : t('nav.tracks')}
+      <Button variant="primary" onClick={() => navigate('/dashboard')}>
+        {t('errors.backToDashboard')}
       </Button>
     </div>
   );

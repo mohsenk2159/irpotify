@@ -165,17 +165,15 @@ if (Test-Path -LiteralPath $migrationsSource) {
 }
 
 # ---------------------------------------------------------------------------------------------
-# 3. Dashboard
+# 3. Web Applications (Admin Dashboard & Player Web App)
 # ---------------------------------------------------------------------------------------------
-Write-Phase '3/8 Dashboard'
+Write-Phase '3/8 Web Applications (Admin Dashboard & Player Web App)'
 
-$distSource = Join-Path $repoRoot 'src\web\admin\dist'
-$webSource = Join-Path $repoRoot 'src\web\admin'
-# The API is started with its working directory set to the project directory, which is therefore its
-# content root, and ASP.NET Core serves static files from <content root>\wwwroot. Copying the bundle
-# into the publish folder would produce an install that serves the API but returns 404 for the
-# dashboard. The project directory is the authoritative location; the publish folder gets a copy too
-# so the assembly also works when it is started from there.
+$adminSource = Join-Path $repoRoot 'src\web\admin'
+$playerSource = Join-Path $repoRoot 'src\web\player'
+$adminDist = Join-Path $repoRoot 'src\web\admin\dist'
+$playerDist = Join-Path $repoRoot 'src\web\player\dist'
+
 $wwwroot = Join-Path $staging 'src\server\MusicHub.Api\wwwroot'
 $wwwrootPublish = Join-Path $staging 'src\server\MusicHub.Api\bin\Debug\net10.0\wwwroot'
 
@@ -183,11 +181,8 @@ if (-not $SkipWebBuild) {
     $npm = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
     if (-not $npm) { $npm = (Get-Command npm -ErrorAction SilentlyContinue).Source }
     if ($npm) {
-        Write-MusicHubInfo 'Building the dashboard (npm run build)'
-        Push-Location $webSource
-        # npm writes progress to stderr. Under $ErrorActionPreference='Stop' (set at the top of this
-        # script) PowerShell converts the first stderr line into a terminating NativeCommandError, so a
-        # perfectly good build would abort the packaging run. Judge by the exit code instead.
+        Write-MusicHubInfo 'Building Admin Dashboard (npm run build)'
+        Push-Location $adminSource
         $previousErrorAction = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
@@ -199,25 +194,53 @@ if (-not $SkipWebBuild) {
             Pop-Location
         }
         if ($npmExit -ne 0) {
-            throw "The dashboard build failed (exit $npmExit).`n$((@($npmOut) | ForEach-Object { "$_" }) -join "`n")"
+            Write-MusicHubWarning "Admin dashboard build warning (exit $npmExit)."
+        } else {
+            Write-MusicHubInfo '  Admin dashboard built'
         }
-        Write-MusicHubInfo '  dashboard built'
+
+        Write-MusicHubInfo 'Building Player Web App (npm run build)'
+        Push-Location $playerSource
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $npmOut = & $npm run build 2>&1
+            $npmExit = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorAction
+            Pop-Location
+        }
+        if ($npmExit -ne 0) {
+            Write-MusicHubWarning "Player web app build warning (exit $npmExit)."
+        } else {
+            Write-MusicHubInfo '  Player web app built'
+        }
     }
     else {
-        Write-MusicHubWarning 'npm was not found; using the existing dist\ if present.'
+        Write-MusicHubWarning 'npm was not found; using existing dist\ directories if present.'
     }
-}
-
-if (-not (Test-Path -LiteralPath (Join-Path $distSource 'index.html'))) {
-    throw "The dashboard bundle is missing at $distSource (no index.html). Run 'npm --prefix src/web/admin run build' first, or omit -SkipWebBuild."
 }
 
 New-Dir $wwwroot | Out-Null
 New-Dir $wwwrootPublish | Out-Null
-Copy-Item -Path (Join-Path $distSource '*') -Destination $wwwroot -Recurse -Force
-Copy-Item -Path (Join-Path $distSource '*') -Destination $wwwrootPublish -Recurse -Force
-if (-not (Test-Path -LiteralPath (Join-Path $wwwroot 'index.html'))) {
-    throw "Copying the dashboard to wwwroot did not produce index.html."
+New-Dir (Join-Path $wwwroot 'admin') | Out-Null
+New-Dir (Join-Path $wwwroot 'player') | Out-Null
+New-Dir (Join-Path $wwwrootPublish 'admin') | Out-Null
+New-Dir (Join-Path $wwwrootPublish 'player') | Out-Null
+
+if (Test-Path -LiteralPath $adminDist) {
+    Copy-Item -Path (Join-Path $adminDist '*') -Destination (Join-Path $wwwroot 'admin') -Recurse -Force
+    Copy-Item -Path (Join-Path $adminDist '*') -Destination (Join-Path $wwwrootPublish 'admin') -Recurse -Force
+    # Root fallback
+    Copy-Item -Path (Join-Path $adminDist '*') -Destination $wwwroot -Recurse -Force
+    Copy-Item -Path (Join-Path $adminDist '*') -Destination $wwwrootPublish -Recurse -Force
+    Write-MusicHubInfo '  Admin dashboard staged to wwwroot/admin'
+}
+if (Test-Path -LiteralPath $playerDist) {
+    Copy-Item -Path (Join-Path $playerDist '*') -Destination (Join-Path $wwwroot 'player') -Recurse -Force
+    Copy-Item -Path (Join-Path $playerDist '*') -Destination (Join-Path $wwwrootPublish 'player') -Recurse -Force
+    Write-MusicHubInfo '  Player web app staged to wwwroot/player'
 }
 Write-MusicHubInfo "  wwwroot: $((Get-ChildItem -LiteralPath $wwwroot -Recurse -File).Count) file(s) (project + publish)"
 

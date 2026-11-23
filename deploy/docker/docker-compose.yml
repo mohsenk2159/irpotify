@@ -69,7 +69,9 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
-      ASPNETCORE_URLS: http://+:5080
+      ASPNETCORE_URLS: http://+:5080;http://+:5081
+      MUSICHUB_DASHBOARD_PORT: ${MUSICHUB_DASHBOARD_PORT:-5080}
+      MUSICHUB_PLAYER_PORT: ${MUSICHUB_PLAYER_PORT:-5081}
       # X-Forwarded-For/Proto are trusted only from the proxies named here, not from every peer.
       # ASPNETCORE_FORWARDEDHEADERS_ENABLED would make ASP.NET Core clear its known-proxy list and
       # believe any source, so a container (or anything that can reach :5080) could forge the client
@@ -99,6 +101,7 @@ services:
       - data:/var/lib/musichub
     expose:
       - "5080"
+      - "5081"
     networks:
       - backend
       - edge

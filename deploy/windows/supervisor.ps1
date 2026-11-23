@@ -51,6 +51,7 @@ function Get-ApiPort {
     if (Test-Path -LiteralPath $endpointFile) {
         try {
             $endpoint = Get-Content -LiteralPath $endpointFile -Raw | ConvertFrom-Json
+            if ($endpoint.DashboardPort) { return [int]$endpoint.DashboardPort }
             if ($endpoint.Port) { return [int]$endpoint.Port }
         }
         catch { Write-Log "could not read install.endpoint.json: $($_.Exception.Message)" }

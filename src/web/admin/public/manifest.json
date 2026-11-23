@@ -1,14 +1,14 @@
 {
-  "name": "irpotify — Private Music Cloud",
-  "short_name": "irpotify",
-  "description": "Self-hosted music streaming and library ecosystem with authentic Spotify experience",
+  "name": "irpotify — پنل مدیریت سرور",
+  "short_name": "irpotify Admin",
+  "description": "سامانه مدیریت، مانیتورینگ و پیکربندی سرور اختصاصی irpotify",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0a0f1c",
   "theme_color": "#0a0f1c",
-  "categories": ["music", "audio", "entertainment"],
+  "categories": ["admin", "utilities", "management"],
   "icons": [
     {
       "src": "/icon-192.png",

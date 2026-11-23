@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuth } from './auth/AuthProvider';
 import { LoginRoute, NotFoundPage, RequireAdmin, RequireAuth, RequireContributor, SetupRoute } from './auth/guards';
 import { Layout } from './ui/Layout';
 import { LoginPage } from './pages/LoginPage';
@@ -20,8 +19,7 @@ import { AuditPage } from './pages/AuditPage';
 import { SessionsPage } from './pages/SessionsPage';
 
 function HomeRedirect() {
-  const { isAdmin } = useAuth();
-  return <Navigate to={isAdmin ? '/dashboard' : '/library/tracks'} replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 export function App() {

@@ -19,4 +19,5 @@
 services:
   api:
     ports:
-      - "${MUSICHUB_LAN_ADDRESS:?run deploy/docker/install.ps1 to detect the LAN address, or set MUSICHUB_LAN_ADDRESS in .env}:${MUSICHUB_LAN_PORT:?set MUSICHUB_LAN_PORT in .env to a free TCP port}:5080"
+      - "${MUSICHUB_LAN_ADDRESS:?run deploy/docker/install.ps1 to detect the LAN address}:${MUSICHUB_DASHBOARD_PORT:-5080}:5080"
+      - "${MUSICHUB_LAN_ADDRESS:?run deploy/docker/install.ps1 to detect the LAN address}:${MUSICHUB_PLAYER_PORT:-5081}:5081"

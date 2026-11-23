@@ -67,7 +67,7 @@ export const api = {
       }),
   },
   auth: {
-    login: (payload: { email: string; password: string; deviceName: string }) =>
+    login: (payload: { email: string; password: string; deviceName: string; clientType?: string }) =>
       http.request<AuthSession>('/api/auth/login', { method: 'POST', json: payload, auth: false }),
     refresh: (refreshToken: string) =>
       http.request<AuthSession>('/api/auth/refresh', { method: 'POST', json: { refreshToken }, auth: false }),

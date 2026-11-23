@@ -345,6 +345,91 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
+var dashboardPort = int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT"), out var dPort) ? dPort : 5080;
+var playerPort = int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_PLAYER_PORT"), out var pPort) ? pPort : 5081;
+
+var contentRoot = app.Environment.ContentRootPath;
+var wwwroot = Path.Combine(contentRoot, "wwwroot");
+var adminDir = Path.Combine(wwwroot, "admin");
+var playerDir = Path.Combine(wwwroot, "player");
+
+// Dual-App SPA & Static Content Middleware:
+// Port 5080 (or dashboard port) -> Admin Dashboard SPA
+// Port 5081 (or player port) -> Player Web App SPA
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value ?? "/";
+    if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/healthz", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/openapi", StringComparison.OrdinalIgnoreCase))
+    {
+        await next();
+        return;
+    }
+
+    var localPort = context.Connection.LocalPort;
+    bool isPlayer = (localPort == playerPort) || path.StartsWith("/player", StringComparison.OrdinalIgnoreCase);
+
+    string targetDir = isPlayer ? playerDir : adminDir;
+    if (!Directory.Exists(targetDir)) targetDir = wwwroot;
+
+    var relPath = path.TrimStart('/');
+    if (isPlayer && relPath.StartsWith("player/", StringComparison.OrdinalIgnoreCase))
+    {
+        relPath = relPath["player/".Length..];
+    }
+    else if (!isPlayer && relPath.StartsWith("admin/", StringComparison.OrdinalIgnoreCase))
+    {
+        relPath = relPath["admin/".Length..];
+    }
+
+    if (string.IsNullOrEmpty(relPath) || relPath.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+    {
+        var indexPath = Path.Combine(targetDir, "index.html");
+        if (File.Exists(indexPath))
+        {
+            context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-cache";
+            await context.Response.SendFileAsync(indexPath);
+            return;
+        }
+    }
+    else
+    {
+        var filePath = Path.Combine(targetDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(filePath))
+        {
+            var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+            if (!provider.TryGetContentType(filePath, out var contentType))
+            {
+                contentType = filePath.EndsWith(".webmanifest", StringComparison.OrdinalIgnoreCase)
+                    ? "application/manifest+json"
+                    : "application/octet-stream";
+            }
+            context.Response.ContentType = contentType;
+            context.Response.Headers.CacheControl = filePath.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "no-cache" : "public,max-age=604800";
+            await context.Response.SendFileAsync(filePath);
+            return;
+        }
+    }
+
+    // SPA fallback: for GET requests (like client routes /library/tracks, /settings, etc.), return index.html
+    if (HttpMethods.IsGet(context.Request.Method))
+    {
+        var indexPath = Path.Combine(targetDir, "index.html");
+        if (File.Exists(indexPath))
+        {
+            context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-cache";
+            await context.Response.SendFileAsync(indexPath);
+            return;
+        }
+    }
+
+    await next();
+});
+
 var defaultFiles = new DefaultFilesOptions();
 app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles(new StaticFileOptions

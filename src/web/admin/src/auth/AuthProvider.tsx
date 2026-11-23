@@ -64,6 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (token) {
             const me = await api.auth.me();
             if (cancelled) return;
+            if (!me.roles.includes('Administrator')) {
+              clearTokens();
+              setStatus('anonymous');
+              return;
+            }
             setUser(me);
             setStatus('authenticated');
             return;
@@ -95,7 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string, deviceName: string) => {
-      const session = await api.auth.login({ email, password, deviceName });
+      const session = await api.auth.login({ email, password, deviceName, clientType: 'admin' });
+      if (!session.user.roles.includes('Administrator')) {
+        throw new Error('دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است.');
+      }
       applyTokens(session);
       queryClient.clear();
       setUser(session.user);

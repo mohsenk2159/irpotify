@@ -32,34 +32,22 @@ const NAV: NavGroup[] = [
     adminOnly: true,
   },
   {
-    id: 'library',
-    labelKey: 'nav.library',
+    id: 'admin',
+    labelKey: 'nav.administration',
     items: [
-      { to: '/library/tracks', labelKey: 'nav.tracks', icon: 'tracks' },
-      { to: '/library/albums', labelKey: 'nav.albums', icon: 'albums' },
-      { to: '/library/artists', labelKey: 'nav.artists', icon: 'artists' },
-      { to: '/library/folders', labelKey: 'nav.folders', icon: 'folders' },
-      { to: '/library/genres', labelKey: 'nav.genres', icon: 'genres' },
-      { to: '/library/playlists', labelKey: 'nav.playlists', icon: 'playlists' },
+      { to: '/admin/monitoring', labelKey: 'nav.monitoring', icon: 'monitoring' },
+      { to: '/admin/users', labelKey: 'nav.users', icon: 'users' },
+      { to: '/admin/settings', labelKey: 'nav.settings', icon: 'settings' },
+      { to: '/admin/telegram', labelKey: 'nav.telegram', icon: 'telegram' },
+      { to: '/admin/audit', labelKey: 'nav.audit', icon: 'audit' },
     ],
+    adminOnly: true,
   },
   {
     id: 'upload',
     labelKey: 'nav.contribute',
     items: [{ to: '/library/upload', labelKey: 'nav.upload', icon: 'upload' }],
     contributorOnly: true,
-  },
-  {
-    id: 'admin',
-    labelKey: 'nav.administration',
-    items: [
-      { to: '/admin/users', labelKey: 'nav.users', icon: 'users' },
-      { to: '/admin/settings', labelKey: 'nav.settings', icon: 'settings' },
-      { to: '/admin/telegram', labelKey: 'nav.telegram', icon: 'telegram' },
-      { to: '/admin/monitoring', labelKey: 'nav.monitoring', icon: 'monitoring' },
-      { to: '/admin/audit', labelKey: 'nav.audit', icon: 'audit' },
-    ],
-    adminOnly: true,
   },
   {
     id: 'account',
@@ -291,53 +279,43 @@ export function Layout() {
           <Outlet />
         </main>
 
-        {/* PWA Mobile Bottom Navigation Bar */}
+        {/* Admin PWA Mobile Bottom Navigation Bar */}
         <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
           <NavLink
-            to={isAdmin ? '/dashboard' : '/library/tracks'}
+            to="/dashboard"
             className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
           >
             <ThreeDIcon type="waves" size={24} />
-            <span>{isAdmin ? t('nav.dashboard') : t('nav.tracks')}</span>
+            <span>{t('nav.dashboard')}</span>
           </NavLink>
           <NavLink
-            to="/library/albums"
+            to="/admin/monitoring"
             className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
           >
-            <ThreeDIcon type="album" size={24} />
-            <span>{t('nav.albums')}</span>
+            <ThreeDIcon type="rocket" size={24} />
+            <span>{t('nav.monitoring')}</span>
           </NavLink>
           <NavLink
-            to="/library/artists"
+            to="/admin/users"
             className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
           >
-            <ThreeDIcon type="mic" size={24} />
-            <span>{t('nav.artists')}</span>
+            <ThreeDIcon type="users" size={24} />
+            <span>{t('nav.users')}</span>
           </NavLink>
           <NavLink
-            to="/library/playlists"
+            to="/admin/settings"
             className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
           >
-            <ThreeDIcon type="cassette" size={24} />
-            <span>{t('nav.playlists')}</span>
+            <ThreeDIcon type="disk" size={24} />
+            <span>{t('nav.settings')}</span>
           </NavLink>
-          {isAdmin ? (
-            <NavLink
-              to="/admin/users"
-              className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
-            >
-              <ThreeDIcon type="users" size={24} />
-              <span>{t('nav.users')}</span>
-            </NavLink>
-          ) : (
-            <NavLink
-              to="/account/sessions"
-              className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
-            >
-              <ThreeDIcon type="shield" size={24} />
-              <span>{t('nav.sessions')}</span>
-            </NavLink>
-          )}
+          <NavLink
+            to="/account/sessions"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="shield" size={24} />
+            <span>{t('nav.sessions')}</span>
+          </NavLink>
         </nav>
 
         {showInstallModal ? (

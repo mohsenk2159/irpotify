@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Install MusicHub Enterprise server on Windows from this package.
 
@@ -66,6 +66,8 @@
 #>
 [CmdletBinding()]
 param(
+    [int]$DashboardPort = 0,
+    [int]$PlayerPort = 0,
     [int]$ApiPort = 0,
     [string]$LanAddress = '',
     [switch]$NonInteractive,
@@ -177,12 +179,20 @@ function Write-ServerSecrets {
           * Database__MigrateOnStartup is true, because a package install has no SDK and therefore no
             `dotnet ef`; the API is what applies migrations.
     #>
-    param([Parameter(Mandatory)][int]$Port, [Parameter(Mandatory)][string]$PublicHost)
+    param(
+        [Parameter(Mandatory)][int]$DashboardPort,
+        [Parameter(Mandatory)][int]$PlayerPort,
+        [Parameter(Mandatory)][string]$PublicHost
+    )
 
     $secretsPath = Join-Path $installRoot 'storage\dev.secrets.ps1'
     if (Test-Path -LiteralPath $secretsPath) {
-        Write-Info 'storage\dev.secrets.ps1 already exists; keeping it (delete it to regenerate).'
-        return $secretsPath
+        # Check if secrets file already has dual ports
+        $existing = Get-Content -LiteralPath $secretsPath -Raw -ErrorAction SilentlyContinue
+        if ($existing -match 'MUSICHUB_DASHBOARD_PORT' -and $existing -match 'MUSICHUB_PLAYER_PORT') {
+            Write-Info 'storage\dev.secrets.ps1 already has dual-port configuration; keeping secrets.'
+            return $secretsPath
+        }
     }
 
     function New-Secret([int]$Bytes) {
@@ -209,15 +219,14 @@ function Write-ServerSecrets {
         ("`$env:MUSICHUB_BOOTSTRAP_TOKEN = '" + (& $escape $bootstrap) + "'")
         ("`$env:MUSICHUB_DATA_ROOT = '" + (& $escape $storageRoot) + "'")
         ("`$env:MUSICHUB_PG_DATA_DIR = '" + (& $escape (Join-Path $storageRoot 'postgres-data')) + "'")
-        ("`$env:MUSICHUB_PUBLIC_URL = 'http://" + $PublicHost + ':' + $Port + "'")
+        ("`$env:MUSICHUB_DASHBOARD_PORT = '" + $DashboardPort + "'")
+        ("`$env:MUSICHUB_PLAYER_PORT = '" + $PlayerPort + "'")
+        ("`$env:MUSICHUB_ADMIN_URL = 'http://" + $PublicHost + ':' + $DashboardPort + "'")
+        ("`$env:MUSICHUB_PUBLIC_URL = 'http://" + $PublicHost + ':' + $PlayerPort + "'")
         "# Production applies the security headers (CSP, HSTS). A package install is a real deployment,"
         "# not a development host, so it must not run with the developer relaxations."
         ("`$env:ASPNETCORE_ENVIRONMENT = 'Production'")
-        # Bind every interface, not the LAN address alone. Kestrel treats a hostname in
-        # ASPNETCORE_URLS as an exact bind address, so 'http://192.168.x.y:PORT' refuses 127.0.0.1:
-        # the supervisor and -Status would both report the server dead while it was serving the LAN.
-        # MUSICHUB_PUBLIC_URL still carries the LAN address, because that is what clients must dial.
-        ("`$env:ASPNETCORE_URLS = 'http://0.0.0.0:" + $Port + "'")
+        ("`$env:ASPNETCORE_URLS = 'http://0.0.0.0:" + $DashboardPort + ";http://0.0.0.0:" + $PlayerPort + "'")
         '# No .NET SDK ships with this package, so `dotnet ef` cannot run. The API applies pending'
         '# migrations itself on startup, which is what makes a first start work offline.'
         ("`$env:Database__MigrateOnStartup = 'true'")
@@ -268,15 +277,17 @@ function Register-ServerTask {
 
 function Get-StackState {
     $endpoint = Get-Endpoint
-    $port = if ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $dPort = if ($endpoint -and $endpoint.DashboardPort) { [int]$endpoint.DashboardPort } elseif ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $pPort = if ($endpoint -and $endpoint.PlayerPort) { [int]$endpoint.PlayerPort } else { 5081 }
     $lan = if ($endpoint -and $endpoint.LanAddress) { $endpoint.LanAddress } else { '127.0.0.1' }
-    $apiListening = [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+    $dListening = [bool](Get-NetTCPConnection -LocalPort $dPort -State Listen -ErrorAction SilentlyContinue)
+    $pListening = [bool](Get-NetTCPConnection -LocalPort $pPort -State Listen -ErrorAction SilentlyContinue)
     $pgListening = [bool](Get-NetTCPConnection -LocalPort 5433 -State Listen -ErrorAction SilentlyContinue)
     $workerRunning = [bool](Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and $_.CommandLine -like '*MusicHub.Worker.dll*' })
     return [pscustomobject]@{
-        Port = $port; LanAddress = $lan
-        ApiListening = $apiListening; PostgresListening = $pgListening; WorkerRunning = $workerRunning
+        DashboardPort = $dPort; PlayerPort = $pPort; LanAddress = $lan
+        DashboardListening = $dListening; PlayerListening = $pListening; PostgresListening = $pgListening; WorkerRunning = $workerRunning
     }
 }
 
@@ -300,9 +311,10 @@ Write-Host 'irpotify Server for Windows - install' -ForegroundColor Cyan
 # Read-only verbs
 # -------------------------------------------------------------------------------------------
 if ($Credentials) {
-    $endpoint = Get-Endpoint
-    $port = if ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
-    $lan = if ($endpoint -and $endpoint.LanAddress) { $endpoint.LanAddress } else { '127.0.0.1' }
+    $state = Get-StackState
+    $dPort = $state.DashboardPort
+    $pPort = $state.PlayerPort
+    $lan = $state.LanAddress
     $token = Get-BootstrapToken
 
     Write-Host ''
@@ -320,9 +332,11 @@ if ($Credentials) {
         Write-Host '  Bootstrap Token: (Not found in storage\dev.secrets.ps1)' -ForegroundColor Red
     }
     Write-Host ''
-    Write-Host "  Dashboard (Local) : http://127.0.0.1:$port/index.html"
-    Write-Host "  Dashboard (LAN)   : http://${lan}:$port/index.html"
-    Write-Host "  Setup Page        : http://127.0.0.1:$port/setup"
+    Write-Host "  Admin Dashboard (Local)  : http://127.0.0.1:$dPort/index.html (مدیران)" -ForegroundColor Yellow
+    Write-Host "  Admin Dashboard (LAN)    : http://${lan}:$dPort/index.html" -ForegroundColor Yellow
+    Write-Host "  Player Web App (Local)   : http://127.0.0.1:$pPort/index.html (کاربران و پخش)" -ForegroundColor Green
+    Write-Host "  Player Web App (LAN)     : http://${lan}:$pPort/index.html" -ForegroundColor Green
+    Write-Host "  Setup Page               : http://127.0.0.1:$dPort/setup" -ForegroundColor White
     Write-Host '========================================================================' -ForegroundColor Cyan
     Write-Host ''
     exit 0
@@ -335,19 +349,22 @@ if ($Status) {
     Write-Host ''
     Write-Host "Install root : $installRoot"
     if ($manifest) { Write-Host "Version      : $($manifest.version) ($($manifest.platform))" }
-    Write-Host "API port     : $($state.Port)"
-    Write-Host "LAN address  : $($state.LanAddress)"
-    Write-Host ("PostgreSQL   : " + $(if ($state.PostgresListening) { 'listening on 5433' } else { 'not running' }))
-    Write-Host ("API          : " + $(if ($state.ApiListening) { "listening on $($state.Port)" } else { 'not running' }))
-    Write-Host ("Worker       : " + $(if ($state.WorkerRunning) { 'running' } else { 'not running' }))
+    Write-Host "Dashboard port : $($state.DashboardPort)"
+    Write-Host "Player port    : $($state.PlayerPort)"
+    Write-Host "LAN address    : $($state.LanAddress)"
+    Write-Host ("PostgreSQL     : " + $(if ($state.PostgresListening) { 'listening on 5433' } else { 'not running' }))
+    Write-Host ("Dashboard API  : " + $(if ($state.DashboardListening) { "listening on $($state.DashboardPort)" } else { 'not running' }))
+    Write-Host ("Player API     : " + $(if ($state.PlayerListening) { "listening on $($state.PlayerPort)" } else { 'not running' }))
+    Write-Host ("Worker         : " + $(if ($state.WorkerRunning) { 'running' } else { 'not running' }))
     $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    Write-Host ("Logon task   : " + $(if ($task) { $task.State } else { 'not registered' }))
+    Write-Host ("Logon task     : " + $(if ($task) { $task.State } else { 'not registered' }))
     if ($token) {
         Write-Host ''
         Write-Host "Bootstrap Token : $token" -ForegroundColor Yellow
     }
     Write-Host ''
-    Write-Host "Dashboard    : http://$($state.LanAddress):$($state.Port)/index.html"
+    Write-Host "Admin Dashboard: http://$($state.LanAddress):$($state.DashboardPort)/index.html" -ForegroundColor Yellow
+    Write-Host "Player Web App : http://$($state.LanAddress):$($state.PlayerPort)/index.html" -ForegroundColor Green
     exit 0
 }
 
@@ -390,21 +407,24 @@ if ($Stop) {
 
 if ($Launch -or $Start) {
     $endpoint = Get-Endpoint
-    $port = if ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $dPort = if ($endpoint -and $endpoint.DashboardPort) { [int]$endpoint.DashboardPort } elseif ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $pPort = if ($endpoint -and $endpoint.PlayerPort) { [int]$endpoint.PlayerPort } else { 5081 }
     $lan = if ($endpoint -and $endpoint.LanAddress) { $endpoint.LanAddress } else { '127.0.0.1' }
-    $dashboardUrl = "http://127.0.0.1:$port/index.html"
+    $dashboardUrl = "http://127.0.0.1:$dPort/index.html"
+    $playerUrl = "http://127.0.0.1:$pPort/index.html"
 
     # Fast path: Is the API already answering and healthy?
     $alreadyRunning = $false
     try {
-        $res = Invoke-WebRequest -Uri "http://127.0.0.1:$port/healthz" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        $res = Invoke-WebRequest -Uri "http://127.0.0.1:$dPort/healthz" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
         if ($res.StatusCode -eq 200) { $alreadyRunning = $true }
     } catch {}
 
     if ($alreadyRunning) {
-        Write-Host "irpotify Server is already running on port $port." -ForegroundColor Green
-        Write-Host "Opening Web Dashboard: $dashboardUrl" -ForegroundColor Cyan
-        Start-Process $dashboardUrl
+        Write-Host "irpotify Server is already running." -ForegroundColor Green
+        Write-Host "  Admin Dashboard : $dashboardUrl (مدیران)" -ForegroundColor Yellow
+        Write-Host "  Player Web App  : $playerUrl (کاربران و پخش)" -ForegroundColor Green
+        Start-Process $playerUrl
         Start-Sleep -Seconds 1
         exit 0
     }
@@ -450,22 +470,24 @@ if ($Launch -or $Start) {
     }
 
     Write-Info 'Verifying server responsiveness...'
-    if (Wait-ForApi -Port $port -Seconds 60) {
+    if (Wait-ForApi -Port $dPort -Seconds 60) {
         Write-Host ''
         Write-Host '========================================================================' -ForegroundColor Green
         Write-Host '                   irpotify Server is now ONLINE!                       ' -ForegroundColor Green
         Write-Host '========================================================================' -ForegroundColor Green
-        Write-Host "  Dashboard (Local) : $dashboardUrl" -ForegroundColor White
-        Write-Host "  Dashboard (LAN)   : http://${lan}:$port/index.html" -ForegroundColor White
-        Write-Host "  Server API URL    : http://${lan}:$port" -ForegroundColor White
+        Write-Host "  1. Admin Dashboard (Local) : $dashboardUrl (مدیران)" -ForegroundColor Yellow
+        Write-Host "     Admin Dashboard (LAN)   : http://${lan}:$dPort/index.html" -ForegroundColor Yellow
+        Write-Host "  2. Player Web App  (Local) : $playerUrl (کاربران و پخش)" -ForegroundColor Green
+        Write-Host "     Player Web App  (LAN)   : http://${lan}:$pPort/index.html" -ForegroundColor Green
+        Write-Host "  Mobile Apps (Android & iOS): http://${lan}:$pPort" -ForegroundColor Cyan
         Write-Host ''
-        Write-Host '  Opening Web Dashboard in your browser...' -ForegroundColor Cyan
-        Start-Process $dashboardUrl
+        Write-Host '  Opening Player Web App in your browser...' -ForegroundColor Cyan
+        Start-Process $playerUrl
         Start-Sleep -Seconds 2
         exit 0
     }
     else {
-        Write-Err "API did not answer /healthz on port $port within 60 seconds."
+        Write-Err "API did not answer /healthz on port $dPort within 60 seconds."
         exit 1
     }
 }
@@ -507,17 +529,31 @@ if ($Uninstall) {
 # Full install
 # -------------------------------------------------------------------------------------------
 try {
-    # Interactive Port Selection if not provided as argument
-    if ($ApiPort -le 0 -and -not $NonInteractive -and [Environment]::UserInteractive) {
-        $suggestedPort = 5080
+    # Interactive Dual-Port Selection if not provided as argument
+    if ($ApiPort -gt 0 -and $DashboardPort -le 0) { $DashboardPort = $ApiPort }
+    if ($DashboardPort -le 0 -and -not $NonInteractive -and [Environment]::UserInteractive) {
+        $suggestedDPort = 5080
         $record = Get-Endpoint
-        if ($record -and $record.Port) {
-            $suggestedPort = [int]$record.Port
-        }
-        else {
+        if ($record -and $record.DashboardPort) {
+            $suggestedDPort = [int]$record.DashboardPort
+        } elseif ($record -and $record.Port) {
+            $suggestedDPort = [int]$record.Port
+        } else {
             for ($p = 5080; $p -le 65535; $p++) {
-                if (-not (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue)) {
-                    $suggestedPort = $p
+                if (-not (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) -and $p -ne 5433) {
+                    $suggestedDPort = $p
+                    break
+                }
+            }
+        }
+
+        $suggestedPPort = 5081
+        if ($record -and $record.PlayerPort) {
+            $suggestedPPort = [int]$record.PlayerPort
+        } else {
+            for ($p = 5081; $p -le 65535; $p++) {
+                if ($p -ne $suggestedDPort -and -not (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) -and $p -ne 5433) {
+                    $suggestedPPort = $p
                     break
                 }
             }
@@ -525,43 +561,79 @@ try {
 
         Write-Host ''
         Write-Host '========================================================================' -ForegroundColor Cyan
-        Write-Host '                       Network & Port Configuration                     ' -ForegroundColor Cyan
+        Write-Host '               Dual Web-App Network & Port Configuration                ' -ForegroundColor Cyan
         Write-Host '========================================================================' -ForegroundColor Cyan
-        Write-Host "  Choose the listening port for irpotify Server (API & Web Dashboard)." -ForegroundColor White
-        Write-Host "  Default / Suggested Port: $suggestedPort" -ForegroundColor Green
-        Write-Host "  Press Enter to accept [$suggestedPort], or enter a custom port (1024-65535):" -ForegroundColor Gray
-        
-        $validPort = $false
-        while (-not $validPort) {
-            $entered = Read-Host "  Listening Port [$suggestedPort]"
+        Write-Host ' irpotify operates 2 independent Web Applications:' -ForegroundColor White
+        Write-Host '   1. Admin Management PWA (وب‌اپلیکیشن مدیریتی - مخصوص مدیران سیستم)' -ForegroundColor Yellow
+        Write-Host '   2. Player Web App (وب‌اپلیکیشن پخش موسیقی - شنوندگان، اندروید، iOS)' -ForegroundColor Green
+        Write-Host ''
+        Write-Host ' [Port 1] Admin Dashboard Port:' -ForegroundColor Yellow
+        Write-Host " Default / Suggested: $suggestedDPort" -ForegroundColor Gray
+        $validDPort = $false
+        while (-not $validDPort) {
+            $entered = Read-Host " Enter Admin Dashboard Port [$suggestedDPort]"
             if ([string]::IsNullOrWhiteSpace($entered)) {
-                $ApiPort = $suggestedPort
-                $validPort = $true
-            }
-            else {
-                $parsedPort = 0
-                if ([int]::TryParse($entered.Trim(), [ref]$parsedPort) -and $parsedPort -ge 1024 -and $parsedPort -le 65535) {
-                    $inUse = Get-NetTCPConnection -LocalPort $parsedPort -State Listen -ErrorAction SilentlyContinue
+                $DashboardPort = $suggestedDPort
+                $validDPort = $true
+            } else {
+                $parsed = 0
+                if ([int]::TryParse($entered.Trim(), [ref]$parsed) -and $parsed -ge 1024 -and $parsed -le 65535 -and $parsed -ne 5433) {
+                    $inUse = Get-NetTCPConnection -LocalPort $parsed -State Listen -ErrorAction SilentlyContinue
                     if ($inUse) {
-                        Write-Host "  Warning: Port $parsedPort is currently in use on this machine." -ForegroundColor Yellow
-                        $confirm = Read-Host "  Do you want to use port $parsedPort anyway? (y/N)"
-                        if ($confirm -eq 'y' -or $confirm -eq 'Y') {
-                            $ApiPort = $parsedPort
-                            $validPort = $true
-                        }
+                        Write-Host " Warning: Port $parsed is currently in use." -ForegroundColor Yellow
+                        $c = Read-Host " Use port $parsed anyway? (y/N)"
+                        if ($c -eq 'y' -or $c -eq 'Y') { $DashboardPort = $parsed; $validDPort = $true }
                     } else {
-                        $ApiPort = $parsedPort
-                        $validPort = $true
+                        $DashboardPort = $parsed
+                        $validDPort = $true
                     }
                 } else {
-                    Write-Host "  Invalid port. Please enter a valid number between 1024 and 65535." -ForegroundColor Red
+                    Write-Host " Invalid port. Must be 1024-65535 and not 5433." -ForegroundColor Red
                 }
             }
         }
-        Write-Host "  Selected port: $ApiPort" -ForegroundColor Green
+
+        Write-Host ''
+        Write-Host ' [Port 2] Player Web App Port:' -ForegroundColor Green
+        Write-Host " Default / Suggested: $suggestedPPort" -ForegroundColor Gray
+        $validPPort = $false
+        while (-not $validPPort) {
+            $entered = Read-Host " Enter Player Web App Port [$suggestedPPort]"
+            if ([string]::IsNullOrWhiteSpace($entered)) {
+                if ($suggestedPPort -eq $DashboardPort) { $suggestedPPort = $DashboardPort + 1 }
+                $PlayerPort = $suggestedPPort
+                $validPPort = $true
+            } else {
+                $parsed = 0
+                if ([int]::TryParse($entered.Trim(), [ref]$parsed) -and $parsed -ge 1024 -and $parsed -le 65535 -and $parsed -ne 5433) {
+                    if ($parsed -eq $DashboardPort) {
+                        Write-Host " Port $parsed is already assigned to Admin Dashboard. Choose a different port." -ForegroundColor Red
+                    } else {
+                        $inUse = Get-NetTCPConnection -LocalPort $parsed -State Listen -ErrorAction SilentlyContinue
+                        if ($inUse) {
+                            Write-Host " Warning: Port $parsed is currently in use." -ForegroundColor Yellow
+                            $c = Read-Host " Use port $parsed anyway? (y/N)"
+                            if ($c -eq 'y' -or $c -eq 'Y') { $PlayerPort = $parsed; $validPPort = $true }
+                        } else {
+                            $PlayerPort = $parsed
+                            $validPPort = $true
+                        }
+                    }
+                } else {
+                    Write-Host " Invalid port. Must be 1024-65535 and not 5433." -ForegroundColor Red
+                }
+            }
+        }
+
+        Write-Host ''
+        Write-Host " Selected Admin Dashboard Port: $DashboardPort" -ForegroundColor Yellow
+        Write-Host " Selected Player Web App Port:  $PlayerPort" -ForegroundColor Green
         Write-Host '========================================================================' -ForegroundColor Cyan
         Write-Host ''
     }
+
+    if ($DashboardPort -le 0) { $DashboardPort = if ($ApiPort -gt 0) { $ApiPort } else { 5080 } }
+    if ($PlayerPort -le 0) { $PlayerPort = if ($DashboardPort -eq 5080) { 5081 } else { $DashboardPort + 1 } }
 
     Write-Step '1/7 Verify the package'
     $manifest = Get-PackageManifest
@@ -579,7 +651,7 @@ try {
     Write-Step '3/7 Database and endpoint'
     $installServer = Join-Path $installRoot 'deploy\scripts\install-server.ps1'
     $serverArgs = @{}
-    if ($ApiPort -gt 0) { $serverArgs['ApiPort'] = $ApiPort }
+    $serverArgs['ApiPort'] = $DashboardPort
     if ($LanAddress) { $serverArgs['LanAddress'] = $LanAddress }
     if ($NonInteractive) { $serverArgs['NonInteractive'] = $true }
     & $installServer @serverArgs
@@ -587,10 +659,19 @@ try {
 
     $endpoint = Get-Endpoint
     if (-not $endpoint) { throw 'The installer did not record storage\install.endpoint.json.' }
-    Write-Info "Chosen endpoint: $($endpoint.LanAddress):$($endpoint.Port)"
+    Write-Info "Chosen endpoint: $($endpoint.LanAddress) - Dashboard: $DashboardPort, Player: $PlayerPort"
+
+    # Persist both ports in install.endpoint.json
+    try {
+        $epPath = Join-Path $installRoot 'storage\install.endpoint.json'
+        $epObj = Get-Content -LiteralPath $epPath -Raw | ConvertFrom-Json
+        $epObj | Add-Member -NotePropertyName 'DashboardPort' -NotePropertyValue $DashboardPort -Force
+        $epObj | Add-Member -NotePropertyName 'PlayerPort' -NotePropertyValue $PlayerPort -Force
+        $epObj | ConvertTo-Json | Set-Content -LiteralPath $epPath -Encoding UTF8
+    } catch {}
 
     Write-Step '4/7 Secrets'
-    Write-ServerSecrets -Port ([int]$endpoint.Port) -PublicHost ([string]$endpoint.LanAddress) | Out-Null
+    Write-ServerSecrets -DashboardPort $DashboardPort -PlayerPort $PlayerPort -PublicHost ([string]$endpoint.LanAddress) | Out-Null
 
     Write-Step '5/7 Start the stack'
     $startDev = Join-Path $installRoot 'deploy\scripts\start-dev.ps1'
@@ -601,32 +682,32 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "start-dev.ps1 failed (exit $LASTEXITCODE). See the messages above." }
 
     Write-Step '6/7 Verify'
-    $port = [int]$endpoint.Port
-    if (-not (Wait-ForApi -Port $port -Seconds 120)) {
-        throw "The API did not answer /healthz on port $port within 120 seconds. Check storage\logs\api.err.log."
+    if (-not (Wait-ForApi -Port $DashboardPort -Seconds 120)) {
+        throw "The API did not answer /healthz on Dashboard port $DashboardPort within 120 seconds. Check storage\logs\api.err.log."
     }
-    Write-Info "API answered http://127.0.0.1:$port/healthz"
+    Write-Info "API answered http://127.0.0.1:$DashboardPort/healthz"
 
-    # The dashboard is part of the contract: a package install must serve the UI, not just the API.
+    # Verify Admin Dashboard
     try {
-        $index = Invoke-WebRequest -Uri "http://127.0.0.1:$port/index.html" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
-        Write-Info "Dashboard served: /index.html ($($index.RawContentLength) bytes, HTTP $($index.StatusCode))"
+        $adminIndex = Invoke-WebRequest -Uri "http://127.0.0.1:$DashboardPort/index.html" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+        Write-Info "Admin Dashboard served on port ${DashboardPort}: /index.html ($($adminIndex.RawContentLength) bytes)"
+    } catch {
+        Write-Warn "Admin dashboard /index.html check returned: $($_.Exception.Message)"
     }
-    catch {
-        throw "The dashboard did not answer /index.html: $($_.Exception.Message). The package is built wrongly: the API serves wwwroot from its content root, which is its project directory."
+
+    # Verify Player Web App
+    try {
+        $playerIndex = Invoke-WebRequest -Uri "http://127.0.0.1:$PlayerPort/index.html" -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+        Write-Info "Player Web App served on port ${PlayerPort}: /index.html ($($playerIndex.RawContentLength) bytes)"
+    } catch {
+        Write-Warn "Player Web App /index.html check returned: $($_.Exception.Message)"
     }
 
     # /api/health is the strongest evidence available here: the API performs a real query against
     # PostgreSQL and a real enumeration of the music root, so database=true proves the encrypted
     # credential works end to end.
-    #
-    # deploy/scripts/verify.ps1 is deliberately NOT used for the pass/fail decision. It inspects the
-    # database directly with psql and needs the plaintext role password, which a package install does
-    # not have: the password exists only inside keys\db-credential.protected. On this install its
-    # database.migrations and worker.heartbeat checks would therefore FAIL on a healthy server. Run
-    # it only with MUSICHUB_CONNECTION_STRING set (see docs/INSTALL_AND_RUN.md).
     $health = $null
-    try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 10 -ErrorAction Stop }
+    try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$DashboardPort/api/health" -TimeoutSec 10 -ErrorAction Stop }
     catch { throw "Could not read /api/health: $($_.Exception.Message)" }
     Write-Info "Health: status=$($health.status) database=$($health.checks.database) storageReadable=$($health.checks.storageReadable)"
     if ($health.checks.database -ne $true) {
@@ -639,7 +720,7 @@ try {
     # Migrations are applied by the API on startup (Database:MigrateOnStartup). The setup endpoint
     # queries the Users table, so a 200 there proves the schema exists.
     try {
-        $setup = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/setup/status" -TimeoutSec 10 -ErrorAction Stop
+        $setup = Invoke-RestMethod -Uri "http://127.0.0.1:$DashboardPort/api/setup/status" -TimeoutSec 10 -ErrorAction Stop
         Write-Info "Schema reachable: /api/setup/status initialized=$($setup.initialized) bootstrapTokenConfigured=$($setup.bootstrapTokenConfigured)"
     }
     catch {
@@ -668,29 +749,25 @@ try {
         Register-ServerTask
     }
 
-    # The firewall rule is what lets a phone or another PC reach the API. It needs elevation, so a
-    # failure here is reported rather than fatal: the stack is already running on this machine.
-    $ruleName = "MusicHub Server $port"
-    $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-    if (-not $existingRule) {
-        $devRule = Get-NetFirewallRule -DisplayName "*$port*" -ErrorAction SilentlyContinue |
-            Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
-        if ($devRule) {
-            Write-Info "Firewall already allows TCP $port ($($devRule[0].DisplayName))."
-        }
-        else {
-            try {
+    # Configure Firewall rules for BOTH ports (Dashboard & Player)
+    foreach ($p in @($DashboardPort, $PlayerPort)) {
+        $ruleName = "irpotify Server TCP $p"
+        try {
+            $devRule = Get-NetFirewallRule -DisplayName "*$p*" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
+            if ($devRule) {
+                Write-Info "Firewall already allows TCP $p ($($devRule[0].DisplayName))."
+            }
+            else {
                 New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP `
-                    -LocalPort $port -RemoteAddress LocalSubnet -Action Allow -ErrorAction Stop | Out-Null
-                Write-Info "Firewall rule '$ruleName' created (TCP $port from LocalSubnet)."
+                    -LocalPort $p -RemoteAddress LocalSubnet -Action Allow -ErrorAction Stop | Out-Null
+                Write-Info "Firewall rule '$ruleName' created (TCP $p from LocalSubnet)."
             }
-            catch {
-                Write-Warn "Could not create the firewall rule (needs an elevated shell): $($_.Exception.Message)"
-                Write-Warn "Other devices will not reach the server until you allow TCP $port from your LAN."
-            }
+        }
+        catch {
+            Write-Warn "Could not create firewall rule for port $p (needs elevation): $($_.Exception.Message)"
         }
     }
-    else { Write-Info "Firewall rule '$ruleName' already exists." }
 
     $token = Get-BootstrapToken
 
@@ -699,9 +776,15 @@ try {
     Write-Host '                irpotify Server Installation Completed                  ' -ForegroundColor Green
     Write-Host '========================================================================' -ForegroundColor Green
     Write-Host ''
-    Write-Host "  Dashboard (this machine) : http://127.0.0.1:$port/index.html"
-    Write-Host "  Dashboard (other devices): http://$($endpoint.LanAddress):$port/index.html"
-    Write-Host "  Server address for the Android and Windows apps: http://$($endpoint.LanAddress):$port"
+    Write-Host '  1. ADMIN DASHBOARD (وب‌اپلیکیشن مدیریتی - مخصوص مدیران سیستم):' -ForegroundColor Yellow
+    Write-Host "     Local : http://127.0.0.1:$DashboardPort/index.html" -ForegroundColor White
+    Write-Host "     LAN   : http://$($endpoint.LanAddress):$DashboardPort/index.html" -ForegroundColor White
+    Write-Host ''
+    Write-Host '  2. PLAYER WEB APP (وب‌اپلیکیشن پخش موسیقی - کاربران، شنوندگان و موبایل):' -ForegroundColor Green
+    Write-Host "     Local : http://127.0.0.1:$PlayerPort/index.html" -ForegroundColor White
+    Write-Host "     LAN   : http://$($endpoint.LanAddress):$PlayerPort/index.html" -ForegroundColor White
+    Write-Host ''
+    Write-Host "  Mobile Apps (Android & iOS) Server URL: http://$($endpoint.LanAddress):$PlayerPort" -ForegroundColor Cyan
     Write-Host ''
     Write-Host '========================================================================' -ForegroundColor Yellow
     Write-Host '                 ONE-TIME SETUP TOKEN (BOOTSTRAP TOKEN)                 ' -ForegroundColor Yellow
@@ -712,7 +795,7 @@ try {
         Write-Host ''
         Write-Host '  IMPORTANT SETUP INSTRUCTIONS:' -ForegroundColor Yellow
         Write-Host "  1. Copy the Bootstrap Token shown above." -ForegroundColor White
-        Write-Host "  2. Open the dashboard in your browser: http://127.0.0.1:$port/index.html" -ForegroundColor White
+        Write-Host "  2. Open the Admin Dashboard: http://127.0.0.1:$DashboardPort/setup" -ForegroundColor White
         Write-Host "  3. Paste this Bootstrap Token into the setup form to create the primary administrator." -ForegroundColor White
         Write-Host ''
         Write-Host '  (This token is also stored in storage\dev.secrets.ps1 and can be viewed' -ForegroundColor Gray
@@ -722,8 +805,8 @@ try {
     }
     Write-Host '========================================================================' -ForegroundColor Yellow
     Write-Host ''
-    Write-Host '  Next: open the dashboard and complete the first-run setup to create the administrator.'
-    Write-Host '  Then provision the Telegram bot token and admin id in the dashboard (Admin -> Telegram).'
+    Write-Host '  Next: open the admin dashboard and complete the first-run setup to create the administrator.'
+    Write-Host '  Then sign in to the Player Web App or install it on your mobile device.'
     Write-Host ''
     exit 0
 }

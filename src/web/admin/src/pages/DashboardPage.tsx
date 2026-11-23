@@ -5,7 +5,6 @@ import type { Track } from '../api/types';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, StatusBadge } from '../ui/primitives';
 import { Icon, type IconName } from '../ui/icons';
 import { useUi } from '../ui/UiProvider';
-import { usePlayer } from '../ui/Player';
 import { Artwork } from '../ui/Artwork';
 import { ThreeDIcon, type ThreeDIconType } from '../ui/ThreeDIcons';
 
@@ -391,10 +390,6 @@ function DashboardHeroBanner({ trackCount, albumCount }: { trackCount: number; a
 }
 
 function TrackListItem({ track }: { track: Track }) {
-  const { t } = useUi();
-  const { playTrack, current, status } = usePlayer();
-  const isCurrent = current?.id === track.id;
-  const isPlaying = isCurrent && status === 'playing';
   return (
     <div className="track-list-item">
       <Artwork url={track.artworkUrl} alt="" size={36} />
@@ -402,14 +397,6 @@ function TrackListItem({ track }: { track: Track }) {
         <span className="track-list-title">{track.title}</span>
         <span className="track-list-sub">{track.artist || '—'}</span>
       </div>
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon"
-        onClick={() => playTrack(track)}
-        aria-label={isPlaying ? t('tracks.pause') : t('tracks.play')}
-      >
-        <Icon name={isPlaying ? 'pause' : 'play'} size={16} />
-      </button>
     </div>
   );
 }

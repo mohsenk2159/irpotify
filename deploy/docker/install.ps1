@@ -209,6 +209,9 @@ try {
 
     Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_LAN_ADDRESS' -Value $endpoint.LanAddress
     Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_LAN_PORT' -Value ([string]$endpoint.Port)
+    Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_DASHBOARD_PORT' -Value ([string]$endpoint.Port)
+    $playerPort = [int]$endpoint.Port + 1
+    Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PLAYER_PORT' -Value ([string]$playerPort)
 
     # The pairing payload must name the URL clients actually reach, or the QR code is useless.
     $lanUrl = "http://$($endpoint.LanAddress):$($endpoint.Port)"
@@ -255,12 +258,19 @@ try {
             finally { $ErrorActionPreference = $previousErrorAction }
 
             if ($npmExit -eq 0) {
-                $dist = Join-Path $repoRoot 'src\web\admin\dist'
-                $wwwroot = Join-Path $repoRoot 'src\server\MusicHub.Api\wwwroot'
-                if (Test-Path -LiteralPath $dist) {
-                    New-MusicHubDirectory -Path $wwwroot | Out-Null
-                    Copy-Item -Path (Join-Path $dist '*') -Destination $wwwroot -Recurse -Force
-                    Write-MusicHubInfo 'Dashboard bundle built into src/server/MusicHub.Api/wwwroot.'
+                $adminDist = Join-Path $repoRoot 'src\web\admin\dist'
+                $playerDist = Join-Path $repoRoot 'src\web\player\dist'
+                $wwwrootAdmin = Join-Path $repoRoot 'src\server\MusicHub.Api\wwwroot\admin'
+                $wwwrootPlayer = Join-Path $repoRoot 'src\server\MusicHub.Api\wwwroot\player'
+                if (Test-Path -LiteralPath $adminDist) {
+                    New-MusicHubDirectory -Path $wwwrootAdmin | Out-Null
+                    Copy-Item -Path (Join-Path $adminDist '*') -Destination $wwwrootAdmin -Recurse -Force
+                    Write-MusicHubInfo 'Admin dashboard built into src/server/MusicHub.Api/wwwroot/admin.'
+                }
+                if (Test-Path -LiteralPath $playerDist) {
+                    New-MusicHubDirectory -Path $wwwrootPlayer | Out-Null
+                    Copy-Item -Path (Join-Path $playerDist '*') -Destination $wwwrootPlayer -Recurse -Force
+                    Write-MusicHubInfo 'Player web app built into src/server/MusicHub.Api/wwwroot/player.'
                 }
             }
             else {
