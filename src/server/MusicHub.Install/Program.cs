@@ -242,7 +242,7 @@ public static class Program
                 info.ArgumentList.Add(full);
                 info.ArgumentList.Add("/inheritance:r");
                 info.ArgumentList.Add("/grant:r");
-                info.ArgumentList.Add($"{Environment.UserDomainName}\\{Environment.UserName}:(R,W)");
+                info.ArgumentList.Add($"{Environment.UserDomainName}\\{Environment.UserName}:(F)");
                 using var process = System.Diagnostics.Process.Start(info);
                 process?.WaitForExit(10_000);
             }

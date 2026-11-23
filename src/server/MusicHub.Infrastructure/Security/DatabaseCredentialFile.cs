@@ -129,7 +129,6 @@ public static class DatabaseCredentialFile
                 stream.Flush(flushToDisk: true);
             }
 
-            RestrictFile(temp);
             File.Move(temp, path, overwrite: true);
             RestrictFile(path);
         }
@@ -291,9 +290,9 @@ public static class DatabaseCredentialFile
         // Windows: remove inherited access and grant only the current account. The content is
         // already DPAPI-encrypted for this account, so this is defence in depth, not the control.
         var account = $"{Environment.UserDomainName}\\{Environment.UserName}";
-        if (!TryRunIcacls(path, "/inheritance:r", "/grant:r", $"{account}:(R,W)"))
+        if (!TryRunIcacls(path, "/inheritance:r", "/grant:r", $"{account}:(F)"))
         {
-            TryRunIcacls(path, "/inheritance:r", "/grant:r", $"{Environment.UserName}:(R,W)");
+            TryRunIcacls(path, "/inheritance:r", "/grant:r", $"{Environment.UserName}:(F)");
         }
     }
 
