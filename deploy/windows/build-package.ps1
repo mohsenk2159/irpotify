@@ -316,7 +316,8 @@ Write-MusicHubInfo "  deploy\scripts: $((Get-ChildItem -LiteralPath $scriptsTarg
 $windowsTarget = New-Dir (Join-Path $staging 'deploy\windows')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'supervisor.ps1') -Destination $windowsTarget -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install.ps1') -Destination $windowsTarget -Force
-Write-MusicHubInfo '  deploy\windows: supervisor + install entry point'
+Copy-Item -Path (Join-Path $PSScriptRoot '*.bat') -Destination $staging -Force
+Write-MusicHubInfo '  deploy\windows: supervisor + install entry point and root bat launchers'
 
 # The supervisor expects storage\run; the scripts expect a storage root. Create them so a fresh
 # extraction has the expected shape before the installer runs.
