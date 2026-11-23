@@ -57,7 +57,7 @@ interface TrackDao {
 
 @Dao
 interface AlbumDao {
-    @Query("SELECT * FROM albums ORDER BY title COLLATE NOCASE")
+    @Query("SELECT * FROM albums WHERE trackCount > 0 ORDER BY title COLLATE NOCASE")
     fun observeAlbums(): Flow<List<AlbumEntity>>
 
     @Query("SELECT * FROM albums ORDER BY title COLLATE NOCASE")
@@ -65,6 +65,9 @@ interface AlbumDao {
 
     @Query("SELECT * FROM albums WHERE id = :id")
     suspend fun get(id: String): AlbumEntity?
+
+    @Query("DELETE FROM albums WHERE id = :id")
+    suspend fun delete(id: String)
 
     @Query("SELECT * FROM albums WHERE artistId = :artistId ORDER BY title COLLATE NOCASE")
     suspend fun getByArtist(artistId: String): List<AlbumEntity>
@@ -99,11 +102,17 @@ interface AlbumDao {
 
 @Dao
 interface ArtistDao {
-    @Query("SELECT * FROM artists ORDER BY name COLLATE NOCASE")
+    @Query("SELECT * FROM artists WHERE trackCount > 0 OR albumCount > 0 ORDER BY name COLLATE NOCASE")
     fun observeArtists(): Flow<List<ArtistEntity>>
+
+    @Query("SELECT * FROM artists ORDER BY name COLLATE NOCASE")
+    suspend fun getAll(): List<ArtistEntity>
 
     @Query("SELECT * FROM artists WHERE id = :id")
     suspend fun get(id: String): ArtistEntity?
+
+    @Query("DELETE FROM artists WHERE id = :id")
+    suspend fun delete(id: String)
 
     @Upsert
     suspend fun upsertAll(artists: List<ArtistEntity>)
@@ -116,6 +125,9 @@ interface ArtistDao {
 interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY name COLLATE NOCASE")
     fun observePlaylists(): Flow<List<PlaylistEntity>>
+
+    @Query("SELECT * FROM playlists ORDER BY name COLLATE NOCASE")
+    suspend fun getAll(): List<PlaylistEntity>
 
     @Query("SELECT * FROM playlists WHERE id = :id")
     suspend fun get(id: String): PlaylistEntity?

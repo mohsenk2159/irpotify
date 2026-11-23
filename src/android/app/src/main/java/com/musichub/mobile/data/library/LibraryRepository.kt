@@ -145,9 +145,9 @@ class LibraryRepository(
         return try {
             val tracks = runApi { api().tracks(page = 1, pageSize = 200) }
             cacheTracks(tracks.items)
-            runCatching { runApi { api().albums(pageSize = 200) } }.getOrNull()?.let { cacheAlbums(it.items) }
-            runCatching { runApi { api().artists(pageSize = 200) } }.getOrNull()?.let { cacheArtists(it.items) }
-            runCatching { runApi { api().playlists() } }.getOrNull()?.let { cachePlaylists(it) }
+            runCatching { runApi { api().albums(pageSize = 200) } }.getOrNull()?.let { cacheAlbums(it.items, reconcile = true) }
+            runCatching { runApi { api().artists(pageSize = 200) } }.getOrNull()?.let { cacheArtists(it.items, reconcile = true) }
+            runCatching { runApi { api().playlists() } }.getOrNull()?.let { cachePlaylists(it, reconcile = true) }
             runCatching { runApi { api().folders() } }.getOrNull()?.let { cacheFolders(it) }
             runCatching { runApi { api().genres() } }.getOrNull()?.let { cacheGenres(it) }
             runCatching { refreshHistoryInternal() }
@@ -212,6 +212,11 @@ class LibraryRepository(
             database.albums().insertAlbumTracks(tracks.mapIndexed { index, track -> AlbumTrackEntity(id, track.id, index) })
             Result.success(AlbumDetailData(album, tracks, fromCache = false))
         } catch (exception: ApiCallException) {
+            if (exception.statusCode == 404) {
+                database.albums().delete(id)
+                database.albums().clearAlbumTracks(id)
+                return Result.failure(exception)
+            }
             val album = database.albums().get(id)
                 ?: return Result.failure(exception)
             Result.success(AlbumDetailData(album, database.albums().getAlbumTracks(id), fromCache = true))
@@ -468,9 +473,19 @@ class LibraryRepository(
         return entities
     }
 
-    private suspend fun cacheAlbums(albums: List<AlbumDto>): List<AlbumEntity> {
+    private suspend fun cacheAlbums(albums: List<AlbumDto>, reconcile: Boolean = false): List<AlbumEntity> {
         val entities = albums.map { cacheAlbumEntity(it) }
         database.albums().upsertAll(entities)
+        if (reconcile) {
+            val validIds = entities.map { it.id }.toSet()
+            val existing = database.albums().getAll()
+            for (album in existing) {
+                if (album.id !in validIds) {
+                    database.albums().delete(album.id)
+                    database.albums().clearAlbumTracks(album.id)
+                }
+            }
+        }
         return entities
     }
 
@@ -491,17 +506,36 @@ class LibraryRepository(
         cachedAt = now(),
     )
 
-    private suspend fun cacheArtists(artists: List<com.musichub.mobile.data.api.models.ArtistDto>): List<ArtistEntity> {
+    private suspend fun cacheArtists(artists: List<com.musichub.mobile.data.api.models.ArtistDto>, reconcile: Boolean = false): List<ArtistEntity> {
         val entities = artists.map {
             ArtistEntity(it.id, it.name, it.biography, it.trackCount, it.albumCount, now())
         }
         database.artists().upsertAll(entities)
+        if (reconcile) {
+            val validIds = entities.map { it.id }.toSet()
+            val existing = database.artists().getAll()
+            for (artist in existing) {
+                if (artist.id !in validIds) {
+                    database.artists().delete(artist.id)
+                }
+            }
+        }
         return entities
     }
 
-    private suspend fun cachePlaylists(playlists: List<PlaylistDto>): List<PlaylistEntity> {
+    private suspend fun cachePlaylists(playlists: List<PlaylistDto>, reconcile: Boolean = false): List<PlaylistEntity> {
         val entities = playlists.map { cachePlaylistEntity(it) }
         database.playlists().upsertAll(entities)
+        if (reconcile) {
+            val validIds = entities.map { it.id }.toSet()
+            val existing = database.playlists().getAll().filter { !it.id.startsWith("local_") }
+            for (playlist in existing) {
+                if (playlist.id !in validIds) {
+                    database.playlists().deletePlaylist(playlist.id)
+                    database.playlists().clearTracks(playlist.id)
+                }
+            }
+        }
         return entities
     }
 

@@ -200,7 +200,7 @@ public static class LibraryEndpoints
                     x.Genre,
                     x.CreatedAt,
                     x.ArtworkPath,
-                    TrackCount = x.AlbumTracks.Count
+                    TrackCount = x.AlbumTracks.Count(m => !m.Track.IsDeleted)
                 })
                 .ToListAsync(ct);
             // Album artwork is derived from the album's first track that has one, so existing data
@@ -287,14 +287,31 @@ public static class LibraryEndpoints
             return Results.NoContent();
         });
 
-        app.MapDelete("/api/albums/{id:guid}", [Authorize(Policy = "Admin")] async (Guid id, ClaimsPrincipal principal, MusicHubDbContext db, HttpContext http, CancellationToken ct) =>
+        app.MapDelete("/api/albums/{id:guid}", [Authorize(Policy = "Admin")] async (Guid id, ClaimsPrincipal principal, MusicHubDbContext db, RealtimeNotifier realtime, HttpContext http, CancellationToken ct) =>
         {
             var album = await db.Albums.SingleOrDefaultAsync(x => x.Id == id);
             if (album is null) return Results.NotFound();
             album.IsDeleted = true;
             album.UpdatedAt = DateTimeOffset.UtcNow;
+
+            var albumTracks = await db.AlbumTracks.Include(at => at.Track).Where(at => at.AlbumId == id).ToListAsync(ct);
+            foreach (var at in albumTracks)
+            {
+                var trackId = at.TrackId;
+                var track = at.Track;
+                db.AlbumTracks.Remove(at);
+
+                var stillInAnotherAlbum = await db.AlbumTracks
+                    .AnyAsync(x => x.TrackId == trackId && x.AlbumId != id, ct);
+                if (!stillInAnotherAlbum && string.Equals(track.AlbumDisplay, album.Title, StringComparison.Ordinal))
+                {
+                    track.AlbumDisplay = string.Empty;
+                }
+            }
+
             AuditWriter.Add(db, principal, "album.delete", "Album", id.ToString(), null, RequestHelpers.Ip(http));
             await db.SaveChangesAsync(ct);
+            await realtime.AlbumUpdated(new { id, isDeleted = true });
             return Results.NoContent();
         });
 
@@ -349,7 +366,7 @@ public static class LibraryEndpoints
             if (!string.IsNullOrWhiteSpace(q)) query = query.Where(x => EF.Functions.ILike(x.Name, $"%{q.Trim()}%"));
             var total = await query.CountAsync(ct);
             var items = await query.OrderBy(x => x.NormalizedName).ThenBy(x => x.Id).Skip((p - 1) * size).Take(size)
-                .Select(x => new { x.Id, x.Name, x.Biography, TrackCount = x.TrackArtists.Count, AlbumCount = x.Albums.Count, artworkUrl = (string?)null })
+                .Select(x => new { x.Id, x.Name, x.Biography, TrackCount = x.TrackArtists.Count, AlbumCount = x.Albums.Count(a => !a.IsDeleted), artworkUrl = (string?)null })
                 .ToListAsync(ct);
             return Results.Ok(new PagedResult<object>(items.Cast<object>().ToList(), p, size, total));
         });
@@ -789,7 +806,7 @@ public static class LibraryEndpoints
                 .Concat(favoriteTrackIds.Select(x => x.Id))
                 .ToList();
             var set = (await db.Favorites.AsNoTracking().Where(x => x.UserId == userId && visibleIds.Contains(x.TrackId)).Select(x => x.TrackId).ToListAsync(ct)).ToHashSet();
-            var albums = await db.Albums.AsNoTracking().Where(x => !x.IsDeleted).OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Take(12).Select(x => new { x.Id, x.Title, x.AlbumArtist, x.Year, TrackCount = x.AlbumTracks.Count }).ToListAsync(ct);
+            var albums = await db.Albums.AsNoTracking().Where(x => !x.IsDeleted && x.AlbumTracks.Any(m => !m.Track.IsDeleted)).OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Take(12).Select(x => new { x.Id, x.Title, x.AlbumArtist, x.Year, TrackCount = x.AlbumTracks.Count(m => !m.Track.IsDeleted) }).ToListAsync(ct);
             return Results.Ok(new
             {
                 recentlyAdded = recentlyAdded.Select(x => DtoMapper.Track(x, set.Contains(x.Id))),
