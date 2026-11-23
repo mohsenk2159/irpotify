@@ -70,6 +70,7 @@ param(
     [string]$LanAddress = '',
     [switch]$NonInteractive,
     [switch]$Start,
+    [switch]$Launch,
     [switch]$Stop,
     [switch]$Status,
     [switch]$Credentials,
@@ -352,17 +353,121 @@ if ($Status) {
 
 if ($Stop) {
     Write-Step 'Stopping the stack'
-    & (Join-Path $installRoot 'deploy\scripts\stop-dev.ps1') -StopDatabase
-    exit $LASTEXITCODE
+    
+    # 1. Stop scheduled task so it doesn't immediately respawn processes
+    try {
+        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    } catch {}
+
+    # 2. Stop supervisor processes if running
+    $supervisors = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -like '*supervisor.ps1*' }
+    foreach ($s in $supervisors) {
+        Stop-Process -Id $s.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    # 3. Stop API, Worker, and Database
+    $stopScript = Join-Path $installRoot 'deploy\scripts\stop-dev.ps1'
+    if (Test-Path -LiteralPath $stopScript) {
+        & $stopScript -StopDatabase
+    }
+
+    # 4. Clean PID files
+    $runDir = Join-Path $installRoot 'storage\run'
+    if (Test-Path -LiteralPath $runDir) {
+        Get-ChildItem -LiteralPath $runDir -Filter '*.pid' -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    $postmasterPid = Join-Path $installRoot 'storage\postgres-data\postmaster.pid'
+    if (Test-Path -LiteralPath $postmasterPid) {
+        Remove-Item -LiteralPath $postmasterPid -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host ''
+    Write-Host 'irpotify Server and all services (PostgreSQL, API, Worker) stopped.' -ForegroundColor Green
+    exit 0
 }
 
-if ($Start) {
+if ($Launch -or $Start) {
+    $endpoint = Get-Endpoint
+    $port = if ($endpoint -and $endpoint.Port) { [int]$endpoint.Port } else { 5080 }
+    $lan = if ($endpoint -and $endpoint.LanAddress) { $endpoint.LanAddress } else { '127.0.0.1' }
+    $dashboardUrl = "http://127.0.0.1:$port/index.html"
+
+    # Fast path: Is the API already answering and healthy?
+    $alreadyRunning = $false
+    try {
+        $res = Invoke-WebRequest -Uri "http://127.0.0.1:$port/healthz" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        if ($res.StatusCode -eq 200) { $alreadyRunning = $true }
+    } catch {}
+
+    if ($alreadyRunning) {
+        Write-Host "irpotify Server is already running on port $port." -ForegroundColor Green
+        Write-Host "Opening Web Dashboard: $dashboardUrl" -ForegroundColor Cyan
+        Start-Process $dashboardUrl
+        Start-Sleep -Seconds 1
+        exit 0
+    }
+
+    Write-Host ''
+    Write-Host '========================================================================' -ForegroundColor Cyan
+    Write-Host '                     Starting irpotify Server...                        ' -ForegroundColor Cyan
+    Write-Host '========================================================================' -ForegroundColor Cyan
+    Write-Host ''
+
     Use-PrivateRuntime | Out-Null
-    Write-Step 'Starting the stack'
-    # No -SkipDatabase here: this verb must also bring PostgreSQL back up if it is down. start-dev
-    # reuses the existing verified credential instead of re-provisioning it.
-    & (Join-Path $installRoot 'deploy\scripts\start-dev.ps1') -BindLan -SkipBuild -NonInteractive
-    exit $LASTEXITCODE
+
+    # Clean any stale postgres postmaster.pid lock file
+    $postmasterPid = Join-Path $installRoot 'storage\postgres-data\postmaster.pid'
+    if (Test-Path -LiteralPath $postmasterPid) {
+        try {
+            $firstLine = (Get-Content -LiteralPath $postmasterPid -TotalCount 1).Trim()
+            $stalePid = 0
+            if ([int]::TryParse($firstLine, [ref]$stalePid)) {
+                if (-not (Get-Process -Id $stalePid -ErrorAction SilentlyContinue)) {
+                    Remove-Item -LiteralPath $postmasterPid -Force -ErrorAction SilentlyContinue
+                    Write-Info 'Cleaned stale postmaster.pid lock file.'
+                }
+            }
+        } catch {}
+    }
+
+    # Ensure log files are accessible
+    $logDir = Join-Path $installRoot 'storage\logs'
+    if (Test-Path -LiteralPath $logDir) {
+        try {
+            if (Get-Command icacls.exe -ErrorAction SilentlyContinue) {
+                & icacls.exe $logDir /grant "$($env:USERNAME):(OI)(CI)F" /T /Q 2>&1 | Out-Null
+            }
+        } catch {}
+    }
+
+    # Start the stack
+    & (Join-Path $installRoot 'deploy\scripts\start-dev.ps1') -BindLan -SkipBuild -NonInteractive -Force
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err 'Server startup encountered an issue. Check storage\logs for details.'
+        exit 1
+    }
+
+    Write-Info 'Verifying server responsiveness...'
+    if (Wait-ForApi -Port $port -Seconds 60) {
+        Write-Host ''
+        Write-Host '========================================================================' -ForegroundColor Green
+        Write-Host '                   irpotify Server is now ONLINE!                       ' -ForegroundColor Green
+        Write-Host '========================================================================' -ForegroundColor Green
+        Write-Host "  Dashboard (Local) : $dashboardUrl" -ForegroundColor White
+        Write-Host "  Dashboard (LAN)   : http://${lan}:$port/index.html" -ForegroundColor White
+        Write-Host "  Server API URL    : http://${lan}:$port" -ForegroundColor White
+        Write-Host ''
+        Write-Host '  Opening Web Dashboard in your browser...' -ForegroundColor Cyan
+        Start-Process $dashboardUrl
+        Start-Sleep -Seconds 2
+        exit 0
+    }
+    else {
+        Write-Err "API did not answer /healthz on port $port within 60 seconds."
+        exit 1
+    }
 }
 
 if ($Uninstall) {
@@ -402,6 +507,62 @@ if ($Uninstall) {
 # Full install
 # -------------------------------------------------------------------------------------------
 try {
+    # Interactive Port Selection if not provided as argument
+    if ($ApiPort -le 0 -and -not $NonInteractive -and [Environment]::UserInteractive) {
+        $suggestedPort = 5080
+        $record = Get-Endpoint
+        if ($record -and $record.Port) {
+            $suggestedPort = [int]$record.Port
+        }
+        else {
+            for ($p = 5080; $p -le 65535; $p++) {
+                if (-not (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue)) {
+                    $suggestedPort = $p
+                    break
+                }
+            }
+        }
+
+        Write-Host ''
+        Write-Host '========================================================================' -ForegroundColor Cyan
+        Write-Host '                       Network & Port Configuration                     ' -ForegroundColor Cyan
+        Write-Host '========================================================================' -ForegroundColor Cyan
+        Write-Host "  Choose the listening port for irpotify Server (API & Web Dashboard)." -ForegroundColor White
+        Write-Host "  Default / Suggested Port: $suggestedPort" -ForegroundColor Green
+        Write-Host "  Press Enter to accept [$suggestedPort], or enter a custom port (1024-65535):" -ForegroundColor Gray
+        
+        $validPort = $false
+        while (-not $validPort) {
+            $entered = Read-Host "  Listening Port [$suggestedPort]"
+            if ([string]::IsNullOrWhiteSpace($entered)) {
+                $ApiPort = $suggestedPort
+                $validPort = $true
+            }
+            else {
+                $parsedPort = 0
+                if ([int]::TryParse($entered.Trim(), [ref]$parsedPort) -and $parsedPort -ge 1024 -and $parsedPort -le 65535) {
+                    $inUse = Get-NetTCPConnection -LocalPort $parsedPort -State Listen -ErrorAction SilentlyContinue
+                    if ($inUse) {
+                        Write-Host "  Warning: Port $parsedPort is currently in use on this machine." -ForegroundColor Yellow
+                        $confirm = Read-Host "  Do you want to use port $parsedPort anyway? (y/N)"
+                        if ($confirm -eq 'y' -or $confirm -eq 'Y') {
+                            $ApiPort = $parsedPort
+                            $validPort = $true
+                        }
+                    } else {
+                        $ApiPort = $parsedPort
+                        $validPort = $true
+                    }
+                } else {
+                    Write-Host "  Invalid port. Please enter a valid number between 1024 and 65535." -ForegroundColor Red
+                }
+            }
+        }
+        Write-Host "  Selected port: $ApiPort" -ForegroundColor Green
+        Write-Host '========================================================================' -ForegroundColor Cyan
+        Write-Host ''
+    }
+
     Write-Step '1/7 Verify the package'
     $manifest = Get-PackageManifest
     if ($manifest) { Write-Info "Package: $($manifest.product) $($manifest.version) ($($manifest.platform))" }
@@ -538,9 +699,9 @@ try {
     Write-Host '                irpotify Server Installation Completed                  ' -ForegroundColor Green
     Write-Host '========================================================================' -ForegroundColor Green
     Write-Host ''
-    Write-Host "  Dashboard (Local) : http://127.0.0.1:$port/index.html"
-    Write-Host "  Dashboard (LAN)   : http://$($endpoint.LanAddress):$port/index.html"
-    Write-Host "  Server API URL    : http://$($endpoint.LanAddress):$port"
+    Write-Host "  Dashboard (this machine) : http://127.0.0.1:$port/index.html"
+    Write-Host "  Dashboard (other devices): http://$($endpoint.LanAddress):$port/index.html"
+    Write-Host "  Server address for the Android and Windows apps: http://$($endpoint.LanAddress):$port"
     Write-Host ''
     Write-Host '========================================================================' -ForegroundColor Yellow
     Write-Host '                 ONE-TIME SETUP TOKEN (BOOTSTRAP TOKEN)                 ' -ForegroundColor Yellow
@@ -560,6 +721,9 @@ try {
         Write-Host '  Warning: Bootstrap token could not be read from storage\dev.secrets.ps1' -ForegroundColor Red
     }
     Write-Host '========================================================================' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host '  Next: open the dashboard and complete the first-run setup to create the administrator.'
+    Write-Host '  Then provision the Telegram bot token and admin id in the dashboard (Admin -> Telegram).'
     Write-Host ''
     exit 0
 }

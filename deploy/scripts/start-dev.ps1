@@ -298,7 +298,7 @@ function Start-MusicHubPostgresServer {
     <# Start PostgreSQL 17 from the portable distribution with pg_ctl (detached, survives the shell). #>
     param([Parameter(Mandatory)]$Config, [Parameter(Mandatory)][bool]$InitializeIfMissing)
     if (-not $Config.PgCtl) { throw "pg_ctl was not found. Expected tools\pgsql\bin\pg_ctl.exe." }
-    if (Test-MusicHubPostgresReady -Config $Config -Quiet) { return 'PostgreSQL already running' }
+    if ((Test-MusicHubPostgresReady -Config $Config -Quiet) -or (Test-MusicHubTcpPort -ComputerName 127.0.0.1 -Port $Config.Port)) { return 'PostgreSQL already running' }
     New-MusicHubDirectory -Path $Config.PgDataDir | Out-Null
     $versionFile = Join-Path $Config.PgDataDir 'PG_VERSION'
     if (-not (Test-Path -LiteralPath $versionFile)) {
@@ -337,8 +337,27 @@ function Start-MusicHubPostgresServer {
         Write-MusicHubInfo "Initialised new PostgreSQL cluster at $($Config.PgDataDir)."
     }
 
+    # Clean any stale postmaster.pid lock file if server crashed or machine rebooted
+    $pidFile = Join-Path $Config.PgDataDir 'postmaster.pid'
+    if (Test-Path -LiteralPath $pidFile) {
+        $stalePid = 0
+        $firstLine = (Get-Content -LiteralPath $pidFile -TotalCount 1).Trim()
+        if ([int]::TryParse($firstLine, [ref]$stalePid) -and -not (Get-Process -Id $stalePid -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+            Write-MusicHubInfo "Cleaned stale postmaster.pid (PID $stalePid was not running)."
+        }
+    }
+
     $logFile = Join-Path $Config.LogDir 'postgres.log'
     New-MusicHubDirectory -Path $Config.LogDir | Out-Null
+    if (Test-Path -LiteralPath $logFile) {
+        try {
+            if (Get-Command icacls.exe -ErrorAction SilentlyContinue) {
+                & icacls.exe $logFile /grant "$($env:USERNAME):(F)" /Q 2>&1 | Out-Null
+            }
+        } catch {}
+    }
+
     # Same handle-inheritance problem as initdb: pg_ctl hands its stdout/stderr to the postmaster.
     $pgStartOut = Join-Path $Config.LogDir 'pg-start.out.log'
     $pgStartErr = Join-Path $Config.LogDir 'pg-start.err.log'

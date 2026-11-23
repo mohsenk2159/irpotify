@@ -123,6 +123,19 @@ try {
             $failures++
             Write-MusicHubError "PostgreSQL stop failed: $($_.Exception.Message)"
         }
+
+        # Terminate any lingering postgres processes for this data directory
+        $lingering = Get-CimInstance Win32_Process -Filter "Name='postgres.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine -like "*$($config.PgDataDir)*" }
+        foreach ($proc in $lingering) {
+            Write-MusicHubInfo "Stopping lingering postgres.exe process (PID $($proc.ProcessId))."
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+
+        $pidFile = Join-Path $config.PgDataDir 'postmaster.pid'
+        if (Test-Path -LiteralPath $pidFile) {
+            Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+        }
     }
     else {
         Write-MusicHubInfo 'PostgreSQL left running (use -StopDatabase to stop it).'
