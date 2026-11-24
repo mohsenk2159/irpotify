@@ -31,8 +31,8 @@ ARG WEB_NODE_IMAGE=node:22-alpine
 FROM ${WEB_NODE_IMAGE} AS web
 WORKDIR /web
 # Dependency manifests first so the npm layer is cached independently of source edits.
-COPY src/web/admin/package.json src/web/admin/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY src/web/admin/package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
 COPY src/web/admin/ ./
 RUN npm run build
 
@@ -41,8 +41,8 @@ RUN npm run build
 # ---------------------------------------------------------------------------------------------
 FROM ${WEB_NODE_IMAGE} AS player-web
 WORKDIR /web-player
-COPY src/web/player/package.json src/web/player/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY src/web/player/package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
 COPY src/web/player/ ./
 RUN npm run build
 
