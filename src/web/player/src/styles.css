@@ -407,31 +407,56 @@ button {
 .now-playing-art-wrapper {
   position: relative;
   width: 100%;
+  max-width: 340px;
   aspect-ratio: 1 / 1;
-  max-height: 42vh;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .now-playing-art-shadow {
   position: absolute;
   inset: 12px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(6, 182, 212, 0.2));
-  filter: blur(24px);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(30, 215, 96, 0.45), rgba(20, 184, 166, 0.25));
+  filter: blur(28px);
   z-index: 1;
 }
 
 .now-playing-art {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--radius-lg);
-  object-fit: cover;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 340px !important;
+  max-height: 340px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 16px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.now-playing-art img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+.now-playing-art svg,
+.now-playing-art svg.vinyl-cover-svg {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  border-radius: 16px;
 }
 
 .now-playing-meta-row {

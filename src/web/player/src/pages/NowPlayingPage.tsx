@@ -110,6 +110,7 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
           <Artwork
             url={currentTrack.artworkUrl}
             alt={currentTrack.title}
+            size={360}
             className="now-playing-art"
           />
         </div>
