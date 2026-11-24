@@ -183,7 +183,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = language;
-    document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr';
+    document.documentElement.dir = 'ltr';
     document.documentElement.setAttribute('data-theme', theme);
   }, [language, theme]);
 

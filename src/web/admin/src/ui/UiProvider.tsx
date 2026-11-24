@@ -112,7 +112,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   useEffect(() => {
-    const direction = language === 'fa' ? 'rtl' : 'ltr';
+    const direction = 'ltr';
     document.documentElement.lang = language;
     document.documentElement.dir = direction;
     writeStored(LANGUAGE_KEY, language);

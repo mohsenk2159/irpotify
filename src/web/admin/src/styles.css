@@ -91,6 +91,7 @@ html[data-theme="light"] {
 html,
 body,
 #root {
+  direction: ltr;
   min-height: 100%;
 }
 
