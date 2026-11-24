@@ -28,10 +28,10 @@ export function SearchPage({ onOpenAlbum: _onOpenAlbum }: { onOpenAlbum?: (id: s
   const tracks = searchResults.data?.items ?? [];
 
   return (
-    <div className="page-container">
+    <div className="search-page">
       {/* Search Input Box */}
-      <div className="search-bar-wrap">
-        <span className="search-icon">🔍</span>
+      <div className="search-input-wrapper">
+        <span className="search-input-icon">🔍</span>
         <input
           type="text"
           className="search-input"
