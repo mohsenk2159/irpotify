@@ -185,6 +185,8 @@ button {
   padding: 0;
   overflow: hidden;
   height: calc(100dvh - 62px - var(--sab));
+  max-height: calc(100dvh - 62px - var(--sab));
+  box-sizing: border-box;
 }
 
 /* ==================================================================
@@ -340,15 +342,17 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: max(12px, var(--sat)) 24px 16px 24px;
+  padding: max(8px, var(--sat)) 20px max(10px, var(--sab)) 20px;
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .now-playing-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 48px;
+  height: 44px;
   flex-shrink: 0;
 }
 
@@ -400,39 +404,41 @@ button {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 20px;
+  justify-content: space-evenly;
+  gap: clamp(6px, 1.6vh, 16px);
   max-width: 420px;
   margin: 0 auto;
   width: 100%;
+  min-height: 0;
 }
 
 .now-playing-art-wrapper {
   position: relative;
   width: 100%;
-  max-width: 340px;
+  max-width: min(320px, 34vh);
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-height: 0;
 }
 
 .now-playing-art-shadow {
   position: absolute;
-  inset: 12px;
+  inset: 10px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(30, 215, 96, 0.45), rgba(20, 184, 166, 0.25));
-  filter: blur(28px);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(6, 182, 212, 0.2));
+  filter: blur(24px);
   z-index: 1;
 }
 
 .now-playing-art {
   width: 100% !important;
   height: 100% !important;
-  max-width: 340px !important;
-  max-height: 340px !important;
+  max-width: min(320px, 34vh) !important;
+  max-height: min(320px, 34vh) !important;
   aspect-ratio: 1 / 1 !important;
   border-radius: 16px;
   position: relative;
@@ -440,7 +446,7 @@ button {
   display: flex !important;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
   overflow: hidden;
 }
 
@@ -612,8 +618,8 @@ button {
 }
 
 .main-play-btn {
-  width: 66px;
-  height: 66px;
+  width: clamp(52px, 6.8vh, 64px);
+  height: clamp(52px, 6.8vh, 64px);
   border-radius: 50%;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border: none;
@@ -635,7 +641,7 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 8px;
+  padding: 0 8px 2px 8px;
   direction: ltr !important;
 }
 
@@ -2194,8 +2200,8 @@ button {
    Authentic Spotify Home Design & Mobile Layout
    ================================================================== */
 :root {
-  --spotify-green: #1ed760;
-  --spotify-green-hover: #1fdf64;
+  --spotify-green: var(--color-primary);
+  --spotify-green-hover: var(--color-primary-hover);
   --spotify-black: #121212;
   --spotify-card-bg: #181818;
   --spotify-card-hover: #282828;
@@ -2244,8 +2250,8 @@ button {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--spotify-green);
-  box-shadow: 0 0 8px var(--spotify-green);
+  background-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary-glow);
 }
 
 .spotify-status-text {
@@ -2288,8 +2294,8 @@ button {
 }
 
 .spotify-pill.is-active {
-  background: var(--spotify-green);
-  color: #000000;
+  background: var(--color-primary);
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -2345,8 +2351,8 @@ button {
 }
 
 .spotify-quick-tile.is-active {
-  background: rgba(30, 215, 96, 0.16);
-  outline: 1px solid rgba(30, 215, 96, 0.4);
+  background: rgba(16, 185, 129, 0.16);
+  outline: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .spotify-quick-art {
@@ -2384,28 +2390,29 @@ button {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--spotify-green);
-  color: #000000;
+  background: var(--color-primary);
+  color: #ffffff;
   font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px var(--color-primary-glow);
   margin-left: 8px;
   margin-right: 8px;
   flex-shrink: 0;
-  opacity: 0.9;
+  opacity: 0.95;
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 .spotify-quick-play:hover {
   transform: scale(1.08);
-  background: var(--spotify-green-hover);
+  background: var(--color-primary-hover);
 }
 
 .spotify-quick-play.is-playing {
   opacity: 1;
-  background: var(--spotify-green);
+  background: var(--color-primary);
+  box-shadow: 0 0 16px var(--color-primary-glow);
   animation: pulse 1.8s infinite;
 }
 
@@ -2457,13 +2464,13 @@ button {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--spotify-green);
-  color: #000000;
+  background: var(--color-primary);
+  color: #ffffff;
   font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 6px 16px var(--color-primary-glow);
   opacity: 0;
   transform: translateY(6px);
   transition: all 0.2s cubic-bezier(0.3, 0, 0, 1);
@@ -2476,7 +2483,7 @@ button {
 }
 
 .spotify-card-play-btn:hover {
-  background: var(--spotify-green-hover);
+  background: var(--color-primary-hover);
   transform: scale(1.08) translateY(0);
 }
 
@@ -2521,7 +2528,7 @@ button {
 }
 
 .spotify-track-row.is-active {
-  background: rgba(30, 215, 96, 0.12);
+  background: rgba(16, 185, 129, 0.14);
 }
 
 .spotify-track-index {
