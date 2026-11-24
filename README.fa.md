@@ -72,11 +72,9 @@ sudo apt update && sudo apt upgrade -y
 # ۲. نصب ابزارهای موردنیاز اولیه
 sudo apt install -y curl git ufw ca-certificates socat cron
 
-# ۳. تنظیم فایروال (در صورت فعال بودن UFW):
+# ۳. تنظیم پورت‌های استاندارد وب در فایروال (پورت‌های اختصاصی در زمان نصب خودکار تنظیم می‌شوند):
 sudo ufw allow 80/tcp    # جهت صدور گواهی رایگان SSL Let's Encrypt
 sudo ufw allow 443/tcp   # ترافیک امن HTTPS
-sudo ufw allow 5080/tcp  # پورت داشبورد مدیریتی ادمین
-sudo ufw allow 5081/tcp  # پورت وب‌اپلیکیشن پلیر کاربران
 ```
 
 #### ⚡ دستور نصب خودکار:

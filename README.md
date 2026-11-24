@@ -70,11 +70,9 @@ sudo apt update && sudo apt upgrade -y
 # 2. Install essential packages
 sudo apt install -y curl git ufw ca-certificates socat cron
 
-# 3. If using UFW firewall, allow standard SSL & custom ports:
+# 3. If using UFW firewall, allow standard HTTP/HTTPS ports (custom app ports are automatically allowed by the installer):
 sudo ufw allow 80/tcp    # For Let's Encrypt SSL validation
 sudo ufw allow 443/tcp   # For HTTPS Web Traffic
-sudo ufw allow 5080/tcp  # Admin Management Dashboard
-sudo ufw allow 5081/tcp  # Player Web App
 ```
 
 #### ⚡ One-Line Automated Install

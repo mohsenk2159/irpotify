@@ -166,6 +166,31 @@ validate_port() {
 }
 
 # ------------------------------------------------------------------------------
+# Automatic Firewall Configuration for User-Selected Ports
+# ------------------------------------------------------------------------------
+configure_firewall() {
+    local d_port="$1"
+    local p_port="$2"
+
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qw "active"; then
+        echo -e "${BLUE}==>${NC} ${BOLD}Configuring UFW firewall rules for selected ports...${NC}"
+        ufw allow 80/tcp >/dev/null 2>&1 || true
+        ufw allow 443/tcp >/dev/null 2>&1 || true
+        ufw allow "${d_port}/tcp" >/dev/null 2>&1 || true
+        ufw allow "${p_port}/tcp" >/dev/null 2>&1 || true
+        echo -e "${GREEN}✓${NC} UFW firewall: Ports ${d_port} and ${p_port} allowed."
+    elif command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
+        echo -e "${BLUE}==>${NC} ${BOLD}Configuring firewalld rules for selected ports...${NC}"
+        firewall-cmd --permanent --add-port=80/tcp >/dev/null 2>&1 || true
+        firewall-cmd --permanent --add-port=443/tcp >/dev/null 2>&1 || true
+        firewall-cmd --permanent --add-port="${d_port}/tcp" >/dev/null 2>&1 || true
+        firewall-cmd --permanent --add-port="${p_port}/tcp" >/dev/null 2>&1 || true
+        firewall-cmd --reload >/dev/null 2>&1 || true
+        echo -e "${GREEN}✓${NC} firewalld: Ports ${d_port} and ${p_port} allowed."
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # Robust .env helper: replaces existing variable (even if commented out) or appends
 # ------------------------------------------------------------------------------
 set_env_var() {
@@ -235,6 +260,8 @@ setup_irpotify() {
     echo ""
     echo -e "Selected Ports: Dashboard=${YELLOW}${dashboard_port}${NC} | Player=${GREEN}${player_port}${NC}"
     echo ""
+
+    configure_firewall "$dashboard_port" "$player_port"
 
     echo -e "Choose connection mode:"
     echo -e "  ${GREEN}1)${NC} ${BOLD}Custom Domain with Automatic Free SSL/HTTPS${NC} (Recommended for Internet)"
@@ -557,6 +584,8 @@ manage_ports() {
     if grep -q "MUSICHUB_PUBLIC_URL=http://${server_ip}:" .env; then
         set_env_var "MUSICHUB_PUBLIC_URL" "http://${server_ip}:${new_p_port}"
     fi
+
+    configure_firewall "$new_d_port" "$new_p_port"
 
     echo -e "${YELLOW}Restarting containers with new ports...${NC}"
     dc down
