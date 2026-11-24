@@ -2596,6 +2596,47 @@ html[dir="rtl"] .pager-double {
   backdrop-filter: blur(16px);
 }
 
+.auth-card-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-block-end: -4px;
+}
+
+.auth-lang-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.auth-lang-btn {
+  background: transparent;
+  border: none;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.auth-lang-btn:hover {
+  color: var(--text);
+}
+
+.auth-lang-btn.active {
+  background: var(--primary, #10b981);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
 .auth-brand {
   display: grid;
   justify-items: center;

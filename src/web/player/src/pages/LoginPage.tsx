@@ -7,7 +7,7 @@ import { ThreeDIcon } from '../ui/ThreeDIcons';
 
 export function LoginPage() {
   const { login } = useAuth();
-  const { t } = useUi();
+  const { t, language, setLanguage, theme, toggleTheme } = useUi();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +32,7 @@ export function LoginPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('نام کاربری یا رمز عبور اشتباه است.');
+        setError(t('auth.invalidCredentials'));
       }
     } finally {
       setLoading(false);
@@ -48,12 +48,12 @@ export function LoginPage() {
 
     try {
       const res = await api.auth.forgotPassword(forgotEmail.trim());
-      setForgotSuccess(res.message || 'درخواست تغییر رمز عبور شما برای مدیریت ارسال شد.');
+      setForgotSuccess(res.message || t('auth.forgotSuccess'));
     } catch (err: unknown) {
       if (err instanceof Error) {
         setForgotError(err.message);
       } else {
-        setForgotError('خطا در ارسال درخواست. لطفاً دوباره تلاش کنید.');
+        setForgotError(t('auth.forgotError'));
       }
     } finally {
       setForgotLoading(false);
@@ -63,6 +63,34 @@ export function LoginPage() {
   return (
     <div className="login-screen">
       <div className="login-card">
+        <div className="login-header-bar">
+          <div className="lang-switcher">
+            <button
+              type="button"
+              className={`lang-chip ${language === 'fa' ? 'active' : ''}`}
+              onClick={() => setLanguage('fa')}
+            >
+              فارسی
+            </button>
+            <button
+              type="button"
+              className={`lang-chip ${language === 'en' ? 'active' : ''}`}
+              onClick={() => setLanguage('en')}
+            >
+              English
+            </button>
+          </div>
+          <button
+            type="button"
+            className="login-theme-btn"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
+          </button>
+        </div>
+
         <div className="login-brand">
           <div className="login-logo-glow">
             <BrandLogo size={52} />
@@ -138,7 +166,7 @@ export function LoginPage() {
                   fontFamily: 'inherit'
                 }}
               >
-                فراموشی رمز عبور؟
+                {t('auth.forgotPassword')}
               </button>
             </div>
           </div>
@@ -151,7 +179,7 @@ export function LoginPage() {
             {loading ? (
               <>
                 <div className="btn-spinner" />
-                <span>در حال ورود…</span>
+                <span>{t('auth.signingIn')}</span>
               </>
             ) : (
               <span>{t('auth.signIn')}</span>
@@ -161,7 +189,7 @@ export function LoginPage() {
 
         <footer className="login-footer">
           <p className="login-footer-hint">
-            🎧 قابل استفاده برای تمام کاربران و مدیران جهت پخش موسیقی
+            {t('auth.footerHint')}
           </p>
         </footer>
       </div>
@@ -172,14 +200,14 @@ export function LoginPage() {
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <ThreeDIcon name="shield" size={26} />
-                <h3 style={{ margin: 0, fontSize: 16 }}>بازیابی رمز عبور</h3>
+                <h3 style={{ margin: 0, fontSize: 16 }}>{t('auth.forgotTitle')}</h3>
               </div>
               <button
                 type="button"
                 className="icon-btn"
                 onClick={() => setShowForgot(false)}
                 disabled={forgotLoading}
-                title="بستن"
+                title={t('action.close')}
               >
                 <Icon name="close" size={18} />
               </button>
@@ -194,7 +222,7 @@ export function LoginPage() {
                   {forgotSuccess}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  مدیریت سیستم پس از بررسی درخواست، رمز عبور جدید را برای شما تنظیم خواهد کرد.
+                  {t('auth.forgotSuccessDetail')}
                 </p>
                 <button
                   type="button"
@@ -205,13 +233,13 @@ export function LoginPage() {
                     setForgotSuccess(null);
                   }}
                 >
-                  متوجه شدم
+                  {t('auth.understood')}
                 </button>
               </div>
             ) : (
               <form onSubmit={handleForgotSubmit}>
                 <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  ایمیل ثبت‌شده در حساب کاربری خود را وارد کنید تا پیام درخواست تغییر رمز برای مدیریت ارسال گردد:
+                  {t('auth.forgotSubtitle')}
                 </p>
 
                 {forgotError && (
@@ -223,7 +251,7 @@ export function LoginPage() {
 
                 <div className="form-group" style={{ marginBottom: 16 }}>
                   <label className="form-label" htmlFor="forgot-email">
-                    ایمیل شما
+                    {t('auth.yourEmail')}
                   </label>
                   <input
                     id="forgot-email"
@@ -244,14 +272,14 @@ export function LoginPage() {
                     onClick={() => setShowForgot(false)}
                     disabled={forgotLoading}
                   >
-                    انصراف
+                    {t('action.cancel')}
                   </button>
                   <button
                     type="submit"
                     className="btn-primary"
                     disabled={forgotLoading || !forgotEmail.trim()}
                   >
-                    {forgotLoading ? 'در حال ارسال…' : 'ارسال درخواست'}
+                    {forgotLoading ? t('auth.sending') : t('auth.sendRequest')}
                   </button>
                 </div>
               </form>

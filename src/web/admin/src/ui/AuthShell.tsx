@@ -6,26 +6,34 @@ export function AuthShell({ children, title, subtitle }: { children: ReactNode; 
   const { t, theme, toggleTheme, language, setLanguage } = useUi();
   return (
     <div className="auth-shell">
-      <div className="auth-toolbar">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setLanguage(language === 'en' ? 'fa' : 'en')}
-          aria-label={t('nav.language')}
-        >
-          {language === 'en' ? 'فا' : 'EN'}
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-icon"
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}
-          title={theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}
-        >
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
-        </button>
-      </div>
       <main className="auth-card" aria-labelledby="auth-title">
+        <div className="auth-card-top-bar">
+          <div className="auth-lang-pill">
+            <button
+              type="button"
+              className={`auth-lang-btn ${language === 'fa' ? 'active' : ''}`}
+              onClick={() => setLanguage('fa')}
+            >
+              فارسی
+            </button>
+            <button
+              type="button"
+              className={`auth-lang-btn ${language === 'en' ? 'active' : ''}`}
+              onClick={() => setLanguage('en')}
+            >
+              English
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}
+            title={theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}
+          >
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
+          </button>
+        </div>
         <div className="auth-brand">
           <BrandLogo size={52} className="auth-brand-logo" />
           <div>

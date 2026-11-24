@@ -10,7 +10,7 @@ import { Button, Field, Input } from '../ui/primitives';
 import { errorMessage } from '../ui/helpers';
 
 export function LoginPage() {
-  const { t } = useUi();
+  const { t, language } = useUi();
   const { login } = useAuth();
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -204,7 +204,7 @@ export function LoginPage() {
               id="reset-email"
               type="email"
               autoComplete="username"
-              placeholder="admin@local (or leave blank for admin)"
+              placeholder={language === 'fa' ? 'admin@local (یا برای مدیر خالی بگذارید)' : 'admin@local (or leave blank for admin)'}
               value={resetEmail}
               onChange={(event) => setResetEmail(event.target.value)}
             />
