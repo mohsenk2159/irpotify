@@ -438,20 +438,71 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Architecture Notice */}
+                {/* 3. Web App Ports Overview Card */}
                 <div
                   style={{
-                    background: 'rgba(29, 185, 84, 0.08)',
-                    border: '1px solid rgba(29, 185, 84, 0.25)',
-                    borderRadius: '10px',
-                    padding: '12px 16px',
-                    marginBottom: '1rem',
-                    fontSize: '12.5px',
-                    lineHeight: 1.6,
-                    color: 'var(--text)',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    marginBottom: '1.25rem',
                   }}
                 >
-                  🛡️ <strong>{t('settings.portSyncNotice')}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '18px' }}>⚡</span>
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
+                      {t('settings.webAppPortsTitle')}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
+                    {t('settings.webAppPortsSubtitle')}
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px' }}>{t('settings.adminDashboardCard')}</span>
+                        <Badge tone="warning">{t('settings.adminOnlyBadge')}</Badge>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>
+                        {t('settings.portLabel')} {form.dashboardPort}
+                      </div>
+                      <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {t('settings.pathLabel')}: <code>/index.html</code> ({t('settings.adminAccessOnly')})
+                      </p>
+                    </div>
+
+                    <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px' }}>{t('settings.musicWebPlayerCard')}</span>
+                        <Badge tone="success">{t('settings.publicUsersBadge')}</Badge>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#1db954', fontFamily: 'monospace' }}>
+                        {t('settings.portLabel')} {form.playerPort}
+                      </div>
+                      <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {t('settings.pathLabel')}: <code>/player/</code> ({t('settings.allUsersUsable')})
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '0.85rem', borderRadius: '8px', background: 'var(--surface-1)', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.6, border: '1px solid var(--border)', marginBottom: '0.75rem' }}>
+                    💡 <strong>{t('settings.portChangeTipTitle')}:</strong> {t('settings.portChangeTipBody')}
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'rgba(29, 185, 84, 0.08)',
+                      border: '1px solid rgba(29, 185, 84, 0.25)',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      fontSize: '12px',
+                      lineHeight: 1.5,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    🛡️ <strong>{t('settings.portSyncNotice')}</strong>
+                  </div>
                 </div>
               </div>
 

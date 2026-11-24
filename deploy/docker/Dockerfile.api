@@ -36,6 +36,16 @@ RUN npm ci --no-audit --no-fund
 COPY src/web/admin/ ./
 RUN npm run build
 
+# ---------------------------------------------------------------------------------------------
+# Player Web App build. Compiled so the player web app is baked into wwwroot/player.
+# ---------------------------------------------------------------------------------------------
+FROM ${WEB_NODE_IMAGE} AS player-web
+WORKDIR /web-player
+COPY src/web/player/package.json src/web/player/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY src/web/player/ ./
+RUN npm run build
+
 # Scratch layer whose entire filesystem is the built dashboard, for `--output type=local`.
 FROM scratch AS web-export
 COPY --from=web /web/dist/ /
@@ -61,11 +71,12 @@ RUN dotnet restore src/server/MusicHub.Api/MusicHub.Api.csproj
 # Full server sources, including any wwwroot the pipeline pre-seeded.
 COPY src/server/ src/server/
 
-# Bake the dashboard in from the `web` stage so `docker pull` + `docker run` yields a working UI.
-# The published image must be complete on its own; requiring the operator to pre-seed wwwroot on the
-# host would make the documented "pull and run" command produce an API with an empty dashboard.
-# `--from=web` replaces whatever wwwroot the context carried, so a stale host bundle cannot leak in.
+# Bake the dashboard and player web apps from the web stages.
+# Clear pre-seeded directories so stale host bundles cannot leak in.
+RUN rm -rf src/server/MusicHub.Api/wwwroot/admin src/server/MusicHub.Api/wwwroot/player
 COPY --from=web /web/dist/ src/server/MusicHub.Api/wwwroot/
+COPY --from=web /web/dist/ src/server/MusicHub.Api/wwwroot/admin/
+COPY --from=player-web /web-player/dist/ src/server/MusicHub.Api/wwwroot/player/
 
 RUN if [ "${REQUIRE_DASHBOARD}" = "true" ] && [ ! -f src/server/MusicHub.Api/wwwroot/index.html ]; then \
         echo "ERROR: REQUIRE_DASHBOARD=true but src/server/MusicHub.Api/wwwroot/index.html is missing." >&2; \
