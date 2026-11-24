@@ -208,6 +208,7 @@ const DANGER_STATUSES = new Set(['failed', 'rejected', 'deadletter', 'degraded',
 const INFO_STATUSES = new Set(['pending', 'processing', 'validating', 'publishing', 'running']);
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
+  const { t } = useUi();
   if (!status) return <Badge>—</Badge>;
   const normalized = status.toLowerCase();
   const tone = SUCCESS_STATUSES.has(normalized)
@@ -219,7 +220,15 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
         : INFO_STATUSES.has(normalized)
           ? 'info'
           : 'neutral';
-  return <Badge tone={tone}>{status}</Badge>;
+
+  let label = status;
+  if (normalized === 'active') label = t('common.active');
+  else if (normalized === 'inactive') label = t('common.inactive');
+  else if (normalized === 'healthy') label = t('monitoring.healthOk');
+  else if (normalized === 'degraded') label = t('monitoring.healthDegraded');
+  else if (normalized === 'revoked') label = t('sessions.revokedBadge');
+
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 /* ------------------------------------------------------------------ */

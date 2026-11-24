@@ -7,6 +7,12 @@ import { PlayerProvider } from './player/PlayerContext';
 import { App } from './App';
 import './styles.css';
 
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

@@ -1,6 +1,6 @@
 export const en = {
-  'common.appName': 'MusicHub Enterprise',
-  'common.tagline': 'Music library operations',
+  'common.appName': 'irpotify Cloud',
+  'common.tagline': 'Self-hosted music cloud',
   'common.loading': 'Loading…',
   'common.save': 'Save',
   'common.saving': 'Saving…',
@@ -126,7 +126,7 @@ export const en = {
 
   'dashboard.title': 'Dashboard',
   'dashboard.subtitle': 'Live library, storage and ingestion status.',
-  'dashboard.welcomeTitle': 'irpotify Studio Dashboard',
+  'dashboard.welcomeTitle': 'irpotify Cloud Dashboard',
   'dashboard.welcomeDesc': 'Your enterprise music cloud, high-fidelity streaming engine & automated Telegram ingest.',
   'dashboard.tracks': 'Tracks',
   'dashboard.albums': 'Albums',
@@ -823,14 +823,27 @@ export const en = {
   'install.desktopTitle': 'Desktop (Chrome / Edge)',
   'install.desktopStep': 'Click the install icon in the address bar or open the browser menu and select "Install irpotify".',
   'install.lanTip': 'Note: On local network (HTTP), mobile browsers do not display the automatic banner. Using the manual steps above installs the full standalone web app immediately.',
+  'install.detectAndroid': '📱 Detected device: Android',
+  'install.detectIos': '🍏 Detected device: iPhone / iPad (iOS)',
+  'install.detectDesktop': '💻 Detected device: Desktop Computer',
+  'install.downloadApk': 'Download Dedicated Android App (APK)',
+  'install.iosStep1': 'In Safari browser, tap the Share icon at the bottom of the screen.',
+  'install.iosStep2': 'Scroll down and tap "Add to Home Screen".',
+  'install.iosStep3': 'Tap "Add" in the top right to place the icon on your screen.',
+  'monitoring.onlineBoardTitle': 'Online Connected Users & Active Sessions',
+  'monitoring.onlineBoardDesc': 'Users currently connected or active in the past 15 minutes ({online} online, {sessions} active sessions)',
+  'monitoring.noOnlineUsers': 'No users currently online',
+  'monitoring.unspecifiedDevice': 'Unspecified device',
+  'telegram.inactive': 'Inactive',
+  'telegram.active': 'Active',
 } as const;
 
 export type TranslationKey = keyof typeof en;
 export type TranslationDict = Record<TranslationKey, string>;
 
 export const fa: TranslationDict = {
-  'common.appName': 'میوزیک‌هاب سازمانی',
-  'common.tagline': 'مدیریت کتابخانه موسیقی',
+  'common.appName': 'irpotify Cloud',
+  'common.tagline': 'سامانه ابری استریم و مدیریت موسیقی',
   'common.loading': 'در حال بارگذاری…',
   'common.save': 'ذخیره',
   'common.saving': 'در حال ذخیره…',
@@ -956,7 +969,7 @@ export const fa: TranslationDict = {
 
   'dashboard.title': 'داشبورد',
   'dashboard.subtitle': 'وضعیت زنده کتابخانه، فضا و ورود محتوا.',
-  'dashboard.welcomeTitle': 'استودیو مدیریت ابر موسیقی irpotify',
+  'dashboard.welcomeTitle': 'داشبورد مدیریت irpotify Cloud',
   'dashboard.welcomeDesc': 'سامانه ابری استریم خصوصی، مدیریت کتابخانه صوتی و بات دریافت تلگرام.',
   'dashboard.tracks': 'قطعه‌ها',
   'dashboard.albums': 'آلبوم‌ها',
@@ -1650,6 +1663,19 @@ export const fa: TranslationDict = {
   'install.desktopTitle': 'کامپیوتر (Chrome / Edge)',
   'install.desktopStep': 'روی آیکون نصب برنامه در نوار آدرس کلیک کنید یا از منوی ۳ نقطه گزینه «Install irpotify» را بزنید.',
   'install.lanTip': 'نکته: در شبکه محلی (HTTP)، مرورگرها بنر خودکار را نشان نمی‌دهند. با استفاده از روش‌های دستی بالا، برنامه دقیقاً مثل یک اپلیکیشن مستقل نصب می‌شود.',
+  'install.detectAndroid': '📱 دستگاه شناسایی‌شده: اندروید (Android)',
+  'install.detectIos': '🍏 دستگاه شناسایی‌شده: آیفون / آیپد (iOS)',
+  'install.detectDesktop': '💻 دستگاه شناسایی‌شده: رایانه دسکتاپ',
+  'install.downloadApk': 'دانلود اپلیکیشن اختصاصی اندروید (APK)',
+  'install.iosStep1': 'در مرورگر Safari دکمه Share (مربع با فلش رو به بالا) را لمس کنید.',
+  'install.iosStep2': 'به سمت پایین اسکرول کرده و گزینه Add to Home Screen (افزودن به صفحه اصلی) را انتخاب کنید.',
+  'install.iosStep3': 'روی Add در بالای صفحه بزنید تا آیکون روی صفحه گوشی قرار گیرد.',
+  'monitoring.onlineBoardTitle': 'تابلو کاربران آنلاین و دستگاه‌های متصل',
+  'monitoring.onlineBoardDesc': 'کاربرانی که در حال حاضر به سرور متصل بوده یا در ۱۵ دقیقه گذشته فعالیت داشته‌اند ({online} کاربر آنلاین، {sessions} نشست و دستگاه فعال)',
+  'monitoring.noOnlineUsers': 'در حال حاضر هیچ کاربری آنلاین نیست',
+  'monitoring.unspecifiedDevice': 'دستگاه نامشخص',
+  'telegram.inactive': 'غیرفعال',
+  'telegram.active': 'فعال',
 };
 
 export const dictionaries: Record<'en' | 'fa', TranslationDict> = { en, fa };

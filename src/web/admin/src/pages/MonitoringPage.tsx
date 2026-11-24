@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
 import { useUi } from '../ui/UiProvider';
+import { roleLabel } from '../ui/helpers';
 import {
   Badge,
   Button,
@@ -235,39 +236,42 @@ export function MonitoringPage() {
             </Card>
           </div>
 
-          <Card title="تابلو کاربران آنلاین و دستگاه‌های متصل">
+          <Card title={t('monitoring.onlineBoardTitle')}>
             <p className="muted small" style={{ marginBottom: '12px' }}>
-              کاربرانی که در حال حاضر به سرور متصل بوده یا در ۱۵ دقیقه گذشته فعالیت داشته‌اند ({onlineQuery.data?.onlineCount ?? 0} کاربر آنلاین، {onlineQuery.data?.activeSessionsCount ?? 0} نشست و دستگاه فعال)
+              {t('monitoring.onlineBoardDesc', {
+                online: formatNumber(onlineQuery.data?.onlineCount ?? 0),
+                sessions: formatNumber(onlineQuery.data?.activeSessionsCount ?? 0),
+              })}
             </p>
             {onlineQuery.isLoading ? <LoadingState /> : null}
             {onlineQuery.isError ? <ErrorState error={onlineQuery.error} onRetry={() => void onlineQuery.refetch()} /> : null}
             {onlineQuery.data ? (
               onlineQuery.data.sessions.length === 0 ? (
-                <EmptyState icon="users" title="در حال حاضر هیچ کاربری آنلاین نیست" />
+                <EmptyState icon="users" title={t('monitoring.noOnlineUsers')} />
               ) : (
                 <div className="table-wrap" style={{ maxHeight: '360px', overflowY: 'auto' }}>
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th scope="col">نام کاربر</th>
-                        <th scope="col">ایمیل</th>
-                        <th scope="col">نقش</th>
-                        <th scope="col">دستگاه / کلاینت</th>
-                        <th scope="col">آدرس IP</th>
-                        <th scope="col">آخرین فعالیت</th>
+                        <th scope="col">{t('common.name')}</th>
+                        <th scope="col">{t('common.email')}</th>
+                        <th scope="col">{t('common.role')}</th>
+                        <th scope="col">{t('sessions.device')}</th>
+                        <th scope="col">{t('sessions.ip')}</th>
+                        <th scope="col">{t('sessions.lastSeen')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {onlineQuery.data.sessions.map((session) => (
                         <tr key={session.sessionId}>
-                          <td style={{ fontWeight: 600 }}>{session.displayName || 'کاربر'}</td>
+                          <td style={{ fontWeight: 600 }}>{session.displayName || t('common.unknown')}</td>
                           <td className="muted small">{session.email}</td>
                           <td>
                             <Badge tone={session.role === 'Administrator' ? 'warning' : 'info'}>
-                              {session.role === 'Administrator' ? '👑 مدیر ارشد' : '🎧 شنونده'}
+                              {roleLabel(t, session.role)}
                             </Badge>
                           </td>
-                          <td>{session.deviceName || 'دستگاه نامشخص'}</td>
+                          <td>{session.deviceName || t('monitoring.unspecifiedDevice')}</td>
                           <td className="muted small" dir="ltr">{session.ipAddress || '—'}</td>
                           <td className="muted small">{formatDate(session.lastSeenAt)}</td>
                         </tr>

@@ -370,13 +370,13 @@ export function Layout() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <ThreeDIcon type="rocket" size={48} animated />
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>irpotify Management Cloud</h4>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>{t('common.appName')}</h4>
                   <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem' }}>
                     {/android/i.test(navigator.userAgent)
-                      ? '📱 دستگاه شناسایی‌شده: اندروید (Android)'
+                      ? t('install.detectAndroid')
                       : /iphone|ipad|ipod/i.test(navigator.userAgent)
-                      ? '🍏 دستگاه شناسایی‌شده: آیفون / آیپد (iOS)'
-                      : '💻 دستگاه شناسایی‌شده: رایانه دسکتاپ'}
+                      ? t('install.detectIos')
+                      : t('install.detectDesktop')}
                   </p>
                 </div>
               </div>
@@ -385,10 +385,10 @@ export function Layout() {
                 <div className="card" style={{ padding: '1rem', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#38bdf8' }}>
                     <ThreeDIcon type="disk" size={22} />
-                    <span>نصب در اندروید (Android)</span>
+                    <span>{t('install.androidTitle')}</span>
                   </div>
                   <p style={{ margin: '0 0 0.75rem', fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
-                    برای دسترسی مستقیم به پنل مدیریت در اندروید، در منوی سه‌نقطه بالای مرورگر کروم گزینه <strong>«افزودن به صفحه اصلی» (Add to Home screen)</strong> یا <strong>«نصب برنامه»</strong> را لمس کنید.
+                    {t('install.androidStep')}
                   </p>
                   <a
                     href="https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk"
@@ -397,7 +397,7 @@ export function Layout() {
                     className="btn btn-primary"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}
                   >
-                    <span>دانلود اپلیکیشن اختصاصی اندروید (APK)</span>
+                    <span>{t('install.downloadApk')}</span>
                   </a>
                 </div>
               ) : null}
@@ -406,12 +406,12 @@ export function Layout() {
                 <div className="card" style={{ padding: '1rem', background: 'rgba(192, 132, 252, 0.08)', borderRadius: '10px', border: '1px solid rgba(192, 132, 252, 0.25)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#c084fc' }}>
                     <ThreeDIcon type="headphones" size={22} />
-                    <span>نصب در آیفون و آیپد (iOS)</span>
+                    <span>{t('install.iosTitle')}</span>
                   </div>
-                  <ol style={{ margin: 0, paddingRight: '1.25rem', fontSize: '0.88rem', lineHeight: 1.6, opacity: 0.95 }}>
-                    <li>در مرورگر <strong>Safari</strong> دکمه <strong>Share</strong> (مربع با فلش رو به بالا) را لمس کنید.</li>
-                    <li>به سمت پایین اسکرول کرده و گزینه <strong>Add to Home Screen (افزودن به صفحه اصلی)</strong> را انتخاب کنید.</li>
-                    <li>روی <strong>Add</strong> در بالای صفحه بزنید تا آیکون روی صفحه گوشی قرار گیرد.</li>
+                  <ol style={{ margin: 0, paddingRight: '1.25rem', paddingLeft: '1.25rem', fontSize: '0.88rem', lineHeight: 1.6, opacity: 0.95 }}>
+                    <li>{t('install.iosStep1')}</li>
+                    <li>{t('install.iosStep2')}</li>
+                    <li>{t('install.iosStep3')}</li>
                   </ol>
                 </div>
               ) : null}
@@ -427,7 +427,7 @@ export function Layout() {
               </div>
 
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', opacity: 0.65, lineHeight: 1.4, fontStyle: 'italic' }}>
-                نکته: در صورتی که با آدرس IP مستقیم (بدون HTTPS) متصل هستید، مرورگر کروم اجازه نصب مستقیم وب‌اپ را غیرفعال می‌کند؛ برای نصب کافیست از منوی مرورگر Add to Home Screen را بزنید.
+                {t('install.lanTip')}
               </p>
             </div>
           </Modal>
