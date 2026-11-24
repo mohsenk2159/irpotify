@@ -12,7 +12,6 @@ import { SettingsPage } from './pages/SettingsPage';
 export function App() {
   const { status } = useAuth();
   const [activeTab, setActiveTab] = useState<PlayerTab>('home');
-  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
 
   // Initialize history state and listen for back/forward navigation
   useEffect(() => {
@@ -66,11 +65,6 @@ export function App() {
     setActiveTab(tab);
   };
 
-  const handleOpenAlbum = (albumId: string) => {
-    setSelectedAlbumId(albumId);
-    handleSelectTab('library');
-  };
-
   const handleBackFromNowPlaying = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       window.history.back();
@@ -82,16 +76,13 @@ export function App() {
   return (
     <Layout activeTab={activeTab} onSelectTab={handleSelectTab}>
       {activeTab === 'home' && (
-        <HomePage onOpenAlbum={handleOpenAlbum} />
+        <HomePage />
       )}
       {activeTab === 'search' && (
-        <SearchPage onOpenAlbum={handleOpenAlbum} />
+        <SearchPage />
       )}
       {activeTab === 'library' && (
-        <LibraryPage
-          openAlbumId={selectedAlbumId}
-          onCloseAlbum={() => setSelectedAlbumId(null)}
-        />
+        <LibraryPage />
       )}
       {activeTab === 'nowPlaying' && (
         <NowPlayingPage onBackToHome={handleBackFromNowPlaying} />

@@ -1,26 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/endpoints';
 import { usePlayer } from '../player/PlayerContext';
 import { useUi } from '../ui/UiProvider';
 import { TrackListItem } from './HomePage';
-import { Artwork } from '../ui/Artwork';
 import { Modal } from '../ui/Modal';
 import { Icon } from '../ui/icons';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
 
-export function LibraryPage({
-  openAlbumId,
-  onCloseAlbum,
-}: {
-  openAlbumId?: string | null;
-  onCloseAlbum?: () => void;
-}) {
+export function LibraryPage() {
   const { t, notify } = useUi();
   const queryClient = useQueryClient();
   const { playTrack, currentTrack, isPlaying, toggleFavorite, isFavorite } = usePlayer();
 
-  const [activeFilter, setActiveFilter] = useState<'playlists' | 'albums' | 'tracks'>('playlists');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -28,36 +20,52 @@ export function LibraryPage({
   const [showAddSongsModal, setShowAddSongsModal] = useState(false);
   const [songSearchQuery, setSongSearchQuery] = useState('');
 
+  // Handle hardware / browser back button for playlist drilldown
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state;
+      if (!state || state.app !== 'irpotify') return;
+      if (state.tab === 'library') {
+        setSelectedPlaylistId(state.playlistId || null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleOpenPlaylist = (playlistId: string) => {
+    setSelectedPlaylistId(playlistId);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ app: 'irpotify', tab: 'library', playlistId }, '');
+    }
+  };
+
+  const handleBackToPlaylists = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      setSelectedPlaylistId(null);
+    }
+  };
+
   // Playlists query
   const playlistsQuery = useQuery({
     queryKey: ['playlists'],
     queryFn: api.playlists.list,
   });
 
-  // Albums query
-  const albumsQuery = useQuery({
-    queryKey: ['albums'],
-    queryFn: () => api.albums.list({ page: 1, pageSize: 30 }),
-  });
-
-  // All tracks query for library
+  // All tracks query for Add Songs modal
   const tracksQuery = useQuery({
     queryKey: ['library', 'tracks'],
     queryFn: () => api.tracks.list({ page: 1, pageSize: 150 }),
   });
 
-  // Selected Playlist detail
+  // Selected Playlist detail query
   const playlistDetailQuery = useQuery({
     queryKey: ['playlist', selectedPlaylistId],
     queryFn: () => api.playlists.get(selectedPlaylistId!),
     enabled: selectedPlaylistId != null,
-  });
-
-  // Selected Album detail
-  const albumDetailQuery = useQuery({
-    queryKey: ['album', openAlbumId],
-    queryFn: () => api.albums.get(openAlbumId!),
-    enabled: openAlbumId != null,
   });
 
   // Create playlist mutation
@@ -78,7 +86,7 @@ export function LibraryPage({
     mutationFn: (id: string) => api.playlists.remove(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['playlists'] });
-      setSelectedPlaylistId(null);
+      handleBackToPlaylists();
       notify('لیست پخش حذف شد', 'info');
     },
   });
@@ -104,72 +112,31 @@ export function LibraryPage({
   });
 
   const playlists = playlistsQuery.data ?? [];
-  const albums = albumsQuery.data?.items ?? [];
   const allTracks = tracksQuery.data?.items ?? [];
 
-  // View: Album Detail View
-  if (openAlbumId && albumDetailQuery.data) {
-    const album = albumDetailQuery.data.album;
-    const albumTracks = albumDetailQuery.data.tracks ?? [];
-    return (
-      <div className="page-container">
-        <button type="button" className="btn-back" onClick={onCloseAlbum}>
-          ← بازگشت
-        </button>
-        <div className="detail-hero">
-          <Artwork url={album.artworkUrl} size={140} />
-          <div className="detail-meta">
-            <span className="detail-tag">آلبوم</span>
-            <h2>{album.title}</h2>
-            <p>{album.albumArtist || album.artistName || '—'}</p>
-            <p className="detail-count">{albumTracks.length} قطعه</p>
-          </div>
-        </div>
-        {albumTracks.length > 0 && (
-          <button
-            type="button"
-            className="btn-play-all"
-            onClick={() => void playTrack(albumTracks[0]!, albumTracks)}
-          >
-            ▶ {t('library.playAll')}
-          </button>
-        )}
-        <div className="vertical-track-list" style={{ marginTop: 16 }}>
-          {albumTracks.map((tr) => (
-            <TrackListItem
-              key={tr.id}
-              track={tr}
-              isCurrent={currentTrack?.id === tr.id}
-              isPlaying={currentTrack?.id === tr.id && isPlaying}
-              isFav={isFavorite(tr.id)}
-              onPlay={() => void playTrack(tr, albumTracks)}
-              onToggleFav={() => void toggleFavorite(tr)}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // View: Playlist Detail View
+  /* ------------------------------------------------------------------ */
+  /* SUBVIEW: Playlist Detail View                                      */
+  /* ------------------------------------------------------------------ */
   if (selectedPlaylistId && playlistDetailQuery.data) {
     const playlist = playlistDetailQuery.data.playlist;
     const pTracks = playlistDetailQuery.data.tracks ?? [];
+
     return (
       <div className="page-container">
         <button
           type="button"
           className="btn-back"
-          onClick={() => setSelectedPlaylistId(null)}
+          onClick={handleBackToPlaylists}
         >
-          ← بازگشت
+          ← بازگشت به لیست‌ها
         </button>
-        <div className="detail-hero">
+
+        <div className="detail-hero" style={{ marginTop: 14 }}>
           <div className="playlist-cover-placeholder">
             <ThreeDIcon type="cassette" size={60} />
           </div>
           <div className="detail-meta">
-            <span className="detail-tag">لیست پخش</span>
+            <span className="detail-tag">لیست پخش خصوصی</span>
             <h2>{playlist.name}</h2>
             <p>{playlist.description || 'بدون توضیحات'}</p>
             <p className="detail-count">{pTracks.length} قطعه</p>
@@ -206,30 +173,44 @@ export function LibraryPage({
           </button>
         </div>
 
-        <div className="vertical-track-list" style={{ marginTop: 16 }}>
-          {pTracks.map((tr) => (
-            <div key={tr.id} className="playlist-track-row-wrap">
-              <TrackListItem
-                track={tr}
-                isCurrent={currentTrack?.id === tr.id}
-                isPlaying={currentTrack?.id === tr.id && isPlaying}
-                isFav={isFavorite(tr.id)}
-                onPlay={() => void playTrack(tr, pTracks)}
-                onToggleFav={() => void toggleFavorite(tr)}
-              />
-              <button
-                type="button"
-                className="btn-remove-track"
-                onClick={() => removeSongMutation.mutate(tr.id)}
-                title="حذف از لیست"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
+        {pTracks.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: 14 }}>این لیست پخش هنوز خالی است.</p>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ marginTop: 12 }}
+              onClick={() => setShowAddSongsModal(true)}
+            >
+              + افزودن اولین آهنگ
+            </button>
+          </div>
+        ) : (
+          <div className="vertical-track-list" style={{ marginTop: 16 }}>
+            {pTracks.map((tr) => (
+              <div key={tr.id} className="playlist-track-row-wrap">
+                <TrackListItem
+                  track={tr}
+                  isCurrent={currentTrack?.id === tr.id}
+                  isPlaying={currentTrack?.id === tr.id && isPlaying}
+                  isFav={isFavorite(tr.id)}
+                  onPlay={() => void playTrack(tr, pTracks)}
+                  onToggleFav={() => void toggleFavorite(tr)}
+                />
+                <button
+                  type="button"
+                  className="btn-remove-track"
+                  onClick={() => removeSongMutation.mutate(tr.id)}
+                  title="حذف از لیست"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Modal: Add Songs */}
+        {/* Modal: Add Songs with Real-time Search */}
         <Modal
           open={showAddSongsModal}
           title={t('library.addSongs')}
@@ -273,7 +254,7 @@ export function LibraryPage({
                     border: 'none',
                     color: '#94a3b8',
                     cursor: 'pointer',
-                    fontSize: 16
+                    fontSize: 16,
                   }}
                 >
                   ✕
@@ -331,12 +312,19 @@ export function LibraryPage({
     );
   }
 
-  // View: Main Library Overview
+  /* ------------------------------------------------------------------ */
+  /* ROOT VIEW: User's Playlists Exclusively (No tabs at the top)       */
+  /* ------------------------------------------------------------------ */
   return (
     <div className="page-container">
       {/* Top Header */}
       <div className="library-header-row">
-        <h2>{t('library.title')}</h2>
+        <div>
+          <h2>لیست‌های پخش شما</h2>
+          <span style={{ fontSize: 13, color: '#94a3b8' }}>
+            {playlists.length} لیست پخش اختصاصی
+          </span>
+        </div>
         <button
           type="button"
           className="btn-add-playlist"
@@ -347,97 +335,53 @@ export function LibraryPage({
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="filter-chips-row">
-        <button
-          type="button"
-          className={`filter-chip${activeFilter === 'playlists' ? ' is-active' : ''}`}
-          onClick={() => setActiveFilter('playlists')}
+      {/* Playlist List or Empty State */}
+      {playlists.length === 0 ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: '48px 20px',
+            gap: 14,
+          }}
         >
-          {t('tab.playlists')}
-        </button>
-        <button
-          type="button"
-          className={`filter-chip${activeFilter === 'albums' ? ' is-active' : ''}`}
-          onClick={() => setActiveFilter('albums')}
-        >
-          {t('tab.albums')}
-        </button>
-        <button
-          type="button"
-          className={`filter-chip${activeFilter === 'tracks' ? ' is-active' : ''}`}
-          onClick={() => setActiveFilter('tracks')}
-        >
-          {t('tab.tracks')}
-        </button>
-      </div>
-
-      {/* Filter: Playlists */}
-      {activeFilter === 'playlists' && (
-        <div className="library-list-col">
-          {/* Liked Songs Purple Gradient Box */}
-          <div
-            className="liked-songs-card"
-            onClick={() => setActiveFilter('tracks')}
+          <ThreeDIcon type="cassette" size={72} />
+          <h3 style={{ margin: 0, fontSize: 18, color: '#fff', fontWeight: 700 }}>
+            هنوز لیست پخشی ایجاد نکرده‌اید
+          </h3>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', maxWidth: 320 }}>
+            این بخش منحصراً برای لیست‌های پخش خصوصی شماست. اولین لیست پخش خود را بسازید و آهنگ‌های دلخواهتان را به آن اضافه کنید.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ marginTop: 8 }}
+            onClick={() => setShowCreateModal(true)}
           >
-            <div className="liked-card-art">
-              <ThreeDIcon type="heart" size={36} />
-            </div>
-            <div className="liked-card-meta">
-              <h4>{t('library.likedSongs')}</h4>
-              <p>مجموعه تمام آهنگ‌های برگزیده شما</p>
-            </div>
-          </div>
-
-          {/* User Playlists */}
+            + {t('library.newPlaylist')}
+          </button>
+        </div>
+      ) : (
+        <div className="library-list-col" style={{ marginTop: 14 }}>
           {playlists.map((pl) => (
             <div
               key={pl.id}
               className="playlist-item-row"
-              onClick={() => setSelectedPlaylistId(pl.id)}
+              onClick={() => handleOpenPlaylist(pl.id)}
             >
               <div className="playlist-icon-badge">
                 <ThreeDIcon type="cassette" size={28} />
               </div>
               <div className="playlist-item-meta">
                 <h4>{pl.name}</h4>
-                <p>{pl.trackCount} قطعه</p>
+                <p>
+                  {pl.trackCount} قطعه {pl.description ? `• ${pl.description}` : ''}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filter: Albums */}
-      {activeFilter === 'albums' && (
-        <div className="grid-2-col" style={{ marginTop: 12 }}>
-          {albums.map((album) => (
-            <div
-              key={album.id}
-              className="album-card-grid"
-              onClick={() => setSelectedPlaylistId(album.id)}
-            >
-              <Artwork url={album.artworkUrl} size={150} />
-              <span className="card-track-title">{album.title}</span>
-              <span className="card-track-artist">{album.albumArtist || '—'}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filter: Tracks */}
-      {activeFilter === 'tracks' && (
-        <div className="vertical-track-list" style={{ marginTop: 12 }}>
-          {allTracks.map((tr) => (
-            <TrackListItem
-              key={tr.id}
-              track={tr}
-              isCurrent={currentTrack?.id === tr.id}
-              isPlaying={currentTrack?.id === tr.id && isPlaying}
-              isFav={isFavorite(tr.id)}
-              onPlay={() => void playTrack(tr, allTracks)}
-              onToggleFav={() => void toggleFavorite(tr)}
-            />
           ))}
         </div>
       )}
@@ -466,7 +410,7 @@ export function LibraryPage({
             className="form-input"
             value={newPlaylistDesc}
             onChange={(e) => setNewPlaylistDesc(e.target.value)}
-            placeholder="توضیح کوتاه درباره لیست"
+            placeholder="توضیح کوتاه درباره لیست (اختیاری)"
           />
           <div className="modal-actions-row">
             <button
@@ -495,3 +439,4 @@ export function LibraryPage({
     </div>
   );
 }
+export default LibraryPage;
