@@ -336,6 +336,9 @@ setup_irpotify() {
 
     chmod 600 .env
 
+    # Install CLI command early so 'irpotify' command is available even if initial container start fails
+    create_cli_command
+
     echo -e "${BLUE}==>${NC} Building and starting containers (this may take 2-3 minutes)..."
     if ! dc up -d --build; then
         echo ""
@@ -353,13 +356,12 @@ setup_irpotify() {
         echo -e "If the logs indicate ${YELLOW}'password authentication failed for user \"musichub\"'${NC},"
         echo -e "the existing PostgreSQL volume was initialized with an earlier password."
         echo -e "To perform a clean database volume reset, run:"
-        echo -e "  ${CYAN}${BOLD}cd $INSTALL_DIR && docker compose down -v && docker compose up -d${NC}"
+        echo -e "  ${CYAN}${BOLD}sudo irpotify reset-db${NC}"
+        echo -e "Or manually:"
+        echo -e "  ${CYAN}${BOLD}sudo irpotify down -v && sudo irpotify up -d${NC}"
         echo -e "${RED}${BOLD}========================================================================${NC}"
         exit 1
     fi
-
-    # Create the helper CLI script
-    create_cli_command
 
     echo ""
     echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════════════${NC}"

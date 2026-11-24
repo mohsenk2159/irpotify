@@ -1,0 +1,7 @@
+# MusicHub Enterprise - Root Compose Configuration
+# Automatically includes production topology and dual-port overlay.
+name: musichub
+
+include:
+  - path: deploy/docker/docker-compose.yml
+  - path: deploy/docker/docker-compose.lan.yml
