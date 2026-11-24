@@ -476,9 +476,6 @@ case "$1" in
     ports)
         bash "$CLI_SCRIPT" --ports
         ;;
-    ssl)
-        bash "$CLI_SCRIPT" --ssl
-        ;;
     reset-db)
         bash "$CLI_SCRIPT" --reset-db
         ;;
@@ -678,138 +675,6 @@ EOF
 }
 
 # ------------------------------------------------------------------------------
-# Domain & SSL Management (Inspired by 3x-ui / acme.sh)
-# ------------------------------------------------------------------------------
-manage_domain_and_ssl() {
-    check_root
-    cd "$INSTALL_DIR" || exit 1
-
-    local server_ip
-    server_ip=$(detect_public_ip)
-    local cur_host
-    cur_host=$(grep "^MUSICHUB_PUBLIC_HOSTNAME=" .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r\n')
-    local cur_url
-    cur_url=$(grep "^MUSICHUB_PUBLIC_URL=" .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r\n')
-
-    while true; do
-        print_banner
-        echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
-        echo -e "${BOLD}Domain, Public IP & SSL Certificate Management:${NC}"
-        echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────${NC}"
-        echo -e "Detected Server Public IP : ${YELLOW}${server_ip}${NC}"
-        echo -e "Currently Active Hostname : ${CYAN}${cur_host:-None}${NC}"
-        echo -e "Currently Active URL      : ${GREEN}${cur_url:-None}${NC}"
-        echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
-        echo -e "  ${GREEN}1)${NC} ${BOLD}Set Custom Domain & Automatic SSL (Let's Encrypt / ZeroSSL)${NC}"
-        echo -e "  ${GREEN}2)${NC} ${BOLD}Issue SSL Certificate via acme.sh (Standalone HTTP-01 on Port 80)${NC}"
-        echo -e "  ${GREEN}3)${NC} ${BOLD}Issue SSL Certificate via Cloudflare DNS API (For CDN / Wildcard)${NC}"
-        echo -e "  ${GREEN}4)${NC} ${BOLD}Switch to Direct Server IP (Disable Domain)${NC}"
-        echo -e "  ${YELLOW}0)${NC} Back to Main Menu"
-        echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
-        echo ""
-
-        local ssl_op
-        read -r -p "Select an option [0-4]: " ssl_op </dev/tty
-        echo ""
-
-        case "$ssl_op" in
-            1)
-                echo -e "${BOLD}Configure Domain & Automatic SSL:${NC}"
-                read -r -p "Enter domain or subdomain (e.g. music.example.com): " d_name </dev/tty
-                d_name=$(echo "$d_name" | tr -d '[:space:]')
-                if [ -z "$d_name" ]; then
-                    echo -e "${RED}[ERROR] Domain cannot be empty.${NC}"
-                    sleep 1
-                    continue
-                fi
-                read -r -p "Enter your email for Let's Encrypt SSL: " a_email </dev/tty
-                a_email=$(echo "$a_email" | tr -d '[:space:]')
-                a_email=${a_email:-"admin@${d_name}"}
-
-                set_env_var "MUSICHUB_PUBLIC_HOSTNAME" "${d_name}"
-                set_env_var "MUSICHUB_PUBLIC_URL" "https://${d_name}"
-                set_env_var "MUSICHUB_ACME_EMAIL" "${a_email}"
-
-                echo -e "${YELLOW}Restarting services with domain SSL...${NC}"
-                dc restart caddy 2>/dev/null || dc up -d caddy
-                echo -e "${GREEN}✓ Domain and automatic SSL configured successfully.${NC}"
-                echo -e "New URL: ${CYAN}https://${d_name}${NC}"
-                read -r -p "Press Enter to continue..." </dev/tty
-                return
-                ;;
-            2)
-                echo -e "${BOLD}Issue SSL Certificate via acme.sh (Standalone):${NC}"
-                echo -e "${YELLOW}Note: Port 80 must be free and the domain must point to this server IP.${NC}"
-                read -r -p "Enter domain name: " acme_domain </dev/tty
-                acme_domain=$(echo "$acme_domain" | tr -d '[:space:]')
-                if [ -z "$acme_domain" ]; then
-                    echo -e "${RED}[ERROR] Domain is required.${NC}"
-                    sleep 1
-                    continue
-                fi
-
-                # Install acme.sh if missing
-                if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
-                    echo -e "${BLUE}Installing acme.sh...${NC}"
-                    curl -s https://get.acme.sh | sh -s email="admin@${acme_domain}"
-                fi
-
-                echo -e "${BLUE}Issuing SSL certificate for ${acme_domain}...${NC}"
-                "$HOME/.acme.sh/acme.sh" --issue -d "$acme_domain" --standalone --force
-
-                echo -e "${GREEN}✓ SSL certificate issued at $HOME/.acme.sh/${acme_domain}_ecc/${NC}"
-                read -r -p "Press Enter to continue..." </dev/tty
-                ;;
-            3)
-                echo -e "${BOLD}Issue SSL Certificate via Cloudflare DNS API:${NC}"
-                read -r -p "Enter domain name: " cf_domain </dev/tty
-                cf_domain=$(echo "$cf_domain" | tr -d '[:space:]')
-                read -r -p "Cloudflare API Token or Global API Key: " cf_key </dev/tty
-                cf_key=$(echo "$cf_key" | tr -d '[:space:]')
-                read -r -p "Cloudflare Account Email (optional if using API Token): " cf_email </dev/tty
-                cf_email=$(echo "$cf_email" | tr -d '[:space:]')
-
-                if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
-                    echo -e "${BLUE}Installing acme.sh...${NC}"
-                    curl -s https://get.acme.sh | sh -s email="${cf_email:-admin@${cf_domain}}"
-                fi
-
-                export CF_Token="$cf_key"
-                export CF_Key="$cf_key"
-                export CF_Email="$cf_email"
-
-                echo -e "${BLUE}Issuing wildcard certificate via Cloudflare DNS API...${NC}"
-                "$HOME/.acme.sh/acme.sh" --issue --dns dns_cf -d "$cf_domain" -d "*.${cf_domain}" --force
-                echo -e "${GREEN}✓ SSL certificate successfully obtained via Cloudflare.${NC}"
-                read -r -p "Press Enter to continue..." </dev/tty
-                ;;
-            4)
-                echo -e "${YELLOW}Switching to direct server IP access...${NC}"
-                local p_port
-                p_port=$(grep "^MUSICHUB_PLAYER_PORT=" .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r\n')
-                p_port=${p_port:-5081}
-
-                set_env_var "MUSICHUB_PUBLIC_HOSTNAME" "localhost"
-                set_env_var "MUSICHUB_PUBLIC_URL" "http://${server_ip}:${p_port}"
-                set_env_var "MUSICHUB_ACME_EMAIL" "admin@localhost"
-
-                dc restart
-                echo -e "${GREEN}✓ Switched to direct IP mode.${NC}"
-                read -r -p "Press Enter to continue..." </dev/tty
-                return
-                ;;
-            0)
-                return
-                ;;
-            *)
-                echo -e "${RED}Invalid option.${NC}"
-                sleep 1
-                ;;
-        esac
-    done
-}
-
-# ------------------------------------------------------------------------------
 # Reset Database Volume (Fixes password mismatch and reinitializes database)
 # ------------------------------------------------------------------------------
 reset_database_volume() {
@@ -959,15 +824,14 @@ show_menu() {
         echo -e "  ${GREEN}7)${NC} ${BOLD}View Credentials & Bootstrap Token (Credentials)${NC}"
         echo -e "  ${GREEN}8)${NC} ${BOLD}Reset Account Password (Reset Password)${NC}"
         echo -e "  ${PURPLE}9)${NC} ${BOLD}Change Listening Ports (Dashboard & Player Ports)${NC}"
-        echo -e "  ${CYAN}10)${NC} ${BOLD}Domain & SSL Management (acme.sh / Caddy SSL)${NC}"
-        echo -e "  ${YELLOW}11)${NC} ${YELLOW}${BOLD}Reset Database Volume (Fix password mismatch / Fresh DB)${NC}"
-        echo -e "  ${RED}12)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Clean Uninstall)${NC}"
+        echo -e "  ${YELLOW}10)${NC} ${YELLOW}${BOLD}Reset Database Volume (Fix password mismatch / Fresh DB)${NC}"
+        echo -e "  ${RED}11)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Clean Uninstall)${NC}"
         echo -e "  ${YELLOW}0)${NC} Exit"
         echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
         echo ""
 
         local op
-        read -r -p "Select an option [0-12]: " op </dev/tty
+        read -r -p "Select an option [0-11]: " op </dev/tty
         echo ""
 
         case "$op" in
@@ -1050,12 +914,9 @@ show_menu() {
                 manage_ports
                 ;;
             10)
-                manage_domain_and_ssl
-                ;;
-            11)
                 reset_database_volume
                 ;;
-            12)
+            11|12)
                 uninstall_irpotify
                 ;;
             0)
@@ -1077,8 +938,6 @@ if [ "$1" == "--menu" ]; then
     show_menu
 elif [ "$1" == "--ports" ]; then
     manage_ports
-elif [ "$1" == "--ssl" ]; then
-    manage_domain_and_ssl
 elif [ "$1" == "--reset-db" ]; then
     reset_database_volume
 elif [ "$1" == "--configure-dns" ]; then

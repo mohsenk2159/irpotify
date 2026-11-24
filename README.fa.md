@@ -103,7 +103,6 @@ sudo irpotify logs          # مشاهده لاگ‌های زنده سرور
 sudo irpotify restart       # راه‌اندازی مجدد سرویس‌ها
 sudo irpotify update        # به‌روزرسانی سرور به آخرین نسخه گیت‌هاب
 sudo irpotify ports         # تغییر پورت‌های داشبورد و وب‌اپ پلیر
-sudo irpotify ssl           # مدیریت دامنه و گواهی‌های SSL
 sudo irpotify reset-db      # ریست دیتابیس (رفع خطای عدم تطابق رمز دیتابیس)
 sudo irpotify credentials   # مشاهده اطلاعات و توکن راه‌اندازی
 sudo irpotify reset-password # بازیابی و تغییر گذرواژه کاربر یا مدیر از ترمینال
