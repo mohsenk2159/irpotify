@@ -107,9 +107,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       streamTokenRef.current = { token: token.token, expiresAt: token.expiresAt };
       audio.src = token.streamUrl;
       audio.currentTime = 0;
-      await audio.play();
-      setIsPlaying(true);
       setCurrentTrack(track);
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch {
+        setIsPlaying(false);
+      }
 
       // Update MediaSession for hardware / lock screen controls
       if ('mediaSession' in navigator) {
