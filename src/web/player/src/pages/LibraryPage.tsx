@@ -6,6 +6,7 @@ import { useUi } from '../ui/UiProvider';
 import { TrackListItem } from './HomePage';
 import { Artwork } from '../ui/Artwork';
 import { Modal } from '../ui/Modal';
+import { Icon } from '../ui/icons';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
 
 export function LibraryPage({
@@ -25,6 +26,7 @@ export function LibraryPage({
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
   const [showAddSongsModal, setShowAddSongsModal] = useState(false);
+  const [songSearchQuery, setSongSearchQuery] = useState('');
 
   // Playlists query
   const playlistsQuery = useQuery({
@@ -41,7 +43,7 @@ export function LibraryPage({
   // All tracks query for library
   const tracksQuery = useQuery({
     queryKey: ['library', 'tracks'],
-    queryFn: () => api.tracks.list({ page: 1, pageSize: 50 }),
+    queryFn: () => api.tracks.list({ page: 1, pageSize: 150 }),
   });
 
   // Selected Playlist detail
@@ -231,28 +233,98 @@ export function LibraryPage({
         <Modal
           open={showAddSongsModal}
           title={t('library.addSongs')}
-          onClose={() => setShowAddSongsModal(false)}
+          onClose={() => {
+            setShowAddSongsModal(false);
+            setSongSearchQuery('');
+          }}
         >
-          <div className="vertical-track-list" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-            {allTracks.map((tr) => {
-              const alreadyIn = pTracks.some((pt) => pt.id === tr.id);
-              return (
-                <div key={tr.id} className="add-song-item">
-                  <div className="add-song-text">
-                    <span className="add-song-title">{tr.title}</span>
-                    <span className="add-song-artist">{tr.artist || '—'}</span>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={songSearchQuery}
+                onChange={(e) => setSongSearchQuery(e.target.value)}
+                placeholder="جستجوی نام آهنگ، خواننده یا آلبوم..."
+                className="form-input"
+                style={{
+                  paddingLeft: 38,
+                  paddingRight: 14,
+                  fontSize: 14,
+                  borderRadius: 10,
+                  background: 'var(--color-surface, #1e293b)',
+                  border: '1px solid var(--color-border, #334155)',
+                  color: '#fff',
+                  width: '100%',
+                  height: 42,
+                }}
+                autoFocus
+              />
+              <div style={{ position: 'absolute', left: 12, pointerEvents: 'none', color: '#94a3b8' }}>
+                <Icon name="search" size={18} />
+              </div>
+              {songSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSongSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: 16
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="vertical-track-list" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+            {(() => {
+              const q = songSearchQuery.toLowerCase().trim();
+              const filtered = allTracks.filter((tr) => {
+                if (!q) return true;
+                return (
+                  tr.title?.toLowerCase().includes(q) ||
+                  tr.artist?.toLowerCase().includes(q) ||
+                  tr.album?.toLowerCase().includes(q)
+                );
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8' }}>
+                    <p style={{ margin: 0, fontSize: 14 }}>هیچ آهنگی مطابق جستجو یافت نشد.</p>
                   </div>
-                  <button
-                    type="button"
-                    className={`btn-add-circle${alreadyIn ? ' is-added' : ''}`}
-                    disabled={alreadyIn}
-                    onClick={() => addSongMutation.mutate(tr.id)}
-                  >
-                    {alreadyIn ? '✓' : '+'}
-                  </button>
-                </div>
-              );
-            })}
+                );
+              }
+
+              return filtered.map((tr) => {
+                const alreadyIn = pTracks.some((pt) => pt.id === tr.id);
+                return (
+                  <div key={tr.id} className="add-song-item">
+                    <div className="add-song-text">
+                      <span className="add-song-title">{tr.title}</span>
+                      <span className="add-song-artist">
+                        {tr.artist || '—'} {tr.album ? `• ${tr.album}` : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn-add-circle${alreadyIn ? ' is-added' : ''}`}
+                      disabled={alreadyIn}
+                      onClick={() => addSongMutation.mutate(tr.id)}
+                      title={alreadyIn ? 'قبلاً اضافه شده' : 'افزودن به لیست'}
+                    >
+                      {alreadyIn ? '✓' : '+'}
+                    </button>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </Modal>
       </div>

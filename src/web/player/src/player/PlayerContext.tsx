@@ -23,7 +23,7 @@ interface PlayerContextValue {
   isBuffering: boolean;
   error: string | null;
   favoritesSet: Set<string>;
-  playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
+  playTrack: (track: Track, newQueue?: Track[], autoNavigate?: boolean) => Promise<void>;
   playQueueItem: (index: number) => Promise<void>;
   togglePlayPause: () => void;
   next: () => void;
@@ -164,7 +164,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [queue, repeatMode, loadAndPlay]);
 
   const playTrack = useCallback(
-    async (track: Track, newQueue?: Track[]) => {
+    async (track: Track, newQueue?: Track[], autoNavigate: boolean = true) => {
       const currentQueue = newQueue ?? (queue.length > 0 ? queue : [track]);
       originalQueueRef.current = currentQueue;
       const effectiveQueue = shuffle
@@ -173,6 +173,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setQueue(effectiveQueue);
       const idx = effectiveQueue.findIndex((t) => t.id === track.id);
       setQueueIndex(idx >= 0 ? idx : 0);
+      if (autoNavigate && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('musichub:navigate-now-playing'));
+      }
       await loadAndPlay(track);
     },
     [queue, shuffle, loadAndPlay],
@@ -183,7 +186,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (index >= 0 && index < queue.length) {
         setQueueIndex(index);
         const track = queue[index];
-        if (track) await loadAndPlay(track);
+        if (track) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('musichub:navigate-now-playing'));
+          }
+          await loadAndPlay(track);
+        }
       }
     },
     [queue, loadAndPlay],

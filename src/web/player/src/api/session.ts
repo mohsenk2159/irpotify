@@ -1,21 +1,28 @@
 /**
- * Web session storage.
+ * Web session storage with Remember Me support.
  *
- * Tradeoff (documented in README): the refresh token lives in *sessionStorage*, not
- * localStorage, so it is discarded when the tab closes and is never shared between
- * tabs. The API only supports bearer/refresh-token auth (no httpOnly cookie), so an
- * XSS vulnerability could read this value; the dashboard therefore ships without
- * third-party scripts and relies on the server CSP (`script-src 'self'`).
- *
- * The access token is kept in memory only.
+ * When "Remember Me" is selected, the refresh token is persisted in localStorage,
+ * keeping the user logged in across browser restarts until they explicitly log out.
+ * When unchecked, it is stored in sessionStorage only (discarded on tab close).
+ * The access token is always kept in memory only.
  */
 
 const REFRESH_TOKEN_KEY = 'musichub.dashboard.refreshToken';
+const REMEMBER_ME_KEY = 'musichub.rememberMe';
 
 let accessToken: string | null = null;
 let memoryRefreshToken: string | null = null;
 
-function storage(): Storage | null {
+function getLocalStorage(): Storage | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getSessionStorage(): Storage | null {
   try {
     if (typeof window === 'undefined') return null;
     return window.sessionStorage;
@@ -24,14 +31,36 @@ function storage(): Storage | null {
   }
 }
 
-function readRefreshToken(): string | null {
-  const store = storage();
-  if (!store) return memoryRefreshToken;
+export function isRememberMeActive(): boolean {
+  const local = getLocalStorage();
+  if (!local) return false;
   try {
-    return store.getItem(REFRESH_TOKEN_KEY);
+    return local.getItem(REMEMBER_ME_KEY) === 'true';
   } catch {
-    return memoryRefreshToken;
+    return false;
   }
+}
+
+function readRefreshToken(): string | null {
+  const local = getLocalStorage();
+  if (local) {
+    try {
+      const val = local.getItem(REFRESH_TOKEN_KEY);
+      if (val) return val;
+    } catch {
+      // ignore
+    }
+  }
+  const session = getSessionStorage();
+  if (session) {
+    try {
+      const val = session.getItem(REFRESH_TOKEN_KEY);
+      if (val) return val;
+    } catch {
+      // ignore
+    }
+  }
+  return memoryRefreshToken;
 }
 
 let refreshToken: string | null = readRefreshToken();
@@ -54,17 +83,36 @@ export function hasStoredRefreshToken(): boolean {
 }
 
 /** Applies a fresh token pair. Called after login and after every rotation. */
-export function applyTokens(tokens: TokenPair): void {
+export function applyTokens(tokens: TokenPair, rememberMe?: boolean): void {
   accessToken = tokens.accessToken;
   refreshToken = tokens.refreshToken;
   memoryRefreshToken = tokens.refreshToken;
-  const store = storage();
-  if (!store) return;
-  try {
-    store.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
-  } catch {
-    // Storage may be unavailable (private mode/quota); the in-memory token still works
-    // for the lifetime of the document.
+
+  const local = getLocalStorage();
+  const session = getSessionStorage();
+
+  const shouldRemember = rememberMe !== undefined ? rememberMe : isRememberMeActive();
+
+  if (local) {
+    try {
+      if (shouldRemember) {
+        local.setItem(REMEMBER_ME_KEY, 'true');
+        local.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+      } else {
+        local.removeItem(REMEMBER_ME_KEY);
+        local.removeItem(REFRESH_TOKEN_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (session) {
+    try {
+      session.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -73,11 +121,23 @@ export function clearTokens(): void {
   accessToken = null;
   refreshToken = null;
   memoryRefreshToken = null;
-  const store = storage();
-  if (!store) return;
-  try {
-    store.removeItem(REFRESH_TOKEN_KEY);
-  } catch {
-    // ignore
+
+  const local = getLocalStorage();
+  if (local) {
+    try {
+      local.removeItem(REFRESH_TOKEN_KEY);
+      local.removeItem(REMEMBER_ME_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  const session = getSessionStorage();
+  if (session) {
+    try {
+      session.removeItem(REFRESH_TOKEN_KEY);
+    } catch {
+      // ignore
+    }
   }
 }

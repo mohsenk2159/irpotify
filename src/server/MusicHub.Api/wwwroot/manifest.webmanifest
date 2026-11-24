@@ -1,15 +1,15 @@
 {
-  "id": "irpotify-admin",
-  "name": "irpotify — پنل مدیریت سرور",
-  "short_name": "irpotify Admin",
-  "description": "سامانه مدیریت، مانیتورینگ و پیکربندی سرور اختصاصی irpotify",
+  "id": "irpotify-player",
+  "name": "irpotify — پخش موسیقی",
+  "short_name": "irpotify Player",
+  "description": "پخش آنلاین و مدیریت کتابخانه موسیقی شخصی با تجربه اصیل اسپاتیفای",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#0a0f1c",
   "theme_color": "#0a0f1c",
-  "categories": ["admin", "utilities", "management"],
+  "categories": ["music", "audio", "entertainment"],
   "icons": [
     {
       "src": "./icon-192.png",

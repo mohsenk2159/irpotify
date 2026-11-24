@@ -29,7 +29,7 @@ interface AuthContextValue {
    * is a usability measure rather than the authorization boundary.
    */
   canContribute: boolean;
-  login: (email: string, password: string, deviceName: string) => Promise<User>;
+  login: (email: string, password: string, deviceName: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -99,12 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (email: string, password: string, deviceName: string) => {
+    async (email: string, password: string, deviceName: string, rememberMe: boolean = true) => {
       const session = await api.auth.login({ email, password, deviceName, clientType: 'admin' });
       if (!session.user.roles.includes('Administrator')) {
         throw new Error('دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است.');
       }
-      applyTokens(session);
+      applyTokens(session, rememberMe);
       queryClient.clear();
       setUser(session.user);
       setStatus('authenticated');

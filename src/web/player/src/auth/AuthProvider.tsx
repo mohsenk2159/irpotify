@@ -19,7 +19,7 @@ interface AuthContextValue {
   status: AuthStatus;
   user: User | null;
   isAdmin: boolean;
-  login: (email: string, password: string, deviceName?: string) => Promise<User>;
+  login: (email: string, password: string, deviceName?: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -68,14 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback(
-    async (email: string, password: string, deviceName: string = 'irpotify Mobile Web') => {
+    async (email: string, password: string, deviceName: string = 'irpotify Mobile Web', rememberMe: boolean = true) => {
       const session = await api.auth.login({
         email,
         password,
         deviceName,
         clientType: 'player',
       });
-      applyTokens(session);
+      applyTokens(session, rememberMe);
       queryClient.clear();
       setUser(session.user);
       setStatus('authenticated');

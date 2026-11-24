@@ -7,6 +7,7 @@ import { AuthShell } from '../ui/AuthShell';
 import { Modal, useToast } from '../ui/Modal';
 import { useUi } from '../ui/UiProvider';
 import { Button, Field, Input } from '../ui/primitives';
+import { Icon } from '../ui/icons';
 import { errorMessage } from '../ui/helpers';
 
 export function LoginPage() {
@@ -17,6 +18,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [deviceName, setDeviceName] = useState('Web dashboard');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +42,7 @@ export function LoginPage() {
     }
     setBusy(true);
     try {
-      await login(email.trim().toLowerCase(), password, deviceName.trim() || 'Web dashboard');
+      await login(email.trim().toLowerCase(), password, deviceName.trim() || 'Web dashboard', rememberMe);
       notify(t('auth.signIn'), 'success');
       navigate('/', { replace: true });
     } catch (cause) {
@@ -125,16 +128,53 @@ export function LoginPage() {
           />
         </Field>
         <Field label={t('auth.password')} htmlFor="login-password" required>
-          <Input
-            id="login-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Input
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              style={{ paddingRight: 40 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+              title={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+              style={{
+                position: 'absolute',
+                right: 10,
+                background: 'none',
+                border: 'none',
+                color: 'var(--color-text-muted, #94a3b8)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 4,
+              }}
+            >
+              <Icon name={showPassword ? 'eye-off' : 'eye'} size={18} />
+            </button>
+          </div>
         </Field>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '-0.25rem', marginBottom: '0.75rem', flexWrap: 'wrap', gap: 8 }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none', color: 'var(--color-text-secondary, #cbd5e1)' }}>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              style={{
+                accentColor: 'var(--color-primary, #10b981)',
+                width: 16,
+                height: 16,
+                cursor: 'pointer'
+              }}
+            />
+            <span>{t('auth.rememberMe')}</span>
+          </label>
           <button
             type="button"
             className="btn btn-ghost btn-sm"

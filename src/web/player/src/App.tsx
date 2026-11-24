@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from './auth/AuthProvider';
 import { BootScreen } from './auth/guards';
 import { LoginPage } from './pages/LoginPage';
@@ -14,6 +14,42 @@ export function App() {
   const [activeTab, setActiveTab] = useState<PlayerTab>('home');
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
 
+  // Initialize history state and listen for back/forward navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!window.history.state || window.history.state.app !== 'irpotify') {
+      window.history.replaceState({ app: 'irpotify', tab: 'home' }, '');
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state;
+      if (state && state.app === 'irpotify' && state.tab) {
+        setActiveTab(state.tab);
+      }
+    };
+
+    const handleAutoNavigateToNowPlaying = () => {
+      setActiveTab((current) => {
+        if (current !== 'nowPlaying') {
+          if (typeof window !== 'undefined') {
+            window.history.pushState({ app: 'irpotify', tab: 'nowPlaying', fromTab: current }, '');
+          }
+          return 'nowPlaying';
+        }
+        return current;
+      });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('musichub:navigate-now-playing', handleAutoNavigateToNowPlaying);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('musichub:navigate-now-playing', handleAutoNavigateToNowPlaying);
+    };
+  }, []);
+
   if (status === 'booting') {
     return <BootScreen />;
   }
@@ -22,13 +58,29 @@ export function App() {
     return <LoginPage />;
   }
 
+  const handleSelectTab = (tab: PlayerTab) => {
+    if (tab === activeTab) return;
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ app: 'irpotify', tab }, '');
+    }
+    setActiveTab(tab);
+  };
+
   const handleOpenAlbum = (albumId: string) => {
     setSelectedAlbumId(albumId);
-    setActiveTab('library');
+    handleSelectTab('library');
+  };
+
+  const handleBackFromNowPlaying = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      setActiveTab('home');
+    }
   };
 
   return (
-    <Layout activeTab={activeTab} onSelectTab={setActiveTab}>
+    <Layout activeTab={activeTab} onSelectTab={handleSelectTab}>
       {activeTab === 'home' && (
         <HomePage onOpenAlbum={handleOpenAlbum} />
       )}
@@ -42,7 +94,7 @@ export function App() {
         />
       )}
       {activeTab === 'nowPlaying' && (
-        <NowPlayingPage onBackToHome={() => setActiveTab('home')} />
+        <NowPlayingPage onBackToHome={handleBackFromNowPlaying} />
       )}
       {activeTab === 'settings' && (
         <SettingsPage />

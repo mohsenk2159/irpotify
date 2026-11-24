@@ -11,6 +11,8 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +29,7 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email.trim(), password, 'irpotify Player WebApp');
+      await login(email.trim(), password, 'irpotify Player WebApp', rememberMe);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -134,19 +136,56 @@ export function LoginPage() {
             <label className="form-label" htmlFor="player-pass">
               {t('auth.password')}
             </label>
-            <div className="input-with-icon">
+            <div className="input-with-icon" style={{ position: 'relative' }}>
               <input
                 id="player-pass"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 className="form-input"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
+                style={{ paddingRight: 40 }}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                title={showPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted, #94a3b8)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 4,
+                }}
+              >
+                <Icon name={showPassword ? 'eye-off' : 'eye'} size={18} />
+              </button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none', color: 'var(--color-text-secondary, #cbd5e1)' }}>
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{
+                    accentColor: 'var(--color-primary, #10b981)',
+                    width: 16,
+                    height: 16,
+                    cursor: 'pointer'
+                  }}
+                />
+                <span>{t('auth.rememberMe')}</span>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -157,7 +196,7 @@ export function LoginPage() {
                 }}
                 style={{
                   fontSize: 13,
-                  color: 'var(--color-primary)',
+                  color: 'var(--color-primary, #10b981)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',

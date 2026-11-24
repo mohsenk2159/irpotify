@@ -2669,4 +2669,217 @@ button {
   }
 }
 
+/* 5. Artist Grid & Artist Cards */
+.spotify-artists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+}
+
+.spotify-artist-card {
+  background: var(--spotify-card-bg);
+  padding: 14px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.spotify-artist-card:hover {
+  background: var(--spotify-card-hover);
+  transform: translateY(-2px);
+}
+
+.spotify-artist-avatar-wrap {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  background: #1e1e24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.spotify-artist-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.spotify-artist-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.spotify-artist-subtitle {
+  font-size: 12px;
+  color: var(--spotify-subtext, #94a3b8);
+}
+
+/* 6. In-Home Track Actions */
+.spotify-track-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.spotify-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--spotify-subtext, #94a3b8);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  padding: 0;
+}
+
+.spotify-action-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.spotify-action-btn.is-fav {
+  color: var(--color-primary, #10b981);
+}
+
+/* 7. In-Home Detail Views (Artist & Album) */
+.inhome-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.inhome-back-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.inhome-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, transparent 100%);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.inhome-hero-art {
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+
+.inhome-hero-art.is-circle {
+  border-radius: 50%;
+}
+
+.inhome-hero-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.inhome-hero-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-primary, #10b981);
+  letter-spacing: 0.5px;
+}
+
+.inhome-hero-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.inhome-hero-sub {
+  font-size: 13px;
+  color: var(--spotify-subtext, #94a3b8);
+  margin: 0;
+}
+
+.inhome-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* 8. Playlist Selector Modal List */
+.playlist-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.playlist-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.playlist-select-item:hover {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.playlist-select-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.playlist-select-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.playlist-select-count {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+
 
