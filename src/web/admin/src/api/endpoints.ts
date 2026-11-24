@@ -18,6 +18,7 @@ import type {
   GenreSummary,
   HealthResponse,
   LoginHistoryEntry,
+  OnlineUsersResponse,
   Paged,
   PlaylistDetail,
   PlaylistSummary,
@@ -171,6 +172,7 @@ export const api = {
   dashboard: {
     stats: () => http.request<DashboardStats>('/api/dashboard/stats'),
     metrics: () => http.request<AdminMetrics>('/api/admin/metrics'),
+    onlineUsers: () => http.request<OnlineUsersResponse>('/api/admin/online-users'),
     audit: (query: { page?: number; pageSize?: number; action?: string; actorUserId?: string }) =>
       http.request<Paged<AuditEntry>>('/api/admin/audit', { query }),
     systemEvents: (limit: number) => http.request<SystemEvent[]>('/api/admin/system-events', { query: { limit } }),

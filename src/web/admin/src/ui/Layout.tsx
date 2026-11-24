@@ -32,6 +32,18 @@ const NAV: NavGroup[] = [
     adminOnly: true,
   },
   {
+    id: 'library',
+    labelKey: 'nav.library',
+    items: [
+      { to: '/library/tracks', labelKey: 'nav.tracks', icon: 'tracks' },
+      { to: '/library/albums', labelKey: 'nav.albums', icon: 'albums' },
+      { to: '/library/artists', labelKey: 'nav.artists', icon: 'artists' },
+      { to: '/library/folders', labelKey: 'nav.folders', icon: 'folders' },
+      { to: '/library/genres', labelKey: 'nav.genres', icon: 'genres' },
+      { to: '/library/playlists', labelKey: 'nav.playlists', icon: 'playlists' },
+    ],
+  },
+  {
     id: 'admin',
     labelKey: 'nav.administration',
     items: [
@@ -312,6 +324,20 @@ export function Layout() {
             <span>{t('nav.dashboard')}</span>
           </NavLink>
           <NavLink
+            to="/library/tracks"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="album" size={24} />
+            <span>{t('nav.tracks')}</span>
+          </NavLink>
+          <NavLink
+            to="/library/folders"
+            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
+          >
+            <ThreeDIcon type="cassette" size={24} />
+            <span>{t('nav.folders')}</span>
+          </NavLink>
+          <NavLink
             to="/admin/monitoring"
             className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
           >
@@ -332,13 +358,6 @@ export function Layout() {
             <ThreeDIcon type="disk" size={24} />
             <span>{t('nav.settings')}</span>
           </NavLink>
-          <NavLink
-            to="/account/sessions"
-            className={({ isActive }) => `mobile-nav-link${isActive ? ' is-active' : ''}`}
-          >
-            <ThreeDIcon type="shield" size={24} />
-            <span>{t('nav.sessions')}</span>
-          </NavLink>
         </nav>
 
         {showInstallModal ? (
@@ -351,30 +370,51 @@ export function Layout() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <ThreeDIcon type="rocket" size={48} animated />
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>irpotify Music Cloud</h4>
-                  <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem' }}>{t('install.subtitle')}</p>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>irpotify Management Cloud</h4>
+                  <p style={{ margin: '0.25rem 0 0', opacity: 0.8, fontSize: '0.85rem' }}>
+                    {/android/i.test(navigator.userAgent)
+                      ? '📱 دستگاه شناسایی‌شده: اندروید (Android)'
+                      : /iphone|ipad|ipod/i.test(navigator.userAgent)
+                      ? '🍏 دستگاه شناسایی‌شده: آیفون / آیپد (iOS)'
+                      : '💻 دستگاه شناسایی‌شده: رایانه دسکتاپ'}
+                  </p>
                 </div>
               </div>
 
-              <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#38bdf8' }}>
-                  <ThreeDIcon type="disk" size={20} />
-                  <span>{t('install.androidTitle')}</span>
+              {/android/i.test(navigator.userAgent) ? (
+                <div className="card" style={{ padding: '1rem', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#38bdf8' }}>
+                    <ThreeDIcon type="disk" size={22} />
+                    <span>نصب در اندروید (Android)</span>
+                  </div>
+                  <p style={{ margin: '0 0 0.75rem', fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
+                    برای دسترسی مستقیم به پنل مدیریت در اندروید، در منوی سه‌نقطه بالای مرورگر کروم گزینه <strong>«افزودن به صفحه اصلی» (Add to Home screen)</strong> یا <strong>«نصب برنامه»</strong> را لمس کنید.
+                  </p>
+                  <a
+                    href="https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}
+                  >
+                    <span>دانلود اپلیکیشن اختصاصی اندروید (APK)</span>
+                  </a>
                 </div>
-                <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
-                  {t('install.androidStep')}
-                </p>
-              </div>
+              ) : null}
 
-              <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#c084fc' }}>
-                  <ThreeDIcon type="headphones" size={20} />
-                  <span>{t('install.iosTitle')}</span>
+              {/iphone|ipad|ipod/i.test(navigator.userAgent) ? (
+                <div className="card" style={{ padding: '1rem', background: 'rgba(192, 132, 252, 0.08)', borderRadius: '10px', border: '1px solid rgba(192, 132, 252, 0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#c084fc' }}>
+                    <ThreeDIcon type="headphones" size={22} />
+                    <span>نصب در آیفون و آیپد (iOS)</span>
+                  </div>
+                  <ol style={{ margin: 0, paddingRight: '1.25rem', fontSize: '0.88rem', lineHeight: 1.6, opacity: 0.95 }}>
+                    <li>در مرورگر <strong>Safari</strong> دکمه <strong>Share</strong> (مربع با فلش رو به بالا) را لمس کنید.</li>
+                    <li>به سمت پایین اسکرول کرده و گزینه <strong>Add to Home Screen (افزودن به صفحه اصلی)</strong> را انتخاب کنید.</li>
+                    <li>روی <strong>Add</strong> در بالای صفحه بزنید تا آیکون روی صفحه گوشی قرار گیرد.</li>
+                  </ol>
                 </div>
-                <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.5, opacity: 0.9 }}>
-                  {t('install.iosStep')}
-                </p>
-              </div>
+              ) : null}
 
               <div className="card" style={{ padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', fontWeight: 600, color: '#1ed760' }}>
@@ -387,7 +427,7 @@ export function Layout() {
               </div>
 
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', opacity: 0.65, lineHeight: 1.4, fontStyle: 'italic' }}>
-                {t('install.lanTip')}
+                نکته: در صورتی که با آدرس IP مستقیم (بدون HTTPS) متصل هستید، مرورگر کروم اجازه نصب مستقیم وب‌اپ را غیرفعال می‌کند؛ برای نصب کافیست از منوی مرورگر Add to Home Screen را بزنید.
               </p>
             </div>
           </Modal>

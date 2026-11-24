@@ -373,6 +373,7 @@ export interface AdminMetrics {
   disk: { name: string; totalBytes: number; freeBytes: number; usedBytes: number } | null;
   database: { connected: boolean; responseMs: number };
   streams: { active: number };
+  onlineUsers?: number;
   jobs: {
     pending: number;
     processing: number;
@@ -382,6 +383,26 @@ export interface AdminMetrics {
   };
   workerHeartbeat: string | null;
   measuredAt: string;
+}
+
+export interface OnlineUserSession {
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  role: string;
+  deviceName: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+export interface OnlineUsersResponse {
+  onlineCount: number;
+  activeSessionsCount: number;
+  activeStreams: number;
+  sessions: OnlineUserSession[];
 }
 
 export interface SystemEvent {

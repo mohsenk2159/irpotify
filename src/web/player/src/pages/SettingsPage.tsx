@@ -17,11 +17,16 @@ export function SettingsPage() {
 
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showSignoutConfirm, setShowSignoutConfirm] = useState(false);
+
+  const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+  const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isWindows = typeof navigator !== 'undefined' && /windows/i.test(navigator.userAgent);
 
   useEffect(() => {
     // Check if already in standalone PWA mode
@@ -41,20 +46,25 @@ export function SettingsPage() {
     };
   }, []);
 
-  const handleInstallClick = async () => {
+  const handleInstallClick = () => {
+    setShowInstallModal(true);
+  };
+
+  const handlePwaDirectInstall = async () => {
     if (installPrompt) {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
       if (choice.outcome === 'accepted') {
         setIsInstalled(true);
-        notify('اپلیکیشن با موفقیت نصب شد', 'success');
+        notify('اپلیکیشن با موفقیت روی دستگاه شما نصب شد', 'success');
+        setShowInstallModal(false);
       }
       setInstallPrompt(null);
     } else {
       notify(
         language === 'fa'
-          ? 'از منوی مرورگر، گزینه «افزودن به صفحه اصلی» (Add to Home Screen) را انتخاب کنید.'
-          : 'From your browser menu, select "Add to Home Screen".',
+          ? 'در منوی مرورگر، گزینه «افزودن به صفحه اصلی» (Add to Home screen) را انتخاب کنید.'
+          : 'From browser menu, select "Add to Home Screen".',
         'info'
       );
     }
@@ -294,6 +304,129 @@ export function SettingsPage() {
               {t('settings.signOut')}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Smart OS-Aware Install App Modal */}
+      <Modal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        title="نصب اپلیکیشن irpotify"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.25rem 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <ThreeDIcon name="lightning" size={44} />
+            <div>
+              <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc' }}>
+                {isAndroid
+                  ? '📱 گوشی شما: اندروید (Android)'
+                  : isIOS
+                  ? '🍏 گوشی شما: آیفون / آیپد (iOS)'
+                  : '💻 سیستم شما: رایانه ویندوز / دسکتاپ'}
+              </h4>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
+                راهنمای نصب متناسب با سیستم‌عامل دستگاه شما
+              </p>
+            </div>
+          </div>
+
+          {/* Android Section */}
+          {isAndroid && (
+            <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#4ade80' }}>
+                <ThreeDIcon name="lightning" size={20} />
+                <span>۱. دانلود مستقیم اپلیکیشن اندروید (پیشنهادی)</span>
+              </div>
+              <p style={{ margin: '0 0 0.85rem', fontSize: '0.86rem', lineHeight: 1.5, color: '#e2e8f0' }}>
+                نسخه بومی اندروید دارای پخش پیوسته در پس‌زمینه (حتی در حالت خاموشی صفحه)، کنترلر در قفل صفحه و کار با دکمه‌های هندزفری است.
+              </p>
+              <a
+                href="https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-android.apk"
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', textDecoration: 'none', padding: '0.75rem' }}
+              >
+                <Icon name="arrow-down" size={16} />
+                <span>دانلود مستقیم فایل irpotify-android.apk (4.9 MB)</span>
+              </a>
+
+              <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontWeight: 600, fontSize: '0.86rem', color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                  ۲. یا نصب به عنوان وب‌اپلیکیشن (PWA):
+                </div>
+                <p style={{ margin: '0 0 0.65rem', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5 }}>
+                  در منوی سه‌نقطه بالای مرورگر کروم، گزینه <strong>«افزودن به صفحه اصلی» (Add to Home screen)</strong> یا <strong>«نصب برنامه»</strong> را انتخاب کنید.
+                </p>
+                {installPrompt && (
+                  <button
+                    className="btn-outline"
+                    style={{ width: '100%', padding: '0.6rem' }}
+                    onClick={handlePwaDirectInstall}
+                  >
+                    نصب خودکار وب‌اپ در صفحه اصلی
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* iOS Section */}
+          {isIOS && (
+            <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.25)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#c084fc' }}>
+                <ThreeDIcon name="lightning" size={20} />
+                <span>نصب در آیفون و آیپد (Apple iOS)</span>
+              </div>
+              <p style={{ margin: '0 0 0.65rem', fontSize: '0.85rem', color: '#e2e8f0' }}>
+                برای نصب برنامه در آیفون کافیست مراحل ساده زیر را در مرورگر <strong>Safari</strong> انجام دهید:
+              </p>
+              <ol style={{ margin: 0, paddingRight: '1.25rem', fontSize: '0.85rem', lineHeight: 1.6, color: '#cbd5e1' }}>
+                <li>در پایین صفحه Safari روی دکمه <strong>Share</strong> (مربع با علامت فلش رو به بالا) بزنید.</li>
+                <li>در لیست به پایین رفته و گزینه <strong>Add to Home Screen (افزودن به صفحه اصلی)</strong> را انتخاب کنید.</li>
+                <li>در گوشه بالا دکمه <strong>Add</strong> را لمس کنید.</li>
+              </ol>
+              <p style={{ margin: '0.65rem 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
+                آیکون برنامه روی صفحه آیفون قرار گرفته و به صورت تمام‌صفحه بدون نوار مرورگر اجرا می‌شود.
+              </p>
+            </div>
+          )}
+
+          {/* Desktop Section */}
+          {(isWindows || (!isAndroid && !isIOS)) && (
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '10px', padding: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontWeight: 700, color: '#38bdf8' }}>
+                <ThreeDIcon name="lightning" size={20} />
+                <span>دانلود نرم‌افزار دسکتاپ ویندوز</span>
+              </div>
+              <p style={{ margin: '0 0 0.85rem', fontSize: '0.86rem', lineHeight: 1.5, color: '#e2e8f0' }}>
+                نرم‌افزار رسمی ویندوز دارای موتور صوتی اختصاصی LibVLC با کیفیت فوق‌العاده بالا و شورت‌کات دسکتاپ است.
+              </p>
+              <a
+                href="https://github.com/mohsenk2159/irpotify/releases/download/v1.0.0/irpotify-player-win-x64-1.0.0-setup.exe"
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', textDecoration: 'none', padding: '0.75rem' }}
+              >
+                <Icon name="arrow-down" size={16} />
+                <span>دانلود نسخه رسمی ویندوز (Setup EXE)</span>
+              </a>
+              {installPrompt && (
+                <button
+                  className="btn-outline"
+                  style={{ width: '100%', marginTop: '0.75rem', padding: '0.6rem' }}
+                  onClick={handlePwaDirectInstall}
+                >
+                  نصب به عنوان وب‌اپلیکیشن دسکتاپ
+                </button>
+              )}
+            </div>
+          )}
+
+          <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4, fontStyle: 'italic' }}>
+            نکته فنی: در اتصالات بر پایه IP مستقیم (پروتکل HTTP)، مرورگر کروم اجازه نصب مستقیم وب‌اپ PWA را محدود می‌کند؛ در صورت مشاهده خطای مرورگر، حتماً از گزینه دانلود مستقیم APK اندروید استفاده نمایید.
+          </p>
         </div>
       </Modal>
     </div>

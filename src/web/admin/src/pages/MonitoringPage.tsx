@@ -40,12 +40,18 @@ export function MonitoringPage() {
     queryFn: api.dashboard.backups,
     refetchInterval: interval,
   });
+  const onlineQuery = useQuery({
+    queryKey: ['monitoring', 'online-users'],
+    queryFn: api.dashboard.onlineUsers,
+    refetchInterval: interval,
+  });
 
   const refreshAll = () => {
     void metricsQuery.refetch();
     void healthQuery.refetch();
     void eventsQuery.refetch();
     void backupsQuery.refetch();
+    void onlineQuery.refetch();
   };
 
   const metrics = metricsQuery.data;
@@ -107,6 +113,13 @@ export function MonitoringPage() {
             <div className="stat-card">
               <span className="stat-label">{t('monitoring.streams')}</span>
               <span className="stat-value">{formatNumber(metrics.streams.active)}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">افراد متصل به سرور</span>
+              <span className="stat-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 10px #10b981' }}></span>
+                {formatNumber(onlineQuery.data?.onlineCount ?? (metrics.onlineUsers ?? 0))}
+              </span>
             </div>
             <div className="stat-card">
               <span className="stat-label">{t('monitoring.database')}</span>
@@ -221,6 +234,50 @@ export function MonitoringPage() {
               ) : null}
             </Card>
           </div>
+
+          <Card title="تابلو کاربران آنلاین و دستگاه‌های متصل">
+            <p className="muted small" style={{ marginBottom: '12px' }}>
+              کاربرانی که در حال حاضر به سرور متصل بوده یا در ۱۵ دقیقه گذشته فعالیت داشته‌اند ({onlineQuery.data?.onlineCount ?? 0} کاربر آنلاین، {onlineQuery.data?.activeSessionsCount ?? 0} نشست و دستگاه فعال)
+            </p>
+            {onlineQuery.isLoading ? <LoadingState /> : null}
+            {onlineQuery.isError ? <ErrorState error={onlineQuery.error} onRetry={() => void onlineQuery.refetch()} /> : null}
+            {onlineQuery.data ? (
+              onlineQuery.data.sessions.length === 0 ? (
+                <EmptyState icon="users" title="در حال حاضر هیچ کاربری آنلاین نیست" />
+              ) : (
+                <div className="table-wrap" style={{ maxHeight: '360px', overflowY: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">نام کاربر</th>
+                        <th scope="col">ایمیل</th>
+                        <th scope="col">نقش</th>
+                        <th scope="col">دستگاه / کلاینت</th>
+                        <th scope="col">آدرس IP</th>
+                        <th scope="col">آخرین فعالیت</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {onlineQuery.data.sessions.map((session) => (
+                        <tr key={session.sessionId}>
+                          <td style={{ fontWeight: 600 }}>{session.displayName || 'کاربر'}</td>
+                          <td className="muted small">{session.email}</td>
+                          <td>
+                            <Badge tone={session.role === 'Administrator' ? 'warning' : 'info'}>
+                              {session.role === 'Administrator' ? '👑 مدیر ارشد' : '🎧 شنونده'}
+                            </Badge>
+                          </td>
+                          <td>{session.deviceName || 'دستگاه نامشخص'}</td>
+                          <td className="muted small" dir="ltr">{session.ipAddress || '—'}</td>
+                          <td className="muted small">{formatDate(session.lastSeenAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : null}
+          </Card>
         </>
       ) : null}
 

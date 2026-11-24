@@ -770,48 +770,87 @@ reset_database_volume() {
 uninstall_irpotify() {
     check_root
     echo -e "${RED}${BOLD}========================================================================${NC}"
-    echo -e "${RED}${BOLD}                     Completely Uninstall irpotify                      ${NC}"
+    echo -e "${RED}${BOLD}                     100% Clean Uninstall irpotify                      ${NC}"
     echo -e "${RED}${BOLD}========================================================================${NC}"
     echo ""
-    read -r -p "Are you sure you want to stop and remove all irpotify containers? (y/N): " confirm </dev/tty
+    read -r -p "Are you sure you want to completely uninstall irpotify? (y/N): " confirm </dev/tty
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}Uninstall cancelled.${NC}"
         read -r -p "Press Enter to continue..." </dev/tty
         return
     fi
 
-    echo -e "${YELLOW}Stopping and removing Docker containers, networks, and volumes...${NC}"
+    echo ""
+    echo -e "${YELLOW}Do you also want to permanently delete all music tracks and audio files?${NC}"
+    echo -e "  - Enter ${BOLD}y${NC}: Delete everything including all music files permanently."
+    echo -e "  - Enter ${BOLD}n${NC}: Keep music files (preserved at ${GREEN}/opt/irpotify_music_backup${NC})."
+    echo ""
+    read -r -p "Delete all music files too? (y/N): " purge_music </dev/tty
+
+    echo ""
+    echo -e "${BLUE}==>${NC} Stopping and removing all irpotify Docker containers..."
     if [ -d "$INSTALL_DIR" ]; then
         cd "$INSTALL_DIR"
         dc down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans 2>/dev/null || true
     fi
 
-    # Remove CLI command
-    rm -f "$CLI_BIN"
+    local leftover_containers
+    leftover_containers=$(docker ps -a -q --filter "name=musichub" 2>/dev/null || true)
+    if [ -n "$leftover_containers" ]; then
+        docker rm -f $leftover_containers >/dev/null 2>&1 || true
+    fi
 
-    echo ""
-    echo -e "${YELLOW}Do you also want to delete all music files and uploaded tracks? (y/N):${NC}"
-    echo -e "  - Enter ${BOLD}y${NC}: Everything including music will be permanently deleted."
-    echo -e "  - Enter ${BOLD}n${NC}: Music files will be preserved at ${GREEN}/opt/irpotify_music_backup${NC}."
-    echo ""
-    read -r -p "Your choice (y/N): " purge </dev/tty
-
-    if [[ "$purge" =~ ^[Yy]$ ]]; then
-        rm -rf "$INSTALL_DIR"
-        echo -e "${GREEN}✓ All files, containers, and databases have been completely deleted.${NC}"
+    if [[ "$purge_music" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}==>${NC} Purging all database and music volumes..."
+        local musichub_volumes
+        musichub_volumes=$(docker volume ls -q --filter "name=musichub" 2>/dev/null || true)
+        if [ -n "$musichub_volumes" ]; then
+            docker volume rm -f $musichub_volumes >/dev/null 2>&1 || true
+        fi
+        docker volume rm -f musichub_pgdata musichub_data 2>/dev/null || true
+        rm -rf /opt/irpotify_music_backup
     else
-        echo -e "${BLUE}Backing up and preserving music files...${NC}"
+        echo -e "${BLUE}==>${NC} Safely preserving music files to /opt/irpotify_music_backup..."
         mkdir -p /opt/irpotify_music_backup
         if [ -d "$INSTALL_DIR/storage/music" ]; then
             cp -r "$INSTALL_DIR/storage/music"/* /opt/irpotify_music_backup/ 2>/dev/null || true
         fi
-        rm -rf "$INSTALL_DIR"
-        echo -e "${GREEN}✓ irpotify has been completely uninstalled.${NC}"
-        echo -e "${GREEN}✓ Your music files are preserved at: ${BOLD}/opt/irpotify_music_backup${NC}"
+        local vol_path
+        vol_path=$(docker volume inspect musichub_data --format '{{.Mountpoint}}' 2>/dev/null || true)
+        if [ -n "$vol_path" ] && [ -d "$vol_path/music" ]; then
+            cp -r "$vol_path/music"/* /opt/irpotify_music_backup/ 2>/dev/null || true
+        fi
+        docker volume rm -f musichub_pgdata 2>/dev/null || true
     fi
 
+    local musichub_networks
+    musichub_networks=$(docker network ls -q --filter "name=musichub" 2>/dev/null || true)
+    if [ -n "$musichub_networks" ]; then
+        docker network rm $musichub_networks >/dev/null 2>&1 || true
+    fi
+
+    rm -f "$CLI_BIN"
+    rm -rf "$INSTALL_DIR"
+
     echo ""
-    echo -e "${CYAN}Running the install command again will now start a fresh installation wizard.${NC}"
+    echo -e "${GREEN}${BOLD}========================================================================${NC}"
+    echo -e "${GREEN}${BOLD}    irpotify has been 100% completely uninstalled from this server!    ${NC}"
+    echo -e "${GREEN}${BOLD}========================================================================${NC}"
+    if [[ "$purge_music" =~ ^[Yy]$ ]]; then
+        echo -e "✓ Containers: Removed"
+        echo -e "✓ Database & Volumes: Removed"
+        echo -e "✓ Installation Directory: Removed"
+        echo -e "✓ Music Files: 100% Permanently Deleted"
+    else
+        echo -e "✓ Containers: Removed"
+        echo -e "✓ Database Volume: Removed"
+        echo -e "✓ Installation Directory: Removed"
+        echo -e "✓ Music Files: ${GREEN}${BOLD}Preserved at /opt/irpotify_music_backup${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}Running the install command will now start a 100% clean, fresh installation wizard:${NC}"
+    echo -e "${GREEN}curl -fsSL https://raw.githubusercontent.com/mohsenk2159/irpotify/main/install.sh | sudo bash${NC}"
+    echo -e "${GREEN}${BOLD}========================================================================${NC}"
     echo ""
     exit 0
 }

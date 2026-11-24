@@ -111,6 +111,7 @@ public static class DashboardEndpoints
                 disk = DiskSnapshot(drive),
                 database = new { connected = dbConnected, responseMs = Math.Round(dbMilliseconds, 1) },
                 streams = new { active = streams.Active },
+                onlineUsers = await db.UserSessions.AsNoTracking().Where(x => x.RevokedAt == null && x.LastSeenAt > DateTimeOffset.UtcNow.AddMinutes(-15)).Select(x => x.UserId).Distinct().CountAsync(ct),
                 jobs = new
                 {
                     pending = await db.BackgroundJobs.CountAsync(x => x.Status == JobStatus.Pending, ct),
@@ -147,6 +148,36 @@ public static class DashboardEndpoints
         {
             var rows = await db.SystemEvents.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(Math.Clamp(limit ?? 50, 1, 200)).ToListAsync(ct);
             return Results.Ok(rows);
+        });
+
+        app.MapGet("/api/admin/online-users", [Authorize(Policy = "Admin")] async (MusicHubDbContext db, StreamTracker streams, CancellationToken ct) =>
+        {
+            var threshold = DateTimeOffset.UtcNow.AddMinutes(-15);
+            var sessions = await db.UserSessions.AsNoTracking()
+                .Where(x => x.RevokedAt == null && x.LastSeenAt >= threshold)
+                .OrderByDescending(x => x.LastSeenAt)
+                .Select(x => new
+                {
+                    sessionId = x.Id,
+                    userId = x.UserId,
+                    displayName = x.User.DisplayName,
+                    email = x.User.Email,
+                    role = x.User.UserRoles.Select(r => r.Role.Name).FirstOrDefault() ?? "User",
+                    deviceName = x.DeviceName,
+                    ipAddress = x.IpAddress,
+                    userAgent = x.UserAgent,
+                    createdAt = x.CreatedAt,
+                    lastSeenAt = x.LastSeenAt
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(new
+            {
+                onlineCount = sessions.Select(x => x.userId).Distinct().Count(),
+                activeSessionsCount = sessions.Count,
+                activeStreams = streams.Active,
+                sessions
+            });
         });
     }
 
