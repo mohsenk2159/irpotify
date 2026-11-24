@@ -116,7 +116,7 @@ export function MonitoringPage() {
               <span className="stat-value">{formatNumber(metrics.streams.active)}</span>
             </div>
             <div className="stat-card">
-              <span className="stat-label">افراد متصل به سرور</span>
+              <span className="stat-label">{t('monitoring.connectedUsers')}</span>
               <span className="stat-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 10px #10b981' }}></span>
                 {formatNumber(onlineQuery.data?.onlineCount ?? (metrics.onlineUsers ?? 0))}
