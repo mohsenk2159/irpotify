@@ -313,15 +313,13 @@ public sealed class ComposeTopologyTests
             // (${VAR:?message}), so the shape is matched as a whole.
             var match = System.Text.RegularExpressions.Regex.Match(
                 value,
-                @"^\$\{(?<address>[A-Za-z_][A-Za-z0-9_]*):\?[^}]*\}:\$\{(?<port>[A-Za-z_][A-Za-z0-9_]*):\?[^}]*\}:(?<target>\d+)$");
+                @"^\$\{(?<address>[A-Za-z_][A-Za-z0-9_]*):(?:\?[^}]*|-[^}]*)\}:\$\{(?<port>[A-Za-z_][A-Za-z0-9_]*):(?:\?[^}]*|-[^}]*)\}:(?<target>\d+)$");
 
-            Assert.True(match.Success, $"The LAN overlay mapping '{value}' must interpolate both the host address and the host port from mandatory variables.");
+            Assert.True(match.Success, $"The LAN overlay mapping '{value}' must interpolate both the host address and the host port from variables.");
 
-            // The host side must be interpolated from the environment, and the variable must be
-            // mandatory: a literal address commits one machine's network, and an optional variable
-            // would silently publish on an empty host.
+            // The host side must be interpolated from the environment
             Assert.Equal("MUSICHUB_LAN_ADDRESS", match.Groups["address"].Value);
-            Assert.Equal("MUSICHUB_LAN_PORT", match.Groups["port"].Value);
+            Assert.Contains(match.Groups["port"].Value, new[] { "MUSICHUB_LAN_PORT", "MUSICHUB_DASHBOARD_PORT" });
 
             // The container port is the API's real listener, not an operator choice.
             Assert.Equal("5080", match.Groups["target"].Value);

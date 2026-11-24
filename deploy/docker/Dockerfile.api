@@ -91,8 +91,11 @@ ARG APP_GID=1654
 # The API analyses every upload in-process (AudioProbeService: ffprobe metadata + ffmpeg artwork
 # extraction), so both binaries must be present; /api/health reports ffprobe availability.
 # curl exists only for the container HEALTHCHECK.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg curl \
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
+ && for i in 1 2 3 4 5; do \
+        (apt-get update -y && apt-get install -y --no-install-recommends ffmpeg curl) && break || \
+        (echo "apt-get failed, retrying in 3 seconds ($i/5)..." && sleep 3); \
+    done \
  && rm -rf /var/lib/apt/lists/*
 
 # MUSICHUB_DATA_ROOT is the persistent root (music, artwork, quarantine, DataProtection key ring)

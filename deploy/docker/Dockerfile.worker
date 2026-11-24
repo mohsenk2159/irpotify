@@ -47,8 +47,11 @@ ARG APP_GID=1654
 
 # ffmpeg/ffprobe: integrity scans and artwork/metadata work performed by the maintenance and
 # Telegram pipelines. procps: `pgrep` for the liveness HEALTHCHECK.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg procps \
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
+ && for i in 1 2 3 4 5; do \
+        (apt-get update -y && apt-get install -y --no-install-recommends ffmpeg procps) && break || \
+        (echo "apt-get failed, retrying in 3 seconds ($i/5)..." && sleep 3); \
+    done \
  && rm -rf /var/lib/apt/lists/*
 
 ENV DOTNET_ENVIRONMENT=Production \

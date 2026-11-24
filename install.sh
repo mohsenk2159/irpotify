@@ -104,6 +104,57 @@ install_docker_if_needed() {
 }
 
 # ------------------------------------------------------------------------------
+# Resilient Docker DNS Configuration (Fixes container build DNS failures)
+# ------------------------------------------------------------------------------
+configure_docker_dns() {
+    echo -e "${BLUE}==>${NC} ${BOLD}Configuring resilient Docker DNS resolvers...${NC}"
+    mkdir -p /etc/docker
+    local daemon_json="/etc/docker/daemon.json"
+    local needs_restart=false
+
+    if [ ! -f "$daemon_json" ]; then
+        cat << 'EOF' > "$daemon_json"
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "dns": ["1.1.1.1", "8.8.8.8", "1.0.0.1", "9.9.9.9"]
+}
+EOF
+        needs_restart=true
+    elif ! grep -q '"dns"' "$daemon_json" 2>/dev/null; then
+        if command -v python3 >/dev/null 2>&1; then
+            python3 -c '
+import json
+p = "/etc/docker/daemon.json"
+try:
+    with open(p, "r") as f:
+        d = json.load(f)
+    if "dns" not in d:
+        d["dns"] = ["1.1.1.1", "8.8.8.8", "1.0.0.1", "9.9.9.9"]
+        with open(p, "w") as f:
+            json.dump(d, f, indent=2)
+except Exception:
+    pass
+'
+            needs_restart=true
+        else
+            sed -i '0,/{/s/{/{\n  "dns": ["1.1.1.1", "8.8.8.8", "1.0.0.1", "9.9.9.9"],/' "$daemon_json"
+            needs_restart=true
+        fi
+    fi
+
+    if [ "$needs_restart" = true ]; then
+        echo -e "${YELLOW}Applying Docker DNS configuration...${NC}"
+        systemctl restart docker >/dev/null 2>&1 || service docker restart >/dev/null 2>&1 || true
+        sleep 2
+    fi
+    echo -e "${GREEN}✓${NC} Docker DNS resolvers ready."
+}
+
+# ------------------------------------------------------------------------------
 # Helper for validating port numbers
 # ------------------------------------------------------------------------------
 validate_port() {
@@ -136,6 +187,7 @@ setup_irpotify() {
     check_root
     install_dependencies
     install_docker_if_needed
+    configure_docker_dns
 
     local server_ip
     server_ip=$(detect_public_ip)
@@ -240,16 +292,29 @@ setup_irpotify() {
         fi
     fi
 
-    echo -e "${BLUE}==>${NC} Generating secure cryptographic secrets and passwords..."
-    local pg_password
-    local jwt_secret
-    local bootstrap_token
-    pg_password=$(openssl rand -hex 32)
-    jwt_secret=$(openssl rand -hex 64)
+    echo -e "${BLUE}==>${NC} Configuring environment secrets and passwords..."
+    local pg_password=""
+    local jwt_secret=""
+    local bootstrap_token=""
+
+    # Preserve existing credentials if reinstalling or updating
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        pg_password=$(grep -E '^POSTGRES_PASSWORD=' "$INSTALL_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d ' "\r\n' || true)
+        jwt_secret=$(grep -E '^MUSICHUB_JWT_SECRET=' "$INSTALL_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d ' "\r\n' || true)
+    fi
+
+    if [ -z "$pg_password" ]; then
+        pg_password=$(openssl rand -hex 32)
+    fi
+    if [ -z "$jwt_secret" ]; then
+        jwt_secret=$(openssl rand -hex 64)
+    fi
     bootstrap_token=$(openssl rand -hex 32)
 
     echo -e "${BLUE}==>${NC} Configuring environment file (.env)..."
-    cp .env.example .env
+    if [ ! -f .env ]; then
+        cp .env.example .env
+    fi
 
     # Apply configuration to .env using reliable set_env_var
     set_env_var "POSTGRES_PASSWORD" "${pg_password}"
@@ -272,7 +337,26 @@ setup_irpotify() {
     chmod 600 .env
 
     echo -e "${BLUE}==>${NC} Building and starting containers (this may take 2-3 minutes)..."
-    dc up -d --build
+    if ! dc up -d --build; then
+        echo ""
+        echo -e "${RED}${BOLD}========================================================================${NC}"
+        echo -e "${RED}${BOLD}               Container startup failed! Inspecting logs...             ${NC}"
+        echo -e "${RED}${BOLD}========================================================================${NC}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}--- API Container Logs (last 50 lines) ---${NC}"
+        dc logs api --tail=50 || true
+        echo ""
+        echo -e "${YELLOW}${BOLD}--- PostgreSQL Container Logs (last 30 lines) ---${NC}"
+        dc logs postgres --tail=30 || true
+        echo ""
+        echo -e "${RED}${BOLD}Diagnostics & Self-Healing:${NC}"
+        echo -e "If the logs indicate ${YELLOW}'password authentication failed for user \"musichub\"'${NC},"
+        echo -e "the existing PostgreSQL volume was initialized with an earlier password."
+        echo -e "To perform a clean database volume reset, run:"
+        echo -e "  ${CYAN}${BOLD}cd $INSTALL_DIR && docker compose down -v && docker compose up -d${NC}"
+        echo -e "${RED}${BOLD}========================================================================${NC}"
+        exit 1
+    fi
 
     # Create the helper CLI script
     create_cli_command
@@ -356,6 +440,9 @@ case "$1" in
         ;;
     ssl)
         bash "$CLI_SCRIPT" --ssl
+        ;;
+    reset-db)
+        bash "$CLI_SCRIPT" --reset-db
         ;;
     uninstall)
         bash "$CLI_SCRIPT" --uninstall
@@ -614,6 +701,39 @@ manage_domain_and_ssl() {
 }
 
 # ------------------------------------------------------------------------------
+# Reset Database Volume (Fixes password mismatch and reinitializes database)
+# ------------------------------------------------------------------------------
+reset_database_volume() {
+    check_root
+    echo -e "${RED}${BOLD}========================================================================${NC}"
+    echo -e "${RED}${BOLD}                  Reset PostgreSQL Database Volume                      ${NC}"
+    echo -e "${RED}${BOLD}========================================================================${NC}"
+    echo -e "${YELLOW}This will wipe the current database container volume and re-initialize it${NC}"
+    echo -e "${YELLOW}using the POSTGRES_PASSWORD defined in .env.${NC}"
+    echo -e "${YELLOW}Uploaded music files and storage will NOT be deleted.${NC}"
+    echo ""
+    read -r -p "Are you sure you want to reset the database? (y/N): " confirm </dev/tty
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Database reset cancelled.${NC}"
+        read -r -p "Press Enter to continue..." </dev/tty
+        return
+    fi
+
+    echo -e "${BLUE}Stopping containers and resetting PostgreSQL volume...${NC}"
+    cd "$INSTALL_DIR"
+    dc down -v
+    echo -e "${BLUE}Starting containers with new database...${NC}"
+    if ! dc up -d; then
+        echo -e "${RED}[ERROR] Failed to start containers.${NC}"
+        dc logs api --tail=30
+    else
+        echo -e "${GREEN}✓ Database volume successfully reset and containers started!${NC}"
+    fi
+    echo ""
+    read -r -p "Press Enter to continue..." </dev/tty
+}
+
+# ------------------------------------------------------------------------------
 # Complete Clean Uninstall Feature
 # ------------------------------------------------------------------------------
 uninstall_irpotify() {
@@ -687,13 +807,14 @@ show_menu() {
         echo -e "  ${GREEN}8)${NC} ${BOLD}Reset Account Password (Reset Password)${NC}"
         echo -e "  ${PURPLE}9)${NC} ${BOLD}Change Listening Ports (Dashboard & Player Ports)${NC}"
         echo -e "  ${CYAN}10)${NC} ${BOLD}Domain & SSL Management (acme.sh / Caddy SSL)${NC}"
-        echo -e "  ${RED}11)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Clean Uninstall)${NC}"
+        echo -e "  ${YELLOW}11)${NC} ${YELLOW}${BOLD}Reset Database Volume (Fix password mismatch / Fresh DB)${NC}"
+        echo -e "  ${RED}12)${NC} ${RED}${BOLD}Completely Uninstall irpotify (Clean Uninstall)${NC}"
         echo -e "  ${YELLOW}0)${NC} Exit"
         echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
         echo ""
 
         local op
-        read -r -p "Select an option [0-11]: " op </dev/tty
+        read -r -p "Select an option [0-12]: " op </dev/tty
         echo ""
 
         case "$op" in
@@ -779,6 +900,9 @@ show_menu() {
                 manage_domain_and_ssl
                 ;;
             11)
+                reset_database_volume
+                ;;
+            12)
                 uninstall_irpotify
                 ;;
             0)
@@ -802,6 +926,10 @@ elif [ "$1" == "--ports" ]; then
     manage_ports
 elif [ "$1" == "--ssl" ]; then
     manage_domain_and_ssl
+elif [ "$1" == "--reset-db" ]; then
+    reset_database_volume
+elif [ "$1" == "--configure-dns" ]; then
+    configure_docker_dns
 elif [ "$1" == "--uninstall" ]; then
     uninstall_irpotify
 elif [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.env" ]; then

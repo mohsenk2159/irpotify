@@ -109,6 +109,7 @@ sudo irpotify restart     # Graceful restart of all services
 sudo irpotify update      # Pull latest GitHub updates and rebuild
 sudo irpotify ports       # Change or reconfigure Dashboard & Player ports
 sudo irpotify ssl         # Domain & SSL Management (acme.sh / Caddy SSL)
+sudo irpotify reset-db    # Reset PostgreSQL volume (fixes password mismatch)
 sudo irpotify credentials # Display bootstrap token and URLs
 sudo irpotify reset-password # Reset admin or user password via CLI
 sudo irpotify uninstall   # Completely and cleanly remove irpotify
