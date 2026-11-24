@@ -231,6 +231,7 @@ public static class SettingsEndpoints
     private static readonly HashSet<string> AllowedKeys =
     [
         "server.name", "server.publicBaseUrl", "server.publicUrlEnabled", "server.lanBaseUrl", "server.lanUrlEnabled",
+        "server.localIp", "server.publicIpOrDomain", "server.dashboardPort", "server.playerPort",
         "server.maintenanceMode", "ui.defaultTheme", "ui.defaultLanguage",
         "storage.maxUploadBytes", MaxConcurrentPerUserKey, "telegram.enabled"
     ];
@@ -242,20 +243,36 @@ public static class SettingsEndpoints
             var stored = await db.AppSettings.AsNoTracking().Where(x => AllowedKeys.Contains(x.Key)).ToDictionaryAsync(x => x.Key, x => x.Value, ct);
             var localIp = NetworkAddressDetector.DetectLocalIPv4();
             var isDockerBridge = localIp.StartsWith("172.17.") || localIp.StartsWith("172.18.") || localIp.StartsWith("172.19.") || localIp.StartsWith("172.20.");
-            var defaultLanPort = Environment.GetEnvironmentVariable("MUSICHUB_LAN_PORT") ?? "5080";
-            var defaultLanUrl = isDockerBridge ? string.Empty : $"http://{localIp}:{defaultLanPort}";
-            var defaultPublicUrl = Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty;
+            var detectedPublicIp = await NetworkAddressDetector.DetectPublicIPv4Async(ct);
+
+            var dashboardPort = Get(stored, "server.dashboardPort", Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT") ?? "5080");
+            var playerPort = Get(stored, "server.playerPort", Environment.GetEnvironmentVariable("MUSICHUB_PLAYER_PORT") ?? "5081");
+
+            var resolvedLocalIp = Get(stored, "server.localIp", isDockerBridge ? string.Empty : localIp);
+            var resolvedPublicIpOrDomain = Get(stored, "server.publicIpOrDomain", !string.IsNullOrWhiteSpace(detectedPublicIp) ? detectedPublicIp : string.Empty);
+
+            var defaultLanUrl = !string.IsNullOrWhiteSpace(resolvedLocalIp) ? $"http://{resolvedLocalIp}:{playerPort}" : string.Empty;
+            var defaultPublicUrl = !string.IsNullOrWhiteSpace(resolvedPublicIpOrDomain)
+                ? (resolvedPublicIpOrDomain.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || resolvedPublicIpOrDomain.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                    ? resolvedPublicIpOrDomain
+                    : (System.Net.IPAddress.TryParse(resolvedPublicIpOrDomain, out _) ? $"http://{resolvedPublicIpOrDomain}:{playerPort}" : $"https://{resolvedPublicIpOrDomain}"))
+                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty);
 
             return Results.Ok(new
             {
                 values = new
                 {
                     serverName = Get(stored, "server.name", config["Server:Name"] ?? "MusicHub Enterprise"),
+                    localIp = resolvedLocalIp,
+                    publicIpOrDomain = resolvedPublicIpOrDomain,
+                    dashboardPort,
+                    playerPort,
                     publicBaseUrl = Get(stored, "server.publicBaseUrl", defaultPublicUrl),
                     publicUrlEnabled = !stored.TryGetValue("server.publicUrlEnabled", out var pEn) || pEn != "false",
                     lanBaseUrl = Get(stored, "server.lanBaseUrl", defaultLanUrl),
                     lanUrlEnabled = !stored.TryGetValue("server.lanUrlEnabled", out var lEn) || lEn != "false",
                     detectedLocalIp = isDockerBridge ? string.Empty : localIp,
+                    detectedPublicIp,
                     maintenanceMode = bool.TryParse(Get(stored, "server.maintenanceMode", "false"), out var maintenance) && maintenance,
                     defaultTheme = Get(stored, "ui.defaultTheme", "dark"),
                     defaultLanguage = Get(stored, "ui.defaultLanguage", "en"),
@@ -272,10 +289,62 @@ public static class SettingsEndpoints
             });
         });
 
-        app.MapPut("/api/admin/settings", [Authorize(Policy = "Admin")] async (Dictionary<string, string> values, ClaimsPrincipal principal, MusicHubDbContext db, HttpContext http, CancellationToken ct) =>
+        app.MapPut("/api/admin/settings", [Authorize(Policy = "Admin")] async (Dictionary<string, string> values, ClaimsPrincipal principal, MusicHubDbContext db, IOptions<StorageOptions> storage, HttpContext http, CancellationToken ct) =>
         {
             var rejected = values.Keys.Where(x => !AllowedKeys.Contains(x)).ToList();
             if (rejected.Count > 0) return Results.BadRequest(new { error = "Unknown settings keys.", rejected });
+
+            // Port validation
+            var dPortStr = values.TryGetValue("server.dashboardPort", out var dVal) ? dVal : null;
+            var pPortStr = values.TryGetValue("server.playerPort", out var pVal) ? pVal : null;
+
+            int? newDPort = null;
+            int? newPPort = null;
+
+            if (!string.IsNullOrWhiteSpace(dPortStr))
+            {
+                if (!int.TryParse(dPortStr, out var dp) || dp < 1024 || dp > 65535)
+                {
+                    return Results.BadRequest(new { error = "پورت داشبورد باید عددی معتبر بین 1024 تا 65535 باشد." });
+                }
+                newDPort = dp;
+            }
+
+            if (!string.IsNullOrWhiteSpace(pPortStr))
+            {
+                if (!int.TryParse(pPortStr, out var pp) || pp < 1024 || pp > 65535)
+                {
+                    return Results.BadRequest(new { error = "پورت وب‌پلیر باید عددی معتبر بین 1024 تا 65535 باشد." });
+                }
+                newPPort = pp;
+            }
+
+            if (newDPort.HasValue && newPPort.HasValue && newDPort.Value == newPPort.Value)
+            {
+                return Results.BadRequest(new { error = "پورت داشبورد مدیریت و پورت وب‌پلیر نمی‌توانند یکسان باشند. لطفاً دو پورت متفاوت انتخاب کنید." });
+            }
+
+            var currentDPort = newDPort ?? PortHelper.GetConfiguredDashboardPort();
+            var currentPPort = newPPort ?? PortHelper.GetConfiguredPlayerPort();
+
+            // Auto-format LAN & Public Base URLs
+            if (values.TryGetValue("server.localIp", out var lIp) && !string.IsNullOrWhiteSpace(lIp))
+            {
+                var cleanIp = lIp.Trim().Replace("http://", "").Replace("https://", "").TrimEnd('/');
+                if (cleanIp.Contains(':')) cleanIp = cleanIp.Split(':')[0];
+                values["server.localIp"] = cleanIp;
+                values["server.lanBaseUrl"] = $"http://{cleanIp}:{currentPPort}";
+            }
+
+            if (values.TryGetValue("server.publicIpOrDomain", out var pubIpDomain) && !string.IsNullOrWhiteSpace(pubIpDomain))
+            {
+                var cleanPub = pubIpDomain.Trim().Replace("http://", "").Replace("https://", "").TrimEnd('/');
+                if (cleanPub.Contains(':')) cleanPub = cleanPub.Split(':')[0];
+                values["server.publicIpOrDomain"] = cleanPub;
+                values["server.publicBaseUrl"] = System.Net.IPAddress.TryParse(cleanPub, out _)
+                    ? $"http://{cleanPub}:{currentPPort}"
+                    : $"https://{cleanPub}";
+            }
 
             if (values.TryGetValue("server.publicBaseUrl", out var pUrl) && !string.IsNullOrWhiteSpace(pUrl))
             {
@@ -302,6 +371,32 @@ public static class SettingsEndpoints
             }
             AuditWriter.Add(db, principal, "settings.update", "AppSetting", null, System.Text.Json.JsonSerializer.Serialize(values.Keys), RequestHelpers.Ip(http));
             await db.SaveChangesAsync(ct);
+
+            // Synchronize .env on disk and write port_config.json
+            var localIpVal = values.TryGetValue("server.localIp", out var valLIp) ? valLIp : null;
+            var publicIpVal = values.TryGetValue("server.publicIpOrDomain", out var valPub) ? valPub : null;
+            var publicUrlVal = values.TryGetValue("server.publicBaseUrl", out var valPUrl) ? valPUrl : null;
+
+            PortHelper.TryUpdateEnvFile(currentDPort, currentPPort, localIpVal, publicIpVal, publicUrlVal);
+
+            try
+            {
+                var dataRoot = storage.Value.RootPath ?? Environment.GetEnvironmentVariable("MUSICHUB_DATA_ROOT") ?? "/var/lib/musichub";
+                var portConfigFile = Path.Combine(dataRoot, "port_config.json");
+                var configPayload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    dashboardPort = currentDPort,
+                    playerPort = currentPPort,
+                    localIp = localIpVal,
+                    publicIpOrDomain = publicIpVal,
+                    lanBaseUrl = values.GetValueOrDefault("server.lanBaseUrl"),
+                    publicBaseUrl = values.GetValueOrDefault("server.publicBaseUrl"),
+                    updatedAt = DateTimeOffset.UtcNow
+                }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(portConfigFile, configPayload);
+            }
+            catch { }
+
             return Results.NoContent();
         });
     }

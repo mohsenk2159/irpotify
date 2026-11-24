@@ -21,9 +21,14 @@ const MB = 1024 * 1024;
 
 interface SettingsForm {
   serverName: string;
+  localIp: string;
+  dashboardPort: string;
+  playerPort: string;
+  publicIpOrDomain: string;
   publicBaseUrl: string;
   lanBaseUrl: string;
   detectedLocalIp: string;
+  detectedPublicIp: string;
   defaultTheme: 'dark' | 'light';
   defaultLanguage: 'en' | 'fa';
   maxUploadMb: string;
@@ -32,9 +37,14 @@ interface SettingsForm {
 
 const FALLBACK_FORM: SettingsForm = {
   serverName: '',
+  localIp: '',
+  dashboardPort: '5080',
+  playerPort: '5081',
+  publicIpOrDomain: '',
   publicBaseUrl: '',
   lanBaseUrl: '',
   detectedLocalIp: '',
+  detectedPublicIp: '',
   defaultTheme: 'dark',
   defaultLanguage: 'en',
   maxUploadMb: '1024',
@@ -53,11 +63,39 @@ export function SettingsPage() {
   useEffect(() => {
     const values = settingsQuery.data?.values;
     if (!values) return;
+
+    let localIp = values.localIp || '';
+    if (!localIp && values.lanBaseUrl) {
+      try {
+        const u = new URL(values.lanBaseUrl);
+        localIp = u.hostname;
+      } catch {}
+    }
+    if (!localIp && values.detectedLocalIp) {
+      localIp = values.detectedLocalIp;
+    }
+
+    let publicIpOrDomain = values.publicIpOrDomain || '';
+    if (!publicIpOrDomain && values.publicBaseUrl) {
+      try {
+        const u = new URL(values.publicBaseUrl);
+        publicIpOrDomain = u.hostname;
+      } catch {}
+    }
+    if (!publicIpOrDomain && values.detectedPublicIp) {
+      publicIpOrDomain = values.detectedPublicIp;
+    }
+
     setForm({
       serverName: values.serverName,
+      localIp,
+      dashboardPort: values.dashboardPort || '5080',
+      playerPort: values.playerPort || '5081',
+      publicIpOrDomain,
       publicBaseUrl: values.publicBaseUrl,
       lanBaseUrl: values.lanBaseUrl ?? '',
       detectedLocalIp: values.detectedLocalIp ?? '',
+      detectedPublicIp: values.detectedPublicIp ?? '',
       defaultTheme: values.defaultTheme === 'light' ? 'light' : 'dark',
       defaultLanguage: values.defaultLanguage === 'fa' ? 'fa' : 'en',
       maxUploadMb: String(Math.round((values.maxUploadBytes / MB) * 100) / 100),
@@ -94,16 +132,25 @@ export function SettingsPage() {
     event.preventDefault();
     setFormError(null);
 
-    const publicUrl = form.publicBaseUrl.trim();
-    if (publicUrl && !publicUrl.startsWith('http://') && !publicUrl.startsWith('https://')) {
-      setFormError(t('settings.urlProtocolRequired'));
+    const dPort = parseInt(form.dashboardPort, 10);
+    const pPort = parseInt(form.playerPort, 10);
+    if (!Number.isInteger(dPort) || dPort < 1024 || dPort > 65535 || !Number.isInteger(pPort) || pPort < 1024 || pPort > 65535) {
+      setFormError(t('settings.invalidPortRange'));
+      return;
+    }
+    if (dPort === pPort) {
+      setFormError(t('settings.portsMustDiffer'));
       return;
     }
 
-    const lanUrl = form.lanBaseUrl.trim();
-    if (lanUrl && !lanUrl.startsWith('http://') && !lanUrl.startsWith('https://')) {
-      setFormError(t('settings.urlProtocolRequired'));
-      return;
+    const cleanLocalIp = form.localIp.trim().replace(/^https?:\/\//i, '').replace(/:\d+$/, '').trim();
+    const cleanPublicIpOrDomain = form.publicIpOrDomain.trim().replace(/^https?:\/\//i, '').replace(/:\d+$/, '').trim();
+
+    const computedLanUrl = cleanLocalIp ? `http://${cleanLocalIp}:${pPort}` : '';
+    let computedPublicUrl = '';
+    if (cleanPublicIpOrDomain) {
+      const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(cleanPublicIpOrDomain);
+      computedPublicUrl = isIp ? `http://${cleanPublicIpOrDomain}:${pPort}` : `https://${cleanPublicIpOrDomain}`;
     }
 
     const maxMb = Number(form.maxUploadMb);
@@ -115,8 +162,12 @@ export function SettingsPage() {
 
     saveMutation.mutate({
       'server.name': form.serverName.trim(),
-      'server.publicBaseUrl': publicUrl,
-      'server.lanBaseUrl': lanUrl,
+      'server.localIp': cleanLocalIp,
+      'server.dashboardPort': String(dPort),
+      'server.playerPort': String(pPort),
+      'server.publicIpOrDomain': cleanPublicIpOrDomain,
+      'server.lanBaseUrl': computedLanUrl,
+      'server.publicBaseUrl': computedPublicUrl,
       'ui.defaultTheme': form.defaultTheme,
       'ui.defaultLanguage': form.defaultLanguage,
       'storage.maxUploadBytes': String(Math.round(maxMb * MB)),
@@ -160,38 +211,247 @@ export function SettingsPage() {
                 />
               </Field>
 
-              {/* Network & Remote Connection Section */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem', marginTop: '0.5rem' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 0.35rem' }}>
-                  {t('settings.networkTitle')}
-                </h3>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
-                  {t('settings.networkSubtitle')}
-                  {form.detectedLocalIp ? ` (${t('settings.detectedLocalIp', { ip: form.detectedLocalIp })})` : ''}
-                </p>
+              {/* 1. Local / LAN Server Configuration Card */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: '1.25rem',
+                  marginTop: '1.25rem',
+                }}
+              >
+                <div
+                  style={{
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    marginBottom: '1.25rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '18px' }}>🏠</span>
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
+                      {t('settings.lanSectionTitle')}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
+                    {t('settings.lanSectionSubtitle')}
+                  </p>
 
-                <Field label={t('settings.lanBaseUrl')} htmlFor="settings-lan-url" hint={t('settings.lanBaseUrlHint')}>
-                  <Input
-                    id="settings-lan-url"
-                    type="url"
-                    inputMode="url"
-                    placeholder="http://192.168.1.50:5080"
-                    value={form.lanBaseUrl}
-                    onChange={(event) => setForm((current) => ({ ...current, lanBaseUrl: event.target.value }))}
-                  />
-                </Field>
-
-                <div style={{ marginTop: '0.75rem' }}>
-                  <Field label={t('settings.publicBaseUrl')} htmlFor="settings-public-url" hint={t('settings.publicBaseUrlHint')}>
+                  <Field
+                    label={t('settings.localIp')}
+                    htmlFor="settings-local-ip"
+                    hint={
+                      form.detectedLocalIp ? (
+                        <span>
+                          {t('settings.localIpHint')}{' '}
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, localIp: form.detectedLocalIp }))}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--primary)',
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              padding: 0,
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {t('settings.useDetectedLocalIp')}: {form.detectedLocalIp}
+                          </button>
+                        </span>
+                      ) : (
+                        t('settings.localIpHint')
+                      )
+                    }
+                  >
                     <Input
-                      id="settings-public-url"
-                      type="url"
-                      inputMode="url"
-                      placeholder="https://music.example.com or http://203.0.113.10:5080"
-                      value={form.publicBaseUrl}
-                      onChange={(event) => setForm((current) => ({ ...current, publicBaseUrl: event.target.value }))}
+                      id="settings-local-ip"
+                      value={form.localIp}
+                      placeholder="192.168.10.20"
+                      onChange={(e) => setForm((f) => ({ ...f, localIp: e.target.value }))}
                     />
                   </Field>
+
+                  <div className="form-grid two" style={{ marginTop: '0.75rem' }}>
+                    <Field label={t('settings.dashboardPort')} htmlFor="settings-dashboard-port" hint={t('settings.dashboardPortHint')}>
+                      <Input
+                        id="settings-dashboard-port"
+                        type="number"
+                        min={1024}
+                        max={65535}
+                        value={form.dashboardPort}
+                        onChange={(e) => setForm((f) => ({ ...f, dashboardPort: e.target.value }))}
+                      />
+                    </Field>
+                    <Field label={t('settings.playerPort')} htmlFor="settings-player-port" hint={t('settings.playerPortHint')}>
+                      <Input
+                        id="settings-player-port"
+                        type="number"
+                        min={1024}
+                        max={65535}
+                        value={form.playerPort}
+                        onChange={(e) => setForm((f) => ({ ...f, playerPort: e.target.value }))}
+                      />
+                    </Field>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: '1rem',
+                      padding: '10px 14px',
+                      background: 'var(--surface-1)',
+                      border: '1px dashed var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>👑 {t('settings.lanDashboardUrl')}: </span>
+                      <code style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                        http://{form.localIp || '192.168.x.x'}:{form.dashboardPort}
+                      </code>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>🎧 {t('settings.lanPlayerUrl')}: </span>
+                      <code style={{ color: '#1db954', fontWeight: 600 }}>
+                        http://{form.localIp || '192.168.x.x'}:{form.playerPort}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Public / Internet Server Configuration Card */}
+                <div
+                  style={{
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    marginBottom: '1.25rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '18px' }}>🌐</span>
+                    <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
+                      {t('settings.publicSectionTitle')}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem' }}>
+                    {t('settings.publicSectionSubtitle')}
+                  </p>
+
+                  <Field
+                    label={t('settings.publicIpOrDomain')}
+                    htmlFor="settings-public-host"
+                    hint={
+                      form.detectedPublicIp ? (
+                        <span>
+                          {t('settings.publicIpOrDomainHint')}{' '}
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, publicIpOrDomain: form.detectedPublicIp }))}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--primary)',
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              padding: 0,
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {t('settings.useDetectedPublicIp')}: {form.detectedPublicIp}
+                          </button>
+                        </span>
+                      ) : (
+                        t('settings.publicIpOrDomainHint')
+                      )
+                    }
+                  >
+                    <Input
+                      id="settings-public-host"
+                      value={form.publicIpOrDomain}
+                      placeholder="203.0.113.10 or music.example.com"
+                      onChange={(e) => setForm((f) => ({ ...f, publicIpOrDomain: e.target.value }))}
+                    />
+                  </Field>
+
+                  <div className="form-grid two" style={{ marginTop: '0.75rem' }}>
+                    <Field label={t('settings.dashboardPort')} htmlFor="settings-public-dashboard-port" hint={t('settings.publicDashboardPortHint')}>
+                      <Input
+                        id="settings-public-dashboard-port"
+                        type="number"
+                        value={form.dashboardPort}
+                        disabled
+                        style={{ opacity: 0.75, cursor: 'not-allowed', background: 'var(--surface-3)' }}
+                      />
+                    </Field>
+                    <Field label={t('settings.playerPort')} htmlFor="settings-public-player-port" hint={t('settings.publicPlayerPortHint')}>
+                      <Input
+                        id="settings-public-player-port"
+                        type="number"
+                        value={form.playerPort}
+                        disabled
+                        style={{ opacity: 0.75, cursor: 'not-allowed', background: 'var(--surface-3)' }}
+                      />
+                    </Field>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: '1rem',
+                      padding: '10px 14px',
+                      background: 'var(--surface-1)',
+                      border: '1px dashed var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>👑 {t('settings.publicDashboardUrl')}: </span>
+                      <code style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                        {form.publicIpOrDomain
+                          ? (/^(\d{1,3}\.){3}\d{1,3}$/.test(form.publicIpOrDomain.trim())
+                              ? `http://${form.publicIpOrDomain.trim()}:${form.dashboardPort}`
+                              : `https://${form.publicIpOrDomain.trim()}`)
+                          : `http://public-ip:${form.dashboardPort}`}
+                      </code>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>🎧 {t('settings.publicPlayerUrl')}: </span>
+                      <code style={{ color: '#1db954', fontWeight: 600 }}>
+                        {form.publicIpOrDomain
+                          ? (/^(\d{1,3}\.){3}\d{1,3}$/.test(form.publicIpOrDomain.trim())
+                              ? `http://${form.publicIpOrDomain.trim()}:${form.playerPort}`
+                              : `https://${form.publicIpOrDomain.trim()}`)
+                          : `http://public-ip:${form.playerPort}`}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Architecture Notice */}
+                <div
+                  style={{
+                    background: 'rgba(29, 185, 84, 0.08)',
+                    border: '1px solid rgba(29, 185, 84, 0.25)',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    marginBottom: '1rem',
+                    fontSize: '12.5px',
+                    lineHeight: 1.6,
+                    color: 'var(--text)',
+                  }}
+                >
+                  🛡️ <strong>{t('settings.portSyncNotice')}</strong>
                 </div>
               </div>
 
@@ -247,45 +507,6 @@ export function SettingsPage() {
                 </Button>
               </div>
             </form>
-          </Card>
-
-          {/* Web App Ports Configuration Card */}
-          <Card title="پورت‌های وب‌اپلیکیشن (Web App Ports)">
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
-              سامانه irpotify به صورت دو پورته اجرا می‌شود تا پنل مدیریت کاملاً از وب‌اپلیکیشن کاربران و پلیر موسیقی مجزا باشد:
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ fontWeight: 700, fontSize: '14px' }}>داشبورد مدیریت</span>
-                  <Badge tone="warning">مخصوص ادمین</Badge>
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)', fontFamily: 'monospace' }}>
-                  پورت {window.location.port || '5080'}
-                </div>
-                <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  مسیر: <code>/index.html</code> (فقط دسترسی مدیران)
-                </p>
-              </div>
-
-              <div style={{ padding: '1rem', borderRadius: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ fontWeight: 700, fontSize: '14px' }}>وب‌اپلیکیشن پلیر موسیقی</span>
-                  <Badge tone="success">عمومی / کاربران</Badge>
-                </div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#22c55e', fontFamily: 'monospace' }}>
-                  پورت {String(Number(window.location.port || 5080) + 1)}
-                </div>
-                <p style={{ margin: '0.5rem 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  مسیر: <code>/player/</code> (قابل استفاده توسط کلیه کاربران)
-                </p>
-              </div>
-            </div>
-
-            <div style={{ padding: '0.85rem', borderRadius: '8px', background: 'var(--surface-2)', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.6, border: '1px solid var(--border)' }}>
-              💡 <strong>نحوه تغییر پورت‌ها:</strong> جهت تغییر یا شخصی‌سازی هر یک از این دو پورت، می‌توانید از طریق منوی ترمینال irpotify (گزینه تنظیمات پورت) یا ویرایش متغیرهای <code>MUSICHUB_DASHBOARD_PORT</code> و <code>MUSICHUB_PLAYER_PORT</code> در فایل <code>.env</code> سرور اقدام فرمایید.
-            </div>
           </Card>
 
           <Card title={t('settings.capabilities')}>

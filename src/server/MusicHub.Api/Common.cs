@@ -136,6 +136,12 @@ public static class NetworkAddressDetector
 {
     public static string DetectLocalIPv4()
     {
+        var envLocalIp = Environment.GetEnvironmentVariable("MUSICHUB_HOST_LOCAL_IP");
+        if (!string.IsNullOrWhiteSpace(envLocalIp) && envLocalIp != "0.0.0.0")
+        {
+            return envLocalIp.Trim();
+        }
+
         try
         {
             using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
@@ -175,9 +181,152 @@ public static class NetworkAddressDetector
 
         return "127.0.0.1";
     }
+
+    public static async Task<string> DetectPublicIPv4Async(CancellationToken ct = default)
+    {
+        var envPublicIp = Environment.GetEnvironmentVariable("MUSICHUB_HOST_PUBLIC_IP");
+        if (!string.IsNullOrWhiteSpace(envPublicIp) && envPublicIp != "0.0.0.0")
+        {
+            return envPublicIp.Trim();
+        }
+
+        var publicHostname = Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_HOSTNAME");
+        if (!string.IsNullOrWhiteSpace(publicHostname) && !string.Equals(publicHostname, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return publicHostname.Trim();
+        }
+
+        try
+        {
+            using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(2.5) };
+            var ip = await client.GetStringAsync("https://api.ipify.org", ct);
+            ip = ip?.Trim();
+            if (!string.IsNullOrWhiteSpace(ip) && System.Net.IPAddress.TryParse(ip, out _))
+            {
+                return ip;
+            }
+        }
+        catch { }
+
+        try
+        {
+            using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(2.5) };
+            var ip = await client.GetStringAsync("https://ifconfig.me/ip", ct);
+            ip = ip?.Trim();
+            if (!string.IsNullOrWhiteSpace(ip) && System.Net.IPAddress.TryParse(ip, out _))
+            {
+                return ip;
+            }
+        }
+        catch { }
+
+        return string.Empty;
+    }
 }
 
 public sealed class ApiException(int statusCode, string message) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;
+}
+
+public static class PortHelper
+{
+    public static int GetConfiguredDashboardPort()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT"), out var p) ? p : 5080;
+    }
+
+    public static int GetConfiguredPlayerPort()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_PLAYER_PORT"), out var p) ? p : 5081;
+    }
+
+    public static bool IsDashboardPort(HttpContext context)
+    {
+        var configured = GetConfiguredDashboardPort();
+        var localPort = context.Connection.LocalPort;
+        if (localPort == 5080 || localPort == configured) return true;
+        if (context.Request.Host.Port is int hostPort && hostPort == configured) return true;
+        return false;
+    }
+
+    public static bool IsPlayerPort(HttpContext context)
+    {
+        var configured = GetConfiguredPlayerPort();
+        var localPort = context.Connection.LocalPort;
+        if (localPort == 5081 || localPort == configured) return true;
+        if (context.Request.Host.Port is int hostPort && hostPort == configured) return true;
+        return false;
+    }
+
+    public static bool TryUpdateEnvFile(int dashboardPort, int playerPort, string? localIp, string? publicIpOrDomain, string? publicUrl)
+    {
+        var candidatePaths = new List<string>
+        {
+            "/opt/irpotify/.env",
+            Path.Combine(AppContext.BaseDirectory, ".env"),
+            Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+            "/var/lib/musichub/.env",
+            "/app/.env"
+        };
+
+        try
+        {
+            var cur = new DirectoryInfo(Directory.GetCurrentDirectory());
+            while (cur is not null)
+            {
+                var p = Path.Combine(cur.FullName, ".env");
+                if (!candidatePaths.Contains(p)) candidatePaths.Add(p);
+                cur = cur.Parent;
+            }
+        }
+        catch { }
+
+        foreach (var path in candidatePaths)
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var lines = File.ReadAllLines(path).ToList();
+                SetOrUpdateKey(lines, "MUSICHUB_DASHBOARD_PORT", dashboardPort.ToString());
+                SetOrUpdateKey(lines, "MUSICHUB_PLAYER_PORT", playerPort.ToString());
+                if (!string.IsNullOrWhiteSpace(localIp))
+                {
+                    SetOrUpdateKey(lines, "MUSICHUB_HOST_LOCAL_IP", localIp.Trim());
+                }
+                if (!string.IsNullOrWhiteSpace(publicIpOrDomain))
+                {
+                    SetOrUpdateKey(lines, "MUSICHUB_HOST_PUBLIC_IP", publicIpOrDomain.Trim());
+                    if (!System.Net.IPAddress.TryParse(publicIpOrDomain.Trim(), out _))
+                    {
+                        SetOrUpdateKey(lines, "MUSICHUB_PUBLIC_HOSTNAME", publicIpOrDomain.Trim());
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(publicUrl))
+                {
+                    SetOrUpdateKey(lines, "MUSICHUB_PUBLIC_URL", publicUrl.Trim());
+                }
+                File.WriteAllLines(path, lines);
+                return true;
+            }
+            catch { }
+        }
+
+        return false;
+    }
+
+    private static void SetOrUpdateKey(List<string> lines, string key, string value)
+    {
+        var prefix = $"{key}=";
+        var index = lines.FindIndex(l => l.StartsWith(prefix, StringComparison.Ordinal) || l.StartsWith($"#{prefix}", StringComparison.Ordinal));
+        var newLine = $"{key}={value}";
+        if (index >= 0)
+        {
+            lines[index] = newLine;
+        }
+        else
+        {
+            lines.Add(newLine);
+        }
+    }
 }

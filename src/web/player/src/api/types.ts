@@ -422,7 +422,12 @@ export interface SystemSettings {
     publicUrlEnabled?: boolean;
     lanBaseUrl?: string;
     lanUrlEnabled?: boolean;
+    localIp?: string;
+    publicIpOrDomain?: string;
+    dashboardPort?: string;
+    playerPort?: string;
     detectedLocalIp?: string;
+    detectedPublicIp?: string;
     maintenanceMode: boolean;
     defaultTheme: string;
     defaultLanguage: string;

@@ -35,6 +35,14 @@ public static class PairingEndpoints
 
         app.MapPost("/api/pairing/claim", async (PairingClaimRequest request, MusicHubDbContext db, AuthService auth, UserEntitlementService entitlements, HttpContext http, CancellationToken ct) =>
         {
+            if (PortHelper.IsDashboardPort(http))
+            {
+                return Results.Json(new
+                {
+                    error = "اتصال غیرمجاز: فعال‌سازی و اتصال اپلیکیشن‌های پلیر و اندروید منحصراً باید از طریق پورت پلیر انجام شود."
+                }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
             if (string.IsNullOrWhiteSpace(request.Code)) return Results.BadRequest(new { error = "Pairing code is required." });
             var hash = CryptoUtil.Sha256Hex(request.Code.Trim());
             var session = await db.PairingSessions.Include(x => x.User)
@@ -111,26 +119,7 @@ public static class PairingEndpoints
             AuditWriter.Add(db, principal, "user.pairing_qr", "User", targetUser.Id.ToString(), null, RequestHelpers.Ip(http));
             await db.SaveChangesAsync(ct);
 
-            var stored = await db.AppSettings.AsNoTracking()
-                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
-                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
-
-            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
-                ? storedLan.Trim().TrimEnd('/')
-                : string.Empty;
-
-            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
-                ? storedPub.Trim().TrimEnd('/')
-                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
-
-            if (string.IsNullOrWhiteSpace(publicUrl))
-            {
-                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
-            }
-
-            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
-                ? publicUrl
-                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+            var (publicUrl, lanUrl, effectiveServer) = await ResolvePlayerPairingUrlsAsync(db, config, http, ct);
 
             var queryParams = new List<string>
             {
@@ -182,26 +171,7 @@ public static class PairingEndpoints
                 return Results.NotFound();
             }
 
-            var stored = await db.AppSettings.AsNoTracking()
-                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
-                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
-
-            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
-                ? storedPub.Trim().TrimEnd('/')
-                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
-
-            if (string.IsNullOrWhiteSpace(publicUrl))
-            {
-                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
-            }
-
-            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
-                ? storedLan.Trim().TrimEnd('/')
-                : string.Empty;
-
-            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
-                ? publicUrl
-                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+            var (publicUrl, lanUrl, effectiveServer) = await ResolvePlayerPairingUrlsAsync(db, config, http, ct);
 
             var queryParams = new List<string>
             {
@@ -235,26 +205,7 @@ public static class PairingEndpoints
                 return Results.Content("<h1 style='color:white;font-family:sans-serif;text-align:center;margin-top:100px;'>Pairing link expired or invalid</h1>", "text/html");
             }
 
-            var stored = await db.AppSettings.AsNoTracking()
-                .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl")
-                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
-
-            var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
-                ? storedPub.Trim().TrimEnd('/')
-                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
-
-            if (string.IsNullOrWhiteSpace(publicUrl))
-            {
-                publicUrl = $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/');
-            }
-
-            var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
-                ? storedLan.Trim().TrimEnd('/')
-                : string.Empty;
-
-            var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
-                ? publicUrl
-                : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"{http.Request.Scheme}://{http.Request.Host}".TrimEnd('/'));
+            var (publicUrl, lanUrl, effectiveServer) = await ResolvePlayerPairingUrlsAsync(db, config, http, ct);
 
             var queryParams = new List<string>
             {
@@ -311,6 +262,63 @@ public static class PairingEndpoints
 </html>";
             return Results.Content(html, "text/html", System.Text.Encoding.UTF8);
         }).AllowAnonymous();
+    }
+
+    private static async Task<(string? publicUrl, string? lanUrl, string effectiveServer)> ResolvePlayerPairingUrlsAsync(MusicHubDbContext db, IConfiguration config, HttpContext http, CancellationToken ct)
+    {
+        var stored = await db.AppSettings.AsNoTracking()
+            .Where(x => x.Key == "server.publicBaseUrl" || x.Key == "server.lanBaseUrl" || x.Key == "server.playerPort" || x.Key == "server.dashboardPort" || x.Key == "server.localIp" || x.Key == "server.publicIpOrDomain")
+            .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
+
+        var playerPort = stored.TryGetValue("server.playerPort", out var sPPort) && !string.IsNullOrWhiteSpace(sPPort)
+            ? sPPort
+            : (Environment.GetEnvironmentVariable("MUSICHUB_PLAYER_PORT") ?? "5081");
+
+        var dashboardPort = stored.TryGetValue("server.dashboardPort", out var sDPort) && !string.IsNullOrWhiteSpace(sDPort)
+            ? sDPort
+            : (Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT") ?? "5080");
+
+        var localIp = stored.TryGetValue("server.localIp", out var sLIp) && !string.IsNullOrWhiteSpace(sLIp)
+            ? sLIp
+            : NetworkAddressDetector.DetectLocalIPv4();
+
+        var lanUrl = stored.TryGetValue("server.lanBaseUrl", out var storedLan) && !string.IsNullOrWhiteSpace(storedLan)
+            ? storedLan.Trim().TrimEnd('/')
+            : (!string.IsNullOrWhiteSpace(localIp) ? $"http://{localIp}:{playerPort}" : string.Empty);
+
+        if (!string.IsNullOrWhiteSpace(lanUrl) && lanUrl.EndsWith($":{dashboardPort}"))
+        {
+            lanUrl = lanUrl[..^($":{dashboardPort}".Length)] + $":{playerPort}";
+        }
+
+        var publicUrl = stored.TryGetValue("server.publicBaseUrl", out var storedPub) && !string.IsNullOrWhiteSpace(storedPub)
+            ? storedPub.Trim().TrimEnd('/')
+            : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_URL") ?? config["Server:PublicBaseUrl"] ?? string.Empty).Trim().TrimEnd('/');
+
+        if (string.IsNullOrWhiteSpace(publicUrl))
+        {
+            var publicHost = stored.TryGetValue("server.publicIpOrDomain", out var sPub) && !string.IsNullOrWhiteSpace(sPub)
+                ? sPub
+                : (Environment.GetEnvironmentVariable("MUSICHUB_PUBLIC_HOSTNAME") ?? string.Empty);
+
+            if (!string.IsNullOrWhiteSpace(publicHost) && publicHost != "localhost")
+            {
+                publicUrl = System.Net.IPAddress.TryParse(publicHost, out _)
+                    ? $"http://{publicHost}:{playerPort}"
+                    : $"https://{publicHost}";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(publicUrl) && publicUrl.EndsWith($":{dashboardPort}"))
+        {
+            publicUrl = publicUrl[..^($":{dashboardPort}".Length)] + $":{playerPort}";
+        }
+
+        var effectiveServer = !string.IsNullOrWhiteSpace(publicUrl)
+            ? publicUrl
+            : (!string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : $"http://{http.Request.Host.Host}:{playerPort}");
+
+        return (!string.IsNullOrWhiteSpace(publicUrl) ? publicUrl : null, !string.IsNullOrWhiteSpace(lanUrl) ? lanUrl : null, effectiveServer);
     }
 
     public sealed record PairingCreateRequest(string? DeviceName);

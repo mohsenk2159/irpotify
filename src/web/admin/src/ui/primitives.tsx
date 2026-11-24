@@ -75,7 +75,7 @@ export function IconButton({
 interface FieldProps {
   label: string;
   htmlFor?: string;
-  hint?: string;
+  hint?: ReactNode;
   error?: string | null;
   required?: boolean;
   children: ReactNode;

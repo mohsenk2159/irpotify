@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MusicHub.Api.Realtime;
+using MusicHub.Domain;
 using MusicHub.Infrastructure;
 using MusicHub.Infrastructure.Media;
 using MusicHub.Infrastructure.Options;
@@ -56,6 +57,10 @@ public static class StreamEndpoints
     {
         app.MapPost("/api/tracks/{id:guid}/stream-token", [Authorize] (Guid id, StreamTokenService tokens, HttpContext http) =>
         {
+            if (PortHelper.IsDashboardPort(http) && !http.User.IsInRole(RoleNames.Administrator))
+            {
+                return Results.Json(new { error = "اتصال غیرمجاز: پخش موسیقی برای کاربران و پلیرها منحصراً از طریق پورت پلیر امکان‌پذیر است." }, statusCode: StatusCodes.Status403Forbidden);
+            }
             var (token, expires) = tokens.Create(id, http.User.GetUserId(), TimeSpan.FromMinutes(10));
             var url = $"/api/tracks/{id}/stream?token={Uri.EscapeDataString(token)}";
             return Results.Ok(new { token, expiresAt = expires, streamUrl = url, absoluteUrl = $"{http.Request.Scheme}://{http.Request.Host}{url}" });
@@ -67,6 +72,12 @@ public static class StreamEndpoints
             var queryToken = http.Request.Query["token"].FirstOrDefault();
             Guid tokenUserId = Guid.Empty;
             var tokenValid = !string.IsNullOrWhiteSpace(queryToken) && tokens.Validate(queryToken!, id, out tokenUserId);
+
+            if (PortHelper.IsDashboardPort(http) && !authenticated)
+            {
+                // Unauthenticated player stream attempt on the dashboard port
+                return Results.Json(new { error = "اتصال غیرمجاز: پخش موسیقی برای اپلیکیشن‌های پلیر منحصراً از طریق پورت پلیر امکان‌پذیر است." }, statusCode: StatusCodes.Status403Forbidden);
+            }
 
             // The user who is charged for these bytes. A bearer-authenticated request uses the
             // token subject; an anonymous request (the player's media fetch) uses the user the

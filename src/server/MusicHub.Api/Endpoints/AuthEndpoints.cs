@@ -26,19 +26,32 @@ public static class AuthEndpoints
                 return Results.Json(new { error = outcome.Error ?? "Login failed." }, statusCode: outcome.Locked ? StatusCodes.Status423Locked : StatusCodes.Status401Unauthorized);
             }
 
-            // Role gating for Admin Dashboard:
-            // Only users with role Administrator can sign in to the Admin Dashboard.
-            var dashboardPort = int.TryParse(Environment.GetEnvironmentVariable("MUSICHUB_DASHBOARD_PORT"), out var dPort) ? dPort : 5080;
-            var isDashboardAccess = clientType.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
-                                    clientType.Equals("dashboard", StringComparison.OrdinalIgnoreCase) ||
-                                    (http.Connection.LocalPort == dashboardPort);
+            // Role and Port gating for Dual-Port Architecture:
+            // Dashboard Port: Exclusively for Admin Dashboard and Administrator logins.
+            // Player Port: For Player Web App, Android, iOS, Desktop clients and playback.
+            var isDashboardPort = PortHelper.IsDashboardPort(http);
 
-            if (isDashboardAccess && !outcome.User.Roles.Contains(RoleNames.Administrator))
+            if (isDashboardPort)
             {
-                return Results.Json(new
+                if (clientType.Equals("player", StringComparison.OrdinalIgnoreCase) ||
+                    clientType.Equals("android", StringComparison.OrdinalIgnoreCase) ||
+                    clientType.Equals("desktop", StringComparison.OrdinalIgnoreCase) ||
+                    clientType.Equals("mobile", StringComparison.OrdinalIgnoreCase) ||
+                    clientType.Equals("ios", StringComparison.OrdinalIgnoreCase))
                 {
-                    error = "دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است. لطفاً از وب‌اپلیکیشن پخش موسیقی یا اپلیکیشن‌های موبایل استفاده کنید."
-                }, statusCode: StatusCodes.Status403Forbidden);
+                    return Results.Json(new
+                    {
+                        error = "اتصال غیرمجاز: اپلیکیشن‌های پخش موسیقی و کلاینت‌های پلیر منحصراً باید از طریق پورت پلیر متصل شوند. پورت داشبورد فقط برای پنل مدیریت است."
+                    }, statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                if (!outcome.User.Roles.Contains(RoleNames.Administrator))
+                {
+                    return Results.Json(new
+                    {
+                        error = "دسترسی غیرمجاز: این پنل منحصراً برای مدیران سیستم است. لطفاً از وب‌اپلیکیشن پخش موسیقی یا اپلیکیشن‌های موبایل (پورت پلیر) استفاده کنید."
+                    }, statusCode: StatusCodes.Status403Forbidden);
+                }
             }
 
             return Results.Ok(new { accessToken = outcome.Tokens.AccessToken, accessTokenExpiresAt = outcome.Tokens.AccessTokenExpiresAt, refreshToken = outcome.Tokens.RefreshToken, refreshTokenExpiresAt = outcome.Tokens.RefreshTokenExpiresAt, user = outcome.User });

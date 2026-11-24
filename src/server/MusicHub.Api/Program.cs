@@ -369,7 +369,8 @@ app.Use(async (context, next) =>
     }
 
     var localPort = context.Connection.LocalPort;
-    bool isPlayer = (localPort == 5081) || (localPort == playerPort) || path.StartsWith("/player", StringComparison.OrdinalIgnoreCase);
+    bool isDashboard = PortHelper.IsDashboardPort(context);
+    bool isPlayer = !isDashboard && (PortHelper.IsPlayerPort(context) || path.StartsWith("/player", StringComparison.OrdinalIgnoreCase));
 
     string targetDir = isPlayer ? playerDir : adminDir;
     if (!Directory.Exists(targetDir)) targetDir = wwwroot;

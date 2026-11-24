@@ -351,6 +351,12 @@ setup_irpotify() {
     set_env_var "MUSICHUB_PLAYER_PORT" "${player_port}"
     set_env_var "MUSICHUB_LAN_ADDRESS" "0.0.0.0"
 
+    local lan_ip
+    lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$lan_ip" ] && lan_ip="127.0.0.1"
+    set_env_var "MUSICHUB_HOST_LOCAL_IP" "${lan_ip}"
+    set_env_var "MUSICHUB_HOST_PUBLIC_IP" "${server_ip}"
+
     if [ "$use_domain" = true ]; then
         set_env_var "MUSICHUB_PUBLIC_HOSTNAME" "${domain}"
         set_env_var "MUSICHUB_PUBLIC_URL" "https://${domain}"
@@ -361,7 +367,10 @@ setup_irpotify() {
         set_env_var "MUSICHUB_ACME_EMAIL" "admin@localhost"
     fi
 
-    chmod 600 .env
+    chmod 664 .env 2>/dev/null || chmod 600 .env
+
+    # Setup automated port watcher for real-time Dashboard Settings port switching
+    setup_port_sync_watcher
 
     # Install CLI command early so 'irpotify' command is available even if initial container start fails
     create_cli_command
@@ -600,6 +609,75 @@ manage_ports() {
 }
 
 # ------------------------------------------------------------------------------
+# Automated Port Reloader (Watches for Dashboard UI Port Changes)
+# ------------------------------------------------------------------------------
+setup_port_sync_watcher() {
+    mkdir -p "$INSTALL_DIR/scripts"
+    cat > "$INSTALL_DIR/scripts/reload-ports.sh" << 'EOF'
+#!/usr/bin/env bash
+set -e
+INSTALL_DIR="/opt/irpotify"
+[ -d "$INSTALL_DIR" ] || exit 0
+cd "$INSTALL_DIR"
+
+CONFIG_FILE="/var/lib/docker/volumes/musichub_data/_data/port_config.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+    CONFIG_FILE="$INSTALL_DIR/data/port_config.json"
+fi
+
+if [ -f "$CONFIG_FILE" ]; then
+    d_port=$(grep -o '"dashboardPort":[0-9]*' "$CONFIG_FILE" 2>/dev/null | cut -d':' -f2)
+    p_port=$(grep -o '"playerPort":[0-9]*' "$CONFIG_FILE" 2>/dev/null | cut -d':' -f2)
+
+    if [ -n "$d_port" ] && [ -n "$p_port" ]; then
+        current_d_port=$(grep "^MUSICHUB_DASHBOARD_PORT=" .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r\n')
+        current_p_port=$(grep "^MUSICHUB_PLAYER_PORT=" .env 2>/dev/null | cut -d '=' -f2- | tr -d ' "\r\n')
+
+        if [ "$d_port" != "$current_d_port" ] || [ "$p_port" != "$current_p_port" ]; then
+            sed -i "s|^MUSICHUB_DASHBOARD_PORT=.*|MUSICHUB_DASHBOARD_PORT=${d_port}|g" .env
+            sed -i "s|^MUSICHUB_PLAYER_PORT=.*|MUSICHUB_PLAYER_PORT=${p_port}|g" .env
+
+            if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+                ufw allow "${d_port}/tcp" >/dev/null 2>&1 || true
+                ufw allow "${p_port}/tcp" >/dev/null 2>&1 || true
+            fi
+
+            docker compose --env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml" up -d 2>/dev/null || true
+        fi
+    fi
+fi
+EOF
+    chmod +x "$INSTALL_DIR/scripts/reload-ports.sh"
+
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        cat > /etc/systemd/system/irpotify-portsync.service << 'EOF'
+[Unit]
+Description=irpotify Port Configuration Reloader
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/irpotify/scripts/reload-ports.sh
+EOF
+
+        cat > /etc/systemd/system/irpotify-portsync.path << 'EOF'
+[Unit]
+Description=Watch for irpotify port configuration changes
+
+[Path]
+PathModified=/var/lib/docker/volumes/musichub_data/_data/port_config.json
+PathModified=/opt/irpotify/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl enable --now irpotify-portsync.path >/dev/null 2>&1 || true
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # Domain & SSL Management (Inspired by 3x-ui / acme.sh)
 # ------------------------------------------------------------------------------
 manage_domain_and_ssl() {
@@ -828,6 +906,11 @@ uninstall_irpotify() {
     if [ -n "$musichub_networks" ]; then
         docker network rm $musichub_networks >/dev/null 2>&1 || true
     fi
+
+    systemctl stop irpotify-portsync.path >/dev/null 2>&1 || true
+    systemctl disable irpotify-portsync.path >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/irpotify-portsync.service /etc/systemd/system/irpotify-portsync.path >/dev/null 2>&1 || true
+    systemctl daemon-reload >/dev/null 2>&1 || true
 
     rm -f "$CLI_BIN"
     rm -rf "$INSTALL_DIR"
