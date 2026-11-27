@@ -352,7 +352,8 @@ setup_irpotify() {
     set_env_var "MUSICHUB_LAN_ADDRESS" "0.0.0.0"
 
     local lan_ip
-    lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    lan_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)
+    [ -z "$lan_ip" ] && lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     [ -z "$lan_ip" ] && lan_ip="127.0.0.1"
     set_env_var "MUSICHUB_HOST_LOCAL_IP" "${lan_ip}"
     set_env_var "MUSICHUB_HOST_PUBLIC_IP" "${server_ip}"
@@ -406,16 +407,22 @@ setup_irpotify() {
     echo ""
     echo -e "👑 ${YELLOW}${BOLD}Admin Management Dashboard (Administrators):${NC}"
     if [ "$use_domain" = true ]; then
-        echo -e "   URL:  ${CYAN}${BOLD}https://${domain}/index.html${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
+        echo -e "   URL:   ${CYAN}${BOLD}https://${domain}/index.html${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
     else
-        echo -e "   URL:  ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
+        echo -e "   URL:   ${CYAN}${BOLD}http://${server_ip}:${dashboard_port}/index.html${NC}"
+    fi
+    if [ -n "$lan_ip" ] && [ "$lan_ip" != "$server_ip" ]; then
+        echo -e "   Local: ${CYAN}${BOLD}http://${lan_ip}:${dashboard_port}/index.html${NC}"
     fi
     echo ""
     echo -e "🎧 ${GREEN}${BOLD}Player Web App (Users, Listeners & Playback):${NC}"
     if [ "$use_domain" = true ]; then
-        echo -e "   URL:  ${CYAN}${BOLD}https://${domain}/player/${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
+        echo -e "   URL:   ${CYAN}${BOLD}https://${domain}/player/${NC}  or  ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
     else
-        echo -e "   URL:  ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
+        echo -e "   URL:   ${CYAN}${BOLD}http://${server_ip}:${player_port}/index.html${NC}"
+    fi
+    if [ -n "$lan_ip" ] && [ "$lan_ip" != "$server_ip" ]; then
+        echo -e "   Local: ${CYAN}${BOLD}http://${lan_ip}:${player_port}/index.html${NC}"
     fi
     echo ""
     echo -e "🔑 ${BOLD}One-Time Setup Token (Bootstrap Token):${NC}"
@@ -597,10 +604,20 @@ manage_ports() {
     dc down
     dc up -d --force-recreate
 
+    local lan_ip
+    lan_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)
+    [ -z "$lan_ip" ] && lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+
     echo ""
     echo -e "${GREEN}✓ Ports successfully updated:${NC}"
     echo -e "   👑 Admin Dashboard : ${CYAN}http://${server_ip}:${new_d_port}/index.html${NC}"
+    if [ -n "$lan_ip" ] && [ "$lan_ip" != "$server_ip" ]; then
+        echo -e "      Local           : ${CYAN}http://${lan_ip}:${new_d_port}/index.html${NC}"
+    fi
     echo -e "   🎧 Player Web App  : ${CYAN}http://${server_ip}:${new_p_port}/index.html${NC}"
+    if [ -n "$lan_ip" ] && [ "$lan_ip" != "$server_ip" ]; then
+        echo -e "      Local           : ${CYAN}http://${lan_ip}:${new_p_port}/index.html${NC}"
+    fi
     echo ""
     read -r -p "Press Enter to continue..." </dev/tty
 }
