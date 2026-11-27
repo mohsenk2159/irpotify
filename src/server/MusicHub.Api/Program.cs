@@ -12,6 +12,7 @@ using MusicHub.Api;
 using MusicHub.Api.Endpoints;
 using MusicHub.Api.Realtime;
 using MusicHub.Api.Security;
+using MusicHub.Api.Services;
 using MusicHub.Domain;
 using MusicHub.Infrastructure;
 using MusicHub.Infrastructure.Library;
@@ -118,6 +119,9 @@ builder.Services.AddScoped<TelegramAlbumEditStore>();
 builder.Services.AddScoped<AlbumService>();
 builder.Services.AddScoped<LibraryReportService>();
 builder.Services.AddScoped<TelegramBotHandler>();
+builder.Services.AddScoped<SystemBackupService>();
+builder.Services.AddSingleton<GitHubUpdateService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GitHubUpdateService>());
 builder.Services.AddScoped<TelegramUpdateRouter>();
 builder.Services.AddScoped<TelegramIngestionService>();
 builder.Services.AddScoped<TelegramPublishService>();
@@ -480,6 +484,7 @@ app.MapTelegramEndpoints();
 app.MapSettingsEndpoints();
 app.MapNotificationEndpoints();
 app.MapStorageEndpoints();
+app.MapUpdateAndBackupEndpoints();
 
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {

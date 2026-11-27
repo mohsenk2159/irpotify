@@ -18,6 +18,7 @@ import { TelegramPage } from './pages/TelegramPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import { AuditPage } from './pages/AuditPage';
 import { SessionsPage } from './pages/SessionsPage';
+import { UpdatesBackupsPage } from './pages/UpdatesBackupsPage';
 
 function HomeRedirect() {
   return <Navigate to="/dashboard" replace />;
@@ -47,6 +48,7 @@ export function App() {
           <Route path="/admin/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
           <Route path="/admin/telegram" element={<RequireAdmin><TelegramPage /></RequireAdmin>} />
           <Route path="/admin/monitoring" element={<RequireAdmin><MonitoringPage /></RequireAdmin>} />
+          <Route path="/admin/updates" element={<RequireAdmin><UpdatesBackupsPage /></RequireAdmin>} />
           <Route path="/admin/audit" element={<RequireAdmin><AuditPage /></RequireAdmin>} />
 
           <Route path="/account/sessions" element={<SessionsPage />} />

@@ -84,6 +84,10 @@ export const api = {
     sessions: () => http.request<SessionInfo[]>('/api/auth/sessions'),
     revokeSession: (id: string) => http.request<void>(`/api/auth/sessions/${id}`, { method: 'DELETE' }),
   },
+  pairing: {
+    claim: (payload: { code: string; deviceName?: string }) =>
+      http.request<AuthSession>('/api/pairing/claim', { method: 'POST', json: payload, auth: false }),
+  },
   users: {
     list: () => http.request<UserSummary[]>('/api/users'),
     create: (payload: UserCreate) => http.request<{ id: string }>('/api/users', { method: 'POST', json: payload }),

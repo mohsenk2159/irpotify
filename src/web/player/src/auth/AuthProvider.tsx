@@ -20,6 +20,7 @@ interface AuthContextValue {
   user: User | null;
   isAdmin: boolean;
   login: (email: string, password: string, deviceName?: string, rememberMe?: boolean) => Promise<User>;
+  loginWithPairing: (code: string, deviceName?: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -84,6 +85,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
+  const loginWithPairing = useCallback(
+    async (code: string, deviceName: string = 'irpotify Player WebApp', rememberMe: boolean = true) => {
+      const session = await api.pairing.claim({ code, deviceName });
+      applyTokens(session, rememberMe);
+      queryClient.clear();
+      setUser(session.user);
+      setStatus('authenticated');
+      return session.user;
+    },
+    [queryClient],
+  );
+
   const logout = useCallback(async () => {
     const refreshToken = getRefreshToken();
     try {
@@ -109,10 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isAdmin: user?.roles.includes('Administrator') ?? false,
       login,
+      loginWithPairing,
       logout,
       refreshUser,
     }),
-    [status, user, login, logout, refreshUser],
+    [status, user, login, loginWithPairing, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

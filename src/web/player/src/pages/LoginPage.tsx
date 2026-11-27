@@ -1,20 +1,165 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import jsQR from 'jsqr';
 import { api } from '../api/endpoints';
 import { useAuth } from '../auth/AuthProvider';
 import { useUi } from '../ui/UiProvider';
 import { BrandLogo, Icon } from '../ui/icons';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
 
+function extractPairingCode(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as { code?: string };
+      if (typeof parsed.code === 'string' && parsed.code.trim()) {
+        return parsed.code.trim();
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return trimmed;
+}
+
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithPairing } = useAuth();
   const { t, language, setLanguage, theme, toggleTheme } = useUi();
 
+  const [loginMode, setLoginMode] = useState<'password' | 'qr'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // QR Login state
+  const [qrInput, setQrInput] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      for (const track of streamRef.current.getTracks()) {
+        track.stop();
+      }
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  useEffect(() => {
+    if (loginMode !== 'qr') stopCamera();
+  }, [loginMode]);
+
+  const submitPairingCode = async (rawPayload: string) => {
+    const code = extractPairingCode(rawPayload);
+    if (!code) {
+      setError('کد QR یا کد جفت‌سازی معتبر نیست.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      await loginWithPairing(code, 'irpotify Player WebApp (QR)', rememberMe);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'کد QR نامعتبر یا منقضی شده است.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startCameraScan = async () => {
+    setError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('مرورگر شما از دوربین پشتیبانی نمی‌کند. از آپلود تصویر QR یا وارد کردن کد استفاده کنید.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          void videoRef.current.play();
+        }
+      });
+    } catch {
+      setError('دسترسی به دوربین رد شد یا دوربین متصل نیست.');
+      stopCamera();
+    }
+  };
+
+  useEffect(() => {
+    if (!cameraActive) return;
+    let cancelled = false;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const scanFrame = () => {
+      if (cancelled || !videoRef.current || !ctx) return;
+      const video = videoRef.current;
+      if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const decoded = jsQR(imageData.data, imageData.width, imageData.height);
+        if (decoded?.data) {
+          stopCamera();
+          void submitPairingCode(decoded.data);
+          return;
+        }
+      }
+      if (!cancelled) {
+        requestAnimationFrame(scanFrame);
+      }
+    };
+
+    const raf = requestAnimationFrame(scanFrame);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [cameraActive]);
+
+  const handleQrImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const decoded = jsQR(imageData.data, imageData.width, imageData.height);
+        if (decoded?.data) {
+          void submitPairingCode(decoded.data);
+        } else {
+          setError('کد QR در تصویر انتخاب‌شده شناسایی نشد.');
+        }
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Forgot password modal state
   const [showForgot, setShowForgot] = useState(false);
@@ -112,6 +257,109 @@ export function LoginPage() {
           </div>
         )}
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
+          <button
+            type="button"
+            className={loginMode === 'password' ? 'btn-primary' : 'btn-outline'}
+            style={{ justifyContent: 'center', padding: '10px 12px', fontSize: 13 }}
+            onClick={() => {
+              setError(null);
+              setLoginMode('password');
+            }}
+          >
+            <Icon name="shield" size={16} />
+            <span>رمز عبور</span>
+          </button>
+          <button
+            type="button"
+            className={loginMode === 'qr' ? 'btn-primary' : 'btn-outline'}
+            style={{ justifyContent: 'center', padding: '10px 12px', fontSize: 13 }}
+            onClick={() => {
+              setError(null);
+              setLoginMode('qr');
+            }}
+          >
+            <Icon name="qr" size={16} />
+            <span>ورود با QR Code</span>
+          </button>
+        </div>
+
+        {loginMode === 'qr' ? (
+          <div className="login-form" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {cameraActive ? (
+              <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+                <video ref={videoRef} style={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }} playsInline muted />
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={stopCamera}
+                  style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}
+                >
+                  توقف دوربین
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => void startCameraScan()}
+                  style={{ justifyContent: 'center', padding: '12px 10px', fontSize: 13 }}
+                >
+                  <Icon name="qr" size={18} />
+                  <span>اسکن با دوربین</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ justifyContent: 'center', padding: '12px 10px', fontSize: 13 }}
+                >
+                  <Icon name="upload" size={18} />
+                  <span>انتخاب عکس QR</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleQrImageUpload}
+                />
+              </div>
+            )}
+
+            <div className="form-group" style={{ marginTop: 4 }}>
+              <label className="form-label" htmlFor="player-qr-code">
+                یا کد جفت‌سازی / متن QR را وارد کنید
+              </label>
+              <input
+                id="player-qr-code"
+                type="text"
+                className="form-input"
+                placeholder="کد QR دریافت‌شده از مدیر..."
+                value={qrInput}
+                onChange={(e) => setQrInput(e.target.value)}
+                dir="ltr"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="btn-primary full-width login-submit-btn"
+              disabled={loading || !qrInput.trim()}
+              onClick={() => void submitPairingCode(qrInput)}
+            >
+              {loading ? (
+                <>
+                  <div className="btn-spinner" />
+                  <span>در حال اتصال...</span>
+                </>
+              ) : (
+                <span>ورود سریع با کد</span>
+              )}
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label className="form-label" htmlFor="player-email">
@@ -225,6 +473,7 @@ export function LoginPage() {
             )}
           </button>
         </form>
+        )}
 
         <footer className="login-footer">
           <p className="login-footer-hint">

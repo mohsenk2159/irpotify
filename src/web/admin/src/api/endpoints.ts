@@ -222,8 +222,107 @@ export const api = {
   system: {
     health: () => http.request<HealthResponse>('/api/health', { auth: false }),
     version: () => http.request<VersionInfo>('/api/version', { auth: false }),
+    updateStatus: () =>
+      http.request<{
+        currentVersion: string;
+        currentCommitSha: string | null;
+        latestCommitSha: string | null;
+        latestCommitMessage: string | null;
+        latestCommitDate: string | null;
+        lastCheckedAt: string | null;
+        updateAvailable: boolean;
+        repoUrl: string;
+        lastError: string | null;
+      }>('/api/admin/system/update-status'),
+    checkUpdate: () =>
+      http.request<{
+        currentVersion: string;
+        currentCommitSha: string | null;
+        latestCommitSha: string | null;
+        latestCommitMessage: string | null;
+        latestCommitDate: string | null;
+        lastCheckedAt: string | null;
+        updateAvailable: boolean;
+        repoUrl: string;
+        lastError: string | null;
+      }>('/api/admin/system/check-update', { method: 'POST' }),
+    applyUpdate: () =>
+      http.request<{
+        applied: boolean;
+        requiresHostAction: boolean;
+        message: string;
+        commandHint: string | null;
+      }>('/api/admin/system/apply-update', { method: 'POST' }),
   },
 };
+
+export async function downloadBackupArchive(): Promise<string> {
+  const token = getAccessToken();
+  const res = await fetch('/api/admin/backups/export', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new Error('خطا در ایجاد فایل بکاپ کامل');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  const fileName = match?.[1] ?? `irpotify-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return fileName;
+}
+
+export function restoreBackupArchive(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<{
+  success: boolean;
+  usersRestored: number;
+  artistsRestored: number;
+  albumsRestored: number;
+  tracksRestored: number;
+  playlistsRestored: number;
+  filesRestored: number;
+  message: string;
+}> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/admin/backups/restore');
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Accept', 'application/json');
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      }
+    };
+    xhr.onerror = () => reject(new Error('خطا در ارسال فایل بکاپ به سرور'));
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          reject(new Error(data?.error || data?.detail || 'خطا در بازیابی بکاپ'));
+        }
+      } catch {
+        reject(new Error('پاسخ نامعتبر از سرور هنگام بازیابی'));
+      }
+    };
+
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    xhr.send(formData);
+  });
+}
 
 export type { UploadFileResult };
 

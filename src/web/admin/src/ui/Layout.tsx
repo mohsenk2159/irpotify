@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
       { to: '/admin/users', labelKey: 'nav.users', icon: 'users' },
       { to: '/admin/settings', labelKey: 'nav.settings', icon: 'settings' },
       { to: '/admin/telegram', labelKey: 'nav.telegram', icon: 'telegram' },
+      { to: '/admin/updates', labelKey: 'nav.updates', icon: 'refresh' },
       { to: '/admin/audit', labelKey: 'nav.audit', icon: 'audit' },
     ],
     adminOnly: true,
