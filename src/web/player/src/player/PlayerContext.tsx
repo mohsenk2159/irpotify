@@ -55,6 +55,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const originalQueueRef = useRef<Track[]>([]);
   const streamTokenRef = useRef<{ token: string; expiresAt: string } | null>(null);
+  const handleTrackEndedRef = useRef<() => void>(() => {});
+
+  // Load initial user favorites from server
+  useEffect(() => {
+    let active = true;
+    api.tracks
+      .list({ favorites: true, page: 1, pageSize: 500 })
+      .then((res) => {
+        if (!active) return;
+        setFavoritesSet(new Set(res.items.map((t) => t.id)));
+      })
+      .catch(() => {
+        // Ignore if not yet authenticated or offline
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Initialize audio element once
   useEffect(() => {
@@ -68,7 +86,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onPause = () => setIsPlaying(false);
     const onWaiting = () => setIsBuffering(true);
     const onPlaying = () => setIsBuffering(false);
-    const onEnded = () => handleTrackEnded();
+    const onEnded = () => handleTrackEndedRef.current();
     const onError = () => {
       setIsBuffering(false);
       setIsPlaying(false);
@@ -161,7 +179,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setIsPlaying(false);
       return prevIndex;
     });
-  }, [queue, repeatMode, loadAndPlay]);
+    },
+    [queue, repeatMode, loadAndPlay],
+  );
+
+  useEffect(() => {
+    handleTrackEndedRef.current = handleTrackEnded;
+  }, [handleTrackEnded]);
+
+  // Spotify-style global keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.code === 'Space' && currentTrack) {
+        e.preventDefault();
+        const audio = audioRef.current;
+        if (audio) {
+          if (audio.paused) void audio.play();
+          else audio.pause();
+        }
+      } else if (e.code === 'ArrowRight' && currentTrack && audioRef.current) {
+        e.preventDefault();
+        audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 5);
+      } else if (e.code === 'ArrowLeft' && currentTrack && audioRef.current) {
+        e.preventDefault();
+        audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+      } else if (e.code === 'KeyM' && audioRef.current) {
+        audioRef.current.volume = audioRef.current.volume > 0 ? 0 : 1;
+        setVolumeState(audioRef.current.volume);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [currentTrack]);
 
   const playTrack = useCallback(
     async (track: Track, newQueue?: Track[], autoNavigate: boolean = true) => {

@@ -178,17 +178,56 @@ try {
         Write-MusicHubInfo 'All required secrets are already set in .env.'
     }
 
-    if ($PublicHostname) { Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME' -Value $PublicHostname }
-    if ($AcmeEmail) { Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL' -Value $AcmeEmail }
+    $selectedDomain = ''
+    if ($PublicHostname) {
+        $selectedDomain = $PublicHostname.Trim()
+        Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME' -Value $selectedDomain
+        Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_URL' -Value "https://$selectedDomain"
+    }
+    if ($AcmeEmail) {
+        Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL' -Value $AcmeEmail.Trim()
+    }
 
-    # The template ships music.example.com. If it is still there and the operator did not pass
-    # -PublicHostname, Caddy would attempt ACME for a domain this machine does not control, which
-    # fails loudly and repeatedly. The LAN path bypasses Caddy entirely, so point the edge at
-    # localhost (Caddy then uses its own local CA) and tell the operator how to switch to a real
-    # domain later. Without this warning the failure only shows up in the Caddy logs.
     $currentHostname = Get-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME'
-    if (-not $PublicHostname -and $currentHostname -eq 'music.example.com') {
+    $currentEmail = Get-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL'
+
+    if (-not $PublicHostname -and -not $NonInteractive -and ([string]::IsNullOrWhiteSpace($currentHostname) -or $currentHostname -eq 'music.example.com' -or $currentHostname -eq 'localhost')) {
+        Write-Host ''
+        Write-Host 'Choose connection mode for your server:' -ForegroundColor Cyan
+        Write-Host '  1) Custom Domain with Automatic Free SSL/HTTPS (Recommended for Internet / Family)' -ForegroundColor Green
+        Write-Host '  2) Local / LAN IP Address only (HTTP, no domain needed)' -ForegroundColor Yellow
+        $modeChoice = Read-Host 'Select option (1 or 2) [Default: 2]'
+        if ($modeChoice -eq '1') {
+            while ($true) {
+                $enteredDomain = (Read-Host 'Enter your domain or subdomain (e.g. music.yourdomain.com)').Trim()
+                if (-not [string]::IsNullOrWhiteSpace($enteredDomain)) {
+                    $selectedDomain = $enteredDomain -replace '^https?://', '' -replace '/.*$', ''
+                    break
+                }
+                Write-Host 'Domain is required for HTTPS.' -ForegroundColor Red
+            }
+            $defaultEmail = "admin@$selectedDomain"
+            $enteredEmail = (Read-Host "Enter your email for free SSL certificate [$defaultEmail]").Trim()
+            if ([string]::IsNullOrWhiteSpace($enteredEmail)) { $enteredEmail = $defaultEmail }
+
+            Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME' -Value $selectedDomain
+            Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_URL' -Value "https://$selectedDomain"
+            Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL' -Value $enteredEmail
+            Write-MusicHubInfo "Configured automatic HTTPS for https://$selectedDomain ($enteredEmail)."
+        }
+        else {
+            Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME' -Value 'localhost'
+            if ([string]::IsNullOrWhiteSpace($currentEmail) -or $currentEmail -eq 'admin@example.com') {
+                Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL' -Value 'admin@localhost'
+            }
+            Write-MusicHubInfo 'Configured for Local / LAN IP mode (MUSICHUB_PUBLIC_HOSTNAME=localhost).'
+        }
+    }
+    elseif (-not $PublicHostname -and $currentHostname -eq 'music.example.com') {
         Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_PUBLIC_HOSTNAME' -Value 'localhost'
+        if ([string]::IsNullOrWhiteSpace($currentEmail) -or $currentEmail -eq 'admin@example.com') {
+            Set-MusicHubEnvValue -Path $envPath -Key 'MUSICHUB_ACME_EMAIL' -Value 'admin@localhost'
+        }
         Write-MusicHubInfo 'MUSICHUB_PUBLIC_HOSTNAME was still the template value; set it to localhost.'
         Write-MusicHubWarning 'The HTTPS edge is not configured for a real domain. LAN access works now.'
         Write-MusicHubWarning 'For public HTTPS, re-run with -PublicHostname <your-domain> -AcmeEmail <you@domain>.'

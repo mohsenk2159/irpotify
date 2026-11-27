@@ -7,27 +7,29 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val Purple = Color(0xFF6C5CE7)
-private val PurpleLight = Color(0xFFB9AEFF)
-private val Teal = Color(0xFF00CEC9)
-private val SurfaceDark = Color(0xFF101014)
-private val SurfaceDarkElevated = Color(0xFF1A1A22)
+private val SpotifyGreen = Color(0xFF1DB954)
+private val SpotifyGreenLight = Color(0xFF1ED760)
+private val SpotifyDark = Color(0xFF121212)
+private val SpotifySurface = Color(0xFF181818)
+private val SpotifySurfaceElevated = Color(0xFF242424)
+private val SpotifyTextWhite = Color(0xFFFFFFFF)
+private val SpotifyTextMuted = Color(0xFFB3B3B3)
 private val SurfaceLight = Color(0xFFFDFCFF)
 
 private val DarkColors = darkColorScheme(
-    primary = PurpleLight,
-    onPrimary = Color(0xFF241A66),
-    primaryContainer = Color(0xFF3B2E8F),
-    onPrimaryContainer = Color(0xFFE6E1FF),
-    secondary = Teal,
-    onSecondary = Color(0xFF003735),
-    background = SurfaceDark,
-    onBackground = Color(0xFFE6E1E9),
-    surface = SurfaceDark,
-    onSurface = Color(0xFFE6E1E9),
-    surfaceVariant = SurfaceDarkElevated,
-    onSurfaceVariant = Color(0xFFC9C5D2),
-    error = Color(0xFFFFB4AB),
+    primary = SpotifyGreen,
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF169C46),
+    onPrimaryContainer = Color.White,
+    secondary = SpotifyGreenLight,
+    onSecondary = Color.Black,
+    background = SpotifyDark,
+    onBackground = SpotifyTextWhite,
+    surface = SpotifySurface,
+    onSurface = SpotifyTextWhite,
+    surfaceVariant = SpotifySurfaceElevated,
+    onSurfaceVariant = SpotifyTextMuted,
+    error = Color(0xFFE91429),
 )
 
 private val LightColors = lightColorScheme(
