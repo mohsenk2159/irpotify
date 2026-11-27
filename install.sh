@@ -688,6 +688,45 @@ EOF
 
         systemctl daemon-reload >/dev/null 2>&1 || true
         systemctl enable --now irpotify-portsync.path >/dev/null 2>&1 || true
+
+        cat > "$INSTALL_DIR/scripts/apply-update.sh" << 'EOF'
+#!/usr/bin/env bash
+set -e
+INSTALL_DIR="/opt/irpotify"
+[ -d "$INSTALL_DIR" ] || exit 0
+TRIGGER_FILE="/var/lib/docker/volumes/musichub_data/_data/update_request.json"
+[ -f "$TRIGGER_FILE" ] || exit 0
+rm -f "$TRIGGER_FILE"
+cd "$INSTALL_DIR"
+git fetch --all --prune >/dev/null 2>&1 || true
+git reset --hard origin/main >/dev/null 2>&1 || true
+docker compose --env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml" up -d --build >/dev/null 2>&1 || true
+EOF
+        chmod +x "$INSTALL_DIR/scripts/apply-update.sh"
+
+        cat > /etc/systemd/system/irpotify-updatesync.service << 'EOF'
+[Unit]
+Description=irpotify In-App GitHub Updater
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/irpotify/scripts/apply-update.sh
+EOF
+
+        cat > /etc/systemd/system/irpotify-updatesync.path << 'EOF'
+[Unit]
+Description=Watch for irpotify in-app update requests
+
+[Path]
+PathExists=/var/lib/docker/volumes/musichub_data/_data/update_request.json
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl enable --now irpotify-updatesync.path >/dev/null 2>&1 || true
     fi
 }
 

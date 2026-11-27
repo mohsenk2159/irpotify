@@ -2,8 +2,10 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MusicHub.Domain;
 using MusicHub.Infrastructure;
+using MusicHub.Infrastructure.Options;
 
 namespace MusicHub.Api.Services;
 
@@ -39,12 +41,17 @@ public sealed class GitHubUpdateService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GitHubUpdateService> _logger;
+    private readonly StorageOptions _storageOptions;
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _checkLock = new(1, 1);
 
-    public GitHubUpdateService(IServiceScopeFactory scopeFactory, ILogger<GitHubUpdateService> logger)
+    public GitHubUpdateService(
+        IServiceScopeFactory scopeFactory,
+        IOptions<StorageOptions> storageOptions,
+        ILogger<GitHubUpdateService> logger)
     {
         _scopeFactory = scopeFactory;
+        _storageOptions = storageOptions.Value;
         _logger = logger;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("irpotify-server", "1.0"));
@@ -204,11 +211,31 @@ public sealed class GitHubUpdateService : BackgroundService
         var repoRoot = FindGitRepositoryRoot();
         if (repoRoot is null)
         {
-            return new ApplyUpdateResult(
-                Applied: false,
-                RequiresHostAction: true,
-                Message: "سرور در محیط ایزوله داکر اجرا می‌شود و دسترسی مستقیم به ابزار گیت میزبان ندارد. فایل بکاپ ذخیره شد؛ برای اعمال آپدیت و بازسازی کانتینرها دستور زیر را روی سرور اجرا کنید:",
-                CommandHint: "irpotify update");
+            try
+            {
+                Directory.CreateDirectory(_storageOptions.RootPath);
+                var triggerPath = Path.Combine(_storageOptions.RootPath, "update_request.json");
+                var payload = JsonSerializer.Serialize(new
+                {
+                    requestedAt = DateTimeOffset.UtcNow,
+                    repoUrl = RepoUrl
+                });
+                await File.WriteAllTextAsync(triggerPath, payload, ct);
+
+                return new ApplyUpdateResult(
+                    Applied: true,
+                    RequiresHostAction: false,
+                    Message: "درخواست آپدیت خودکار برای سرویس میزبان ارسال شد. سرور ظرف ۱ تا ۲ دقیقه از گیتهاب به‌روزرسانی و مجدداً راه‌اندازی می‌شود.",
+                    CommandHint: "irpotify update");
+            }
+            catch (Exception ex)
+            {
+                return new ApplyUpdateResult(
+                    Applied: false,
+                    RequiresHostAction: true,
+                    Message: $"امکان ثبت درخواست آپدیت خودکار وجود نداشت ({ex.Message}). دستور زیر را در سرور اجرا کنید:",
+                    CommandHint: "irpotify update");
+            }
         }
 
         try
