@@ -81,6 +81,7 @@ export function FoldersPage() {
 
   // Upload to folder state
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadFolderInputRef = useRef<HTMLInputElement | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
@@ -186,8 +187,11 @@ export function FoldersPage() {
     },
   });
 
+  const isAudioFile = (file: File) =>
+    file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|opus)$/i.test(file.name);
+
   const addUploadFiles = (files: FileList | File[]) => {
-    const incoming = Array.from(files);
+    const incoming = Array.from(files).filter(isAudioFile);
     if (incoming.length === 0) return;
     setUploadError(null);
     setUploadQueue((current) => {
@@ -201,9 +205,45 @@ export function FoldersPage() {
     });
   };
 
-  const onUploadDrop = (event: DragEvent<HTMLDivElement>) => {
+  const readEntryFiles = async (entry: FileSystemEntry): Promise<File[]> => {
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        (entry as FileSystemFileEntry).file(
+          (file) => resolve([file]),
+          () => resolve([]),
+        );
+      });
+    }
+    if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      const entries: FileSystemEntry[] = [];
+      while (true) {
+        const batch = await new Promise<FileSystemEntry[]>((resolve) => {
+          reader.readEntries(resolve, () => resolve([]));
+        });
+        if (batch.length === 0) break;
+        entries.push(...batch);
+      }
+      const nested = await Promise.all(entries.map(readEntryFiles));
+      return nested.flat();
+    }
+    return [];
+  };
+
+  const onUploadDrop = async (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setUploadDragging(false);
+    const items = event.dataTransfer.items;
+    if (items && items.length > 0 && typeof items[0]?.webkitGetAsEntry === 'function') {
+      const entries = Array.from(items)
+        .map((item) => item.webkitGetAsEntry())
+        .filter((e): e is FileSystemEntry => e !== null);
+      const allFiles = (await Promise.all(entries.map(readEntryFiles))).flat();
+      if (allFiles.length > 0) {
+        addUploadFiles(allFiles);
+        return;
+      }
+    }
     addUploadFiles(event.dataTransfer.files);
   };
 
@@ -623,14 +663,24 @@ export function FoldersPage() {
             </span>
             <p className="dropzone-title">{t('upload.dropzone')}</p>
             <p className="muted small">{t('folders.uploadHint')}</p>
-            <Button
-              variant="secondary"
-              icon="upload"
-              disabled={uploadMutation.isPending}
-              onClick={() => uploadInputRef.current?.click()}
-            >
-              {t('upload.browse')}
-            </Button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Button
+                variant="secondary"
+                icon="upload"
+                disabled={uploadMutation.isPending}
+                onClick={() => uploadInputRef.current?.click()}
+              >
+                {t('upload.browse')}
+              </Button>
+              <Button
+                variant="ghost"
+                icon="folders"
+                disabled={uploadMutation.isPending}
+                onClick={() => uploadFolderInputRef.current?.click()}
+              >
+                انتخاب پوشه (Folder)
+              </Button>
+            </div>
             <input
               ref={uploadInputRef}
               type="file"
@@ -638,6 +688,18 @@ export function FoldersPage() {
               accept={AUDIO_ACCEPT}
               className="sr-only"
               aria-label={t('upload.browse')}
+              onChange={(event) => {
+                if (event.target.files) addUploadFiles(event.target.files);
+                event.target.value = '';
+              }}
+            />
+            <input
+              ref={uploadFolderInputRef}
+              type="file"
+              multiple
+              {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+              className="sr-only"
+              aria-label="انتخاب پوشه"
               onChange={(event) => {
                 if (event.target.files) addUploadFiles(event.target.files);
                 event.target.value = '';
