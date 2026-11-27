@@ -41,13 +41,17 @@ public static class UploadEndpoints
             Guid? albumId = null;
             if (Guid.TryParse(form["albumId"].FirstOrDefault(), out var parsedAlbum)) albumId = parsedAlbum;
 
-            if (folderId is not null && !await db.Folders.AnyAsync(x => x.Id == folderId && !x.IsDeleted, ct))
-                return Results.BadRequest(new { error = "Folder not found." });
+            if (folderId is not null)
+            {
+                var targetFolder = await db.Folders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == folderId && !x.IsDeleted, ct);
+                if (targetFolder is null) return Results.BadRequest(new { error = "Folder not found." });
+            }
             if (albumId is not null && !await db.Albums.AnyAsync(x => x.Id == albumId && !x.IsDeleted, ct))
                 return Results.BadRequest(new { error = "Album not found." });
 
             var userId = principal.GetUserId();
             var results = new List<UploadResult>();
+            var uploadedTrackIds = new List<Guid>();
             foreach (var file in form.Files)
             {
                 await using var stream = file.OpenReadStream();
@@ -62,7 +66,17 @@ public static class UploadEndpoints
                     null,
                     options.Value.MaxUploadBytes), ct);
 
+                if (result.Success && result.TrackId is Guid tid) uploadedTrackIds.Add(tid);
                 results.Add(new UploadResult(result.FileName, result.Success, result.Duplicate, result.Error, await LoadTrackAsync(db, result.TrackId, userId, ct)));
+            }
+
+            if (folderId is not null && albumId is null && uploadedTrackIds.Count > 0)
+            {
+                var targetFolder = await db.Folders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == folderId && !x.IsDeleted, ct);
+                if (targetFolder is not null)
+                {
+                    await Services.FolderSyncHelper.SyncTracksAsync(db, targetFolder, uploadedTrackIds, ct);
+                }
             }
 
             if (results.Any(x => x.Success))

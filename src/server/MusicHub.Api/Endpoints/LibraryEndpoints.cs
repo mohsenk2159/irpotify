@@ -483,6 +483,7 @@ public static class LibraryEndpoints
             AuditWriter.Add(db, principal, "folder.create", "Folder", folder.Id.ToString(), null, RequestHelpers.Ip(http));
             try { await db.SaveChangesAsync(ct); }
             catch (DbUpdateException) { return Results.Conflict(new { error = "A folder with that name already exists here." }); }
+            await Services.FolderSyncHelper.EnsureArtistAndAlbumAsync(db, folder, ct);
             await realtime.FolderUpdated(new { folder.Id, folder.Name });
             return Results.Created($"/api/folders/{folder.Id}", new { folder.Id, folder.Name, folder.ParentId });
         });
@@ -491,6 +492,7 @@ public static class LibraryEndpoints
         {
             var folder = await db.Folders.SingleOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
             if (folder is null) return Results.NotFound();
+            var oldName = folder.Name;
             if (!string.IsNullOrWhiteSpace(request.Name)) folder.Name = request.Name.Trim()[..Math.Min(request.Name.Trim().Length, 200)];
             if (request.Description is not null) folder.Description = request.Description;
             if (request.ParentId is not null)
@@ -503,6 +505,7 @@ public static class LibraryEndpoints
             AuditWriter.Add(db, principal, "folder.update", "Folder", folder.Id.ToString(), null, RequestHelpers.Ip(http));
             try { await db.SaveChangesAsync(ct); }
             catch (DbUpdateException) { return Results.Conflict(new { error = "A folder with that name already exists here." }); }
+            await Services.FolderSyncHelper.SyncRenameAsync(db, folder, oldName, ct);
             await realtime.FolderUpdated(new { folder.Id, folder.Name });
             return Results.NoContent();
         });
@@ -521,7 +524,8 @@ public static class LibraryEndpoints
 
         app.MapPost("/api/folders/{id:guid}/tracks", [Authorize(Policy = "Admin")] async (Guid id, FolderTrackRequest request, MusicHubDbContext db, RealtimeNotifier realtime, CancellationToken ct) =>
         {
-            if (!await db.Folders.AnyAsync(x => x.Id == id && !x.IsDeleted, ct)) return Results.NotFound();
+            var folder = await db.Folders.SingleOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
+            if (folder is null) return Results.NotFound();
             // An unbounded list with a per-item query let one request issue tens of thousands of
             // round trips and pin a thread; normalise to a set first and batch the two lookups
             // (CR-011).
@@ -537,6 +541,7 @@ public static class LibraryEndpoints
                     db.FolderTracks.Add(new FolderTrack { FolderId = id, TrackId = trackId });
                 }
                 await db.SaveChangesAsync(ct);
+                await Services.FolderSyncHelper.SyncTracksAsync(db, folder, existingTracks, ct);
             }
             await realtime.FolderUpdated(new { id });
             return Results.NoContent();
