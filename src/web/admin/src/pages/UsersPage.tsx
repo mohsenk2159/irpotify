@@ -434,7 +434,7 @@ export function UsersPage() {
       return;
     }
     if (createForm.password !== createForm.confirmPassword) {
-      setCreateError('رمز عبور و تکرار آن یکسان نیستند.');
+      setCreateError(t('users.passwordMismatch'));
       return;
     }
     createMutation.mutate({ ...createForm, email });
@@ -733,8 +733,8 @@ export function UsersPage() {
               <button
                 type="button"
                 onClick={() => setShowCreatePassword((v) => !v)}
-                aria-label={showCreatePassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
-                title={showCreatePassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                aria-label={showCreatePassword ? t('users.hidePassword') : t('users.showPassword')}
+                title={showCreatePassword ? t('users.hidePassword') : t('users.showPassword')}
                 style={{
                   position: 'absolute',
                   right: 10,
@@ -752,7 +752,7 @@ export function UsersPage() {
               </button>
             </div>
           </Field>
-          <Field label="تکرار رمز عبور" htmlFor="user-confirm-password" required>
+          <Field label={t('users.confirmPassword')} htmlFor="user-confirm-password" required>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Input
                 id="user-confirm-password"
@@ -766,8 +766,8 @@ export function UsersPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
-                aria-label={showConfirmPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
-                title={showConfirmPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                aria-label={showConfirmPassword ? t('users.hidePassword') : t('users.showPassword')}
+                title={showConfirmPassword ? t('users.hidePassword') : t('users.showPassword')}
                 style={{
                   position: 'absolute',
                   right: 10,
