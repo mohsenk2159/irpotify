@@ -39,6 +39,7 @@ interface CreateForm {
   email: string;
   displayName: string;
   password: string;
+  confirmPassword: string;
   role: RoleName;
   expiresOn: string;
   canUsePlayer: boolean;
@@ -57,6 +58,7 @@ const EMPTY_CREATE: CreateForm = {
   email: '',
   displayName: '',
   password: '',
+  confirmPassword: '',
   role: 'Listener',
   expiresOn: '',
   canUsePlayer: true,
@@ -119,6 +121,8 @@ export function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_CREATE);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [editing, setEditing] = useState<UserSummary | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -267,6 +271,8 @@ export function UsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
       setCreateOpen(false);
       setCreateForm(EMPTY_CREATE);
+      setShowCreatePassword(false);
+      setShowConfirmPassword(false);
       notify(t('users.created'), 'success');
       void openQrModal({
         id: data.id,
@@ -425,6 +431,10 @@ export function UsersPage() {
     }
     if (createForm.password.length < 12) {
       setCreateError(t('users.passwordHint'));
+      return;
+    }
+    if (createForm.password !== createForm.confirmPassword) {
+      setCreateError('رمز عبور و تکرار آن یکسان نیستند.');
       return;
     }
     createMutation.mutate({ ...createForm, email });
@@ -710,14 +720,70 @@ export function UsersPage() {
             />
           </Field>
           <Field label={t('users.password')} htmlFor="user-password" hint={t('users.passwordHint')} required>
-            <Input
-              id="user-password"
-              type="password"
-              autoComplete="new-password"
-              value={createForm.password}
-              onChange={(event) => setCreateForm((form) => ({ ...form, password: event.target.value }))}
-              required
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Input
+                id="user-password"
+                type={showCreatePassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={createForm.password}
+                onChange={(event) => setCreateForm((form) => ({ ...form, password: event.target.value }))}
+                required
+                style={{ paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCreatePassword((v) => !v)}
+                aria-label={showCreatePassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                title={showCreatePassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted, #94a3b8)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 4,
+                }}
+              >
+                <Icon name={showCreatePassword ? 'eye-off' : 'eye'} size={18} />
+              </button>
+            </div>
+          </Field>
+          <Field label="تکرار رمز عبور" htmlFor="user-confirm-password" required>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Input
+                id="user-confirm-password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={createForm.confirmPassword}
+                onChange={(event) => setCreateForm((form) => ({ ...form, confirmPassword: event.target.value }))}
+                required
+                style={{ paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={showConfirmPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                title={showConfirmPassword ? 'پنهان کردن رمز' : 'نمایش رمز'}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted, #94a3b8)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 4,
+                }}
+              >
+                <Icon name={showConfirmPassword ? 'eye-off' : 'eye'} size={18} />
+              </button>
+            </div>
           </Field>
           <div className="form-grid two">
             <Field label={t('users.role')} htmlFor="user-role">
