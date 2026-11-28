@@ -216,7 +216,7 @@ export function HomePage({
         <div className="inhome-detail-view">
           <div className="inhome-back-bar">
             <button type="button" className="btn-back" onClick={handleBack}>
-              ← بازگشت
+              {isFa ? '← بازگشت' : '← Back'}
             </button>
           </div>
 
@@ -225,11 +225,11 @@ export function HomePage({
               <Artwork url={album.artworkUrl} size={120} />
             </div>
             <div className="inhome-hero-meta">
-              <span className="inhome-hero-tag">آلبوم</span>
+              <span className="inhome-hero-tag">{isFa ? 'آلبوم' : 'Album'}</span>
               <h2 className="inhome-hero-title">{album.title}</h2>
               <p className="inhome-hero-sub">
                 {album.albumArtist || album.artistName || '—'}
-                {album.year ? ` • سال ${album.year}` : ''} • {albumTracks.length} قطعه
+                {album.year ? (isFa ? ` • سال ${album.year}` : ` • ${album.year}`) : ''} • {albumTracks.length} {isFa ? 'قطعه' : 'tracks'}
               </p>
             </div>
           </div>
@@ -241,7 +241,7 @@ export function HomePage({
                 className="btn-play-all"
                 onClick={() => void playTrack(albumTracks[0]!, albumTracks)}
               >
-                ▶ پخش همه آهنگ‌ها
+                {isFa ? '▶ پخش همه آهنگ‌ها' : '▶ Play All'}
               </button>
             </div>
           )}
@@ -436,11 +436,11 @@ export function HomePage({
                 <div className="spotify-quick-art liked-art">
                   <ThreeDIcon type="heart" size={28} />
                 </div>
-                <span className="spotify-quick-title">آهنگ‌های پسندیده‌شده</span>
+                <span className="spotify-quick-title">{t('home.likedTracks')}</span>
                 <button
                   type="button"
                   className="spotify-quick-play"
-                  aria-label="پخش"
+                  aria-label={isFa ? 'پخش' : 'Play'}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (favoriteTracks.length > 0) {
@@ -478,7 +478,7 @@ export function HomePage({
           {recentTracks.length > 0 && (
             <section className="spotify-section">
               <div className="spotify-section-header">
-                <h2 className="spotify-section-title">تازه‌ها و اخیراً بارگذاری‌شده</h2>
+                <h2 className="spotify-section-title">{t('home.recentlyAdded')}</h2>
               </div>
               <div className="spotify-carousel">
                 {recentTracks.slice(0, 12).map((track) => (
@@ -509,7 +509,7 @@ export function HomePage({
           {albums.length > 0 && (
             <section className="spotify-section">
               <div className="spotify-section-header">
-                <h2 className="spotify-section-title">آلبوم‌های منتخب</h2>
+                <h2 className="spotify-section-title">{t('home.featuredAlbums')}</h2>
               </div>
               <div className="spotify-carousel">
                 {albums.slice(0, 10).map((album) => (
@@ -539,7 +539,7 @@ export function HomePage({
           {/* Popular Tracks Section */}
           <section className="spotify-section">
             <div className="spotify-section-header">
-              <h2 className="spotify-section-title">بیشترین پخش و پیشنهادی</h2>
+              <h2 className="spotify-section-title">{t('home.mostPlayed')}</h2>
             </div>
             <div className="spotify-track-list">
               {(popularTracks.length > 0 ? popularTracks : recentTracks).slice(0, 8).map((track, idx) => (
@@ -584,15 +584,17 @@ export function HomePage({
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 24 }}>
           <section className="spotify-section">
             <div className="spotify-section-header">
-              <h2 className="spotify-section-title">تمام خواننده‌ها و هنرمندان</h2>
-              <span style={{ fontSize: 13, color: '#94a3b8' }}>{artists.length} هنرمند</span>
+              <h2 className="spotify-section-title">{isFa ? 'تمام خواننده‌ها و هنرمندان' : 'All Artists'}</h2>
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                {artists.length} {isFa ? 'هنرمند' : 'artists'}
+              </span>
             </div>
 
             {artists.length === 0 ? (
               <div className="spotify-empty-state">
                 <ThreeDIcon type="mic" size={60} />
-                <h3>هنرمندی یافت نشد</h3>
-                <p>پس از بارگذاری فایل‌ها، اطلاعات خواننده‌ها به‌صورت خودکار در اینجا قرار می‌گیرد.</p>
+                <h3>{isFa ? 'هنرمندی یافت نشد' : 'No artists found'}</h3>
+                <p>{isFa ? 'پس از بارگذاری فایل‌ها، اطلاعات خواننده‌ها به‌صورت خودکار در اینجا قرار می‌گیرد.' : 'Artists will appear here once tracks are uploaded.'}</p>
               </div>
             ) : (
               <div className="spotify-artists-grid">
@@ -613,7 +615,7 @@ export function HomePage({
                     </div>
                     <span className="spotify-artist-title">{artist.name}</span>
                     <span className="spotify-artist-subtitle">
-                      {artist.albumCount || 0} آلبوم • {artist.trackCount || 0} آهنگ
+                      {artist.albumCount || 0} {isFa ? 'آلبوم' : 'albums'} • {artist.trackCount || 0} {isFa ? 'آهنگ' : 'tracks'}
                     </span>
                   </div>
                 ))}
@@ -626,12 +628,14 @@ export function HomePage({
             <section className="spotify-section" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20 }}>
               <div className="spotify-section-header">
                 <div>
-                  <h2 className="spotify-section-title">🎵 آهنگ‌های متفرقه / بدون خواننده</h2>
+                  <h2 className="spotify-section-title">{isFa ? '🎵 آهنگ‌های متفرقه / بدون خواننده' : '🎵 Tracks Without Artist'}</h2>
                   <p style={{ margin: '4px 0 0', fontSize: 12, color: '#94a3b8' }}>
-                    قطعاتی که برچسب خواننده ندارند یا خواننده آن‌ها نامشخص است
+                    {isFa ? 'قطعاتی که برچسب خواننده ندارند یا خواننده آن‌ها نامشخص است' : 'Tracks with missing or unknown artist metadata'}
                   </p>
                 </div>
-                <span style={{ fontSize: 13, color: '#94a3b8' }}>{orphanTracks.length} قطعه</span>
+                <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                  {orphanTracks.length} {isFa ? 'قطعه' : 'tracks'}
+                </span>
               </div>
               <div className="spotify-track-list">
                 {orphanTracks.map((track, idx) => (
@@ -676,8 +680,8 @@ export function HomePage({
           {favoriteTracks.length === 0 ? (
             <div className="spotify-empty-state">
               <ThreeDIcon type="heart" size={60} />
-              <h3>هنوز آهنگی را لایک نکرده‌اید</h3>
-              <p>هر آهنگی که دوست دارید را با دکمه قلب ذخیره کنید تا اینجا ظاهر شود.</p>
+              <h3>{isFa ? 'هنوز آهنگی را لایک نکرده‌اید' : 'No liked songs yet'}</h3>
+              <p>{isFa ? 'هر آهنگی که دوست دارید را با دکمه قلب ذخیره کنید تا اینجا ظاهر شود.' : 'Tap the heart icon on any song to save it here.'}</p>
             </div>
           ) : (
             <div className="spotify-track-list">
@@ -708,7 +712,7 @@ export function HomePage({
     return (
       <Modal
         open={playlistModalTrack !== null}
-        title="افزودن به لیست پخش"
+        title={isFa ? 'افزودن به لیست پخش' : 'Add to Playlist'}
         onClose={() => setPlaylistModalTrack(null)}
       >
         {playlistModalTrack && (
@@ -735,13 +739,13 @@ export function HomePage({
             </div>
 
             <p style={{ fontSize: 13, color: '#cbd5e1', marginBottom: 10 }}>
-              انتخاب لیست پخش شخصی برای افزودن این آهنگ:
+              {isFa ? 'انتخاب لیست پخش شخصی برای افزودن این آهنگ:' : 'Choose a personal playlist:'}
             </p>
 
             {userPlaylists.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8' }}>
-                <p style={{ margin: 0, fontSize: 13 }}>هنوز لیست پخشی ایجاد نکرده‌اید.</p>
-                <p style={{ margin: '4px 0 0', fontSize: 12 }}>از بخش «کتابخانه» یک لیست پخش جدید بسازید.</p>
+                <p style={{ margin: 0, fontSize: 13 }}>{isFa ? 'هنوز لیست پخشی ایجاد نکرده‌اید.' : 'No playlists created yet.'}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12 }}>{isFa ? 'از بخش «کتابخانه» یک لیست پخش جدید بسازید.' : 'Create one in the Library tab.'}</p>
               </div>
             ) : (
               <div className="playlist-select-list">
@@ -759,12 +763,12 @@ export function HomePage({
                   >
                     <div className="playlist-select-info">
                       <span className="playlist-select-name">{pl.name}</span>
-                      <span className="playlist-select-count">{pl.trackCount} قطعه</span>
+                      <span className="playlist-select-count">{pl.trackCount} {isFa ? 'قطعه' : 'tracks'}</span>
                     </div>
                     <button
                       type="button"
                       className="btn-add-circle"
-                      title="افزودن به این لیست"
+                      title={isFa ? 'افزودن به این لیست' : 'Add to this playlist'}
                       style={{ pointerEvents: 'none' }}
                     >
                       +

@@ -9,7 +9,8 @@ import { Icon } from '../ui/icons';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
 
 export function LibraryPage() {
-  const { t, notify } = useUi();
+  const { t, language, notify } = useUi();
+  const isFa = language === 'fa';
   const queryClient = useQueryClient();
   const { playTrack, currentTrack, isPlaying, toggleFavorite, isFavorite } = usePlayer();
 
@@ -128,7 +129,7 @@ export function LibraryPage() {
           className="btn-back"
           onClick={handleBackToPlaylists}
         >
-          ← بازگشت به لیست‌ها
+          {isFa ? '← بازگشت به لیست‌ها' : '← Back to Playlists'}
         </button>
 
         <div className="detail-hero" style={{ marginTop: 14 }}>
@@ -136,10 +137,10 @@ export function LibraryPage() {
             <ThreeDIcon type="cassette" size={60} />
           </div>
           <div className="detail-meta">
-            <span className="detail-tag">لیست پخش خصوصی</span>
+            <span className="detail-tag">{isFa ? 'لیست پخش خصوصی' : 'Private Playlist'}</span>
             <h2>{playlist.name}</h2>
-            <p>{playlist.description || 'بدون توضیحات'}</p>
-            <p className="detail-count">{pTracks.length} قطعه</p>
+            <p>{playlist.description || (isFa ? 'بدون توضیحات' : 'No description')}</p>
+            <p className="detail-count">{pTracks.length} {isFa ? 'قطعه' : 'tracks'}</p>
           </div>
         </div>
 
@@ -164,7 +165,7 @@ export function LibraryPage() {
             type="button"
             className="btn-danger-outline"
             onClick={() => {
-              if (window.confirm('آیا از حذف این لیست پخش اطمینان دارید؟')) {
+              if (window.confirm(isFa ? 'آیا از حذف این لیست پخش اطمینان دارید؟' : 'Delete this playlist?')) {
                 deleteMutation.mutate(playlist.id);
               }
             }}
@@ -175,14 +176,14 @@ export function LibraryPage() {
 
         {pTracks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8' }}>
-            <p style={{ margin: 0, fontSize: 14 }}>این لیست پخش هنوز خالی است.</p>
+            <p style={{ margin: 0, fontSize: 14 }}>{isFa ? 'این لیست پخش هنوز خالی است.' : 'This playlist is empty.'}</p>
             <button
               type="button"
               className="btn-secondary"
               style={{ marginTop: 12 }}
               onClick={() => setShowAddSongsModal(true)}
             >
-              + افزودن اولین آهنگ
+              {isFa ? '+ افزودن اولین آهنگ' : '+ Add First Song'}
             </button>
           </div>
         ) : (
@@ -320,9 +321,9 @@ export function LibraryPage() {
       {/* Top Header */}
       <div className="library-header-row">
         <div>
-          <h2>لیست‌های پخش شما</h2>
+          <h2>{isFa ? 'لیست‌های پخش شما' : 'Your Playlists'}</h2>
           <span style={{ fontSize: 13, color: '#94a3b8' }}>
-            {playlists.length} لیست پخش اختصاصی
+            {playlists.length} {isFa ? 'لیست پخش اختصاصی' : 'private playlists'}
           </span>
         </div>
         <button
@@ -350,10 +351,12 @@ export function LibraryPage() {
         >
           <ThreeDIcon type="cassette" size={72} />
           <h3 style={{ margin: 0, fontSize: 18, color: '#fff', fontWeight: 700 }}>
-            هنوز لیست پخشی ایجاد نکرده‌اید
+            {isFa ? 'هنوز لیست پخشی ایجاد نکرده‌اید' : 'No playlists created yet'}
           </h3>
           <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', maxWidth: 320 }}>
-            این بخش منحصراً برای لیست‌های پخش خصوصی شماست. اولین لیست پخش خود را بسازید و آهنگ‌های دلخواهتان را به آن اضافه کنید.
+            {isFa
+              ? 'این بخش منحصراً برای لیست‌های پخش خصوصی شماست. اولین لیست پخش خود را بسازید و آهنگ‌های دلخواهتان را به آن اضافه کنید.'
+              : 'This space is dedicated to your private playlists. Create your first playlist and add your favorite songs.'}
           </p>
           <button
             type="button"
@@ -378,7 +381,7 @@ export function LibraryPage() {
               <div className="playlist-item-meta">
                 <h4>{pl.name}</h4>
                 <p>
-                  {pl.trackCount} قطعه {pl.description ? `• ${pl.description}` : ''}
+                  {pl.trackCount} {isFa ? 'قطعه' : 'tracks'} {pl.description ? `• ${pl.description}` : ''}
                 </p>
               </div>
             </div>
