@@ -71,6 +71,7 @@ fun HomeScreen(
         factory = viewModelFactory { initializer { HomeViewModel(container) } },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val allTracks by viewModel.tracks.collectAsStateWithLifecycle()
     val allAlbums by viewModel.albums.collectAsStateWithLifecycle()
@@ -83,85 +84,87 @@ fun HomeScreen(
             onSelectTab = viewModel::selectTab,
         )
 
-        when (selectedTab) {
-            HomeTab.All -> {
-                when (val home = state) {
-                    HomeState.Loading -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = viewModel::refresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (selectedTab) {
+                HomeTab.All -> {
+                    when (val home = state) {
+                        HomeState.Loading -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
                         }
-                    }
 
-                    is HomeState.Failed -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Text(errorMessage(home.error))
-                                Button(onClick = { viewModel.reload() }) {
-                                    Text(stringResource(R.string.action_retry))
+                        is HomeState.Failed -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text(errorMessage(home.error))
+                                    Button(onClick = { viewModel.reload() }) {
+                                        Text(stringResource(R.string.action_retry))
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    is HomeState.Success -> PullToRefreshBox(
-                        isRefreshing = home.refreshing,
-                        onRefresh = viewModel::refresh,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        HomeContent(
-                            data = home.data,
-                            container = container,
-                            onOpenAlbum = onOpenAlbum,
-                            onPlayTracks = { tracks, startIndex ->
-                                viewModel.playTracks(tracks, startIndex)
-                                onPlayTracks()
-                            },
-                            onToggleFavorite = viewModel::toggleFavorite,
-                        )
+                        is HomeState.Success -> {
+                            HomeContent(
+                                data = home.data,
+                                container = container,
+                                onOpenAlbum = onOpenAlbum,
+                                onPlayTracks = { tracks, startIndex ->
+                                    viewModel.playTracks(tracks, startIndex)
+                                    onPlayTracks()
+                                },
+                                onToggleFavorite = viewModel::toggleFavorite,
+                            )
+                        }
                     }
                 }
-            }
 
-            HomeTab.Tracks -> {
-                FullTrackList(
-                    tracks = allTracks,
-                    container = container,
-                    onPlayTracks = { tracks, startIndex ->
-                        viewModel.playTracks(tracks, startIndex)
-                        onPlayTracks()
-                    },
-                    onToggleFavorite = viewModel::toggleFavorite,
-                )
-            }
+                HomeTab.Tracks -> {
+                    FullTrackList(
+                        tracks = allTracks,
+                        container = container,
+                        onPlayTracks = { tracks, startIndex ->
+                            viewModel.playTracks(tracks, startIndex)
+                            onPlayTracks()
+                        },
+                        onToggleFavorite = viewModel::toggleFavorite,
+                    )
+                }
 
-            HomeTab.Albums -> {
-                FullAlbumList(
-                    albums = allAlbums,
-                    container = container,
-                    onOpenAlbum = onOpenAlbum,
-                )
-            }
+                HomeTab.Albums -> {
+                    FullAlbumList(
+                        albums = allAlbums,
+                        container = container,
+                        onOpenAlbum = onOpenAlbum,
+                    )
+                }
 
-            HomeTab.Artists -> {
-                FullArtistList(
-                    artists = allArtists,
-                    onOpenArtist = onOpenArtist,
-                )
-            }
+                HomeTab.Artists -> {
+                    FullArtistList(
+                        artists = allArtists,
+                        onOpenArtist = onOpenArtist,
+                    )
+                }
 
-            HomeTab.Favorites -> {
-                FullTrackList(
-                    tracks = allFavorites,
-                    container = container,
-                    onPlayTracks = { tracks, startIndex ->
-                        viewModel.playTracks(tracks, startIndex)
-                        onPlayTracks()
-                    },
-                    onToggleFavorite = viewModel::toggleFavorite,
-                )
+                HomeTab.Favorites -> {
+                    FullTrackList(
+                        tracks = allFavorites,
+                        container = container,
+                        onPlayTracks = { tracks, startIndex ->
+                            viewModel.playTracks(tracks, startIndex)
+                            onPlayTracks()
+                        },
+                        onToggleFavorite = viewModel::toggleFavorite,
+                    )
+                }
             }
         }
     }

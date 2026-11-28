@@ -58,6 +58,9 @@ class HomeViewModel(
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _selectedTab = MutableStateFlow(HomeTab.All)
     val selectedTab: StateFlow<HomeTab> = _selectedTab.asStateFlow()
 
@@ -100,17 +103,26 @@ class HomeViewModel(
      * so the swipe gesture shows its own indicator instead of blanking the screen.
      */
     fun refresh() {
+        if (_isRefreshing.value) return
         val current = _state.value
-        if (current is HomeState.Success && current.refreshing) return
         viewModelScope.launch {
-            if (current is HomeState.Success) {
-                _state.value = current.copy(refreshing = true)
+            _isRefreshing.value = true
+            try {
+                if (current is HomeState.Success) {
+                    _state.value = current.copy(refreshing = true)
+                }
+                libraryRepo?.refreshLibrary()
                 homeSource.loadHome()
-                    .onSuccess { _state.value = HomeState.Success(it) }
-                    .onFailure { _state.value = current.copy(refreshing = false) }
-            } else {
-                // Nothing on screen to preserve, so fall back to the full loading path.
-                reload()
+                    .onSuccess { _state.value = HomeState.Success(it, refreshing = false) }
+                    .onFailure { err ->
+                        _state.value = if (current is HomeState.Success) {
+                            current.copy(refreshing = false)
+                        } else {
+                            HomeState.Failed(err)
+                        }
+                    }
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
