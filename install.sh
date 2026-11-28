@@ -478,6 +478,12 @@ case "$1" in
     update)
         cd "$INSTALL_DIR"
         git fetch --all && git reset --hard origin/main
+        bash "$CLI_SCRIPT" --sync-watchers
+        NEW_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+        VOL_DIR=$(docker volume inspect musichub_data -f '{{.Mountpoint}}' 2>/dev/null || echo "/var/lib/docker/volumes/musichub_data/_data")
+        if [ -n "$NEW_SHA" ] && [ -d "$VOL_DIR" ]; then
+            echo "$NEW_SHA" > "$VOL_DIR/current_sha.txt"
+        fi
         dc up -d --build
         ;;
     ports)
@@ -689,18 +695,28 @@ EOF
         systemctl daemon-reload >/dev/null 2>&1 || true
         systemctl enable --now irpotify-portsync.path >/dev/null 2>&1 || true
 
+        VOL_DIR=$(docker volume inspect musichub_data -f '{{.Mountpoint}}' 2>/dev/null || echo "/var/lib/docker/volumes/musichub_data/_data")
+        [ -d "$VOL_DIR" ] && git -C "$INSTALL_DIR" rev-parse HEAD > "$VOL_DIR/current_sha.txt" 2>/dev/null || true
+
         cat > "$INSTALL_DIR/scripts/apply-update.sh" << 'EOF'
 #!/usr/bin/env bash
 set -e
 INSTALL_DIR="/opt/irpotify"
+LOG_FILE="/var/log/irpotify-update.log"
 [ -d "$INSTALL_DIR" ] || exit 0
-TRIGGER_FILE="/var/lib/docker/volumes/musichub_data/_data/update_request.json"
+VOL_DIR=$(docker volume inspect musichub_data -f '{{.Mountpoint}}' 2>/dev/null || echo "/var/lib/docker/volumes/musichub_data/_data")
+TRIGGER_FILE="${VOL_DIR}/update_request.json"
 [ -f "$TRIGGER_FILE" ] || exit 0
 rm -f "$TRIGGER_FILE"
-cd "$INSTALL_DIR"
-git fetch --all --prune >/dev/null 2>&1 || true
-git reset --hard origin/main >/dev/null 2>&1 || true
-docker compose --env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml" up -d --build >/dev/null 2>&1 || true
+{
+  echo "=== irpotify in-app update started at $(date -Iseconds) ==="
+  cd "$INSTALL_DIR"
+  git fetch --all --prune
+  git reset --hard origin/main
+  git rev-parse HEAD > "${VOL_DIR}/current_sha.txt" 2>/dev/null || true
+  docker compose --env-file "$INSTALL_DIR/.env" -f "$INSTALL_DIR/deploy/docker/docker-compose.yml" -f "$INSTALL_DIR/deploy/docker/docker-compose.lan.yml" up -d --build
+  echo "=== irpotify in-app update finished at $(date -Iseconds) ==="
+} >> "$LOG_FILE" 2>&1 || true
 EOF
         chmod +x "$INSTALL_DIR/scripts/apply-update.sh"
 
@@ -714,12 +730,12 @@ Type=oneshot
 ExecStart=/opt/irpotify/scripts/apply-update.sh
 EOF
 
-        cat > /etc/systemd/system/irpotify-updatesync.path << 'EOF'
+        cat > /etc/systemd/system/irpotify-updatesync.path << EOF
 [Unit]
 Description=Watch for irpotify in-app update requests
 
 [Path]
-PathExists=/var/lib/docker/volumes/musichub_data/_data/update_request.json
+PathExists=${VOL_DIR}/update_request.json
 
 [Install]
 WantedBy=multi-user.target
@@ -998,6 +1014,9 @@ elif [ "$1" == "--reset-db" ]; then
     reset_database_volume
 elif [ "$1" == "--configure-dns" ]; then
     configure_docker_dns
+elif [ "$1" == "--sync-watchers" ]; then
+    create_cli_command
+    setup_port_sync_watcher
 elif [ "$1" == "--uninstall" ]; then
     uninstall_irpotify
 elif [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.env" ]; then

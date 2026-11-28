@@ -271,7 +271,7 @@ public sealed class GitHubUpdateService : BackgroundService
         }
     }
 
-    private static async Task<string?> ResolveCurrentShaAsync(MusicHubDbContext db, CancellationToken ct)
+    private async Task<string?> ResolveCurrentShaAsync(MusicHubDbContext db, CancellationToken ct)
     {
         var repoRoot = FindGitRepositoryRoot();
         if (repoRoot is not null)
@@ -286,9 +286,26 @@ public sealed class GitHubUpdateService : BackgroundService
             }
             catch
             {
-                // fall back to AppSettings
+                // fall back to volume/AppSettings
             }
         }
+
+        var shaFile = Path.Combine(_storageOptions.RootPath, "current_sha.txt");
+        if (File.Exists(shaFile))
+        {
+            try
+            {
+                var sha = (await File.ReadAllTextAsync(shaFile, ct)).Trim();
+                if (!string.IsNullOrWhiteSpace(sha)) return sha;
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        var envSha = Environment.GetEnvironmentVariable("MUSICHUB_CURRENT_SHA");
+        if (!string.IsNullOrWhiteSpace(envSha)) return envSha.Trim();
 
         var stored = await db.AppSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Key == SettingCurrentSha, ct);
         return stored?.Value;
