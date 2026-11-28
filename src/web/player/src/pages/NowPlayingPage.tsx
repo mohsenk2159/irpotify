@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/endpoints';
 import { usePlayer } from '../player/PlayerContext';
 import { useUi } from '../ui/UiProvider';
 import { Icon } from '../ui/icons';
 import { Artwork } from '../ui/Artwork';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
+import { Modal } from '../ui/Modal';
 
 interface NowPlayingPageProps {
   onBackToHome?: () => void;
@@ -31,12 +34,27 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
     toggleFavorite,
     isFavorite,
     playQueueItem,
+    addToQueue,
+    removeFromQueue,
   } = usePlayer();
 
-  const { t, formatTime } = useUi();
+  const { t, formatTime, notify } = useUi();
   const [showQueue, setShowQueue] = useState(false);
+  const [showAddToQueue, setShowAddToQueue] = useState(false);
+  const [queueSearch, setQueueSearch] = useState('');
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
+
+  const catalogQuery = useQuery({
+    queryKey: ['tracks', 'queue-picker'],
+    queryFn: () => api.tracks.list({ page: 1, pageSize: 200 }),
+    enabled: showAddToQueue,
+  });
+  const catalogTracks = (catalogQuery.data?.items ?? []).filter((tr) => {
+    const q = queueSearch.trim().toLowerCase();
+    if (!q) return true;
+    return tr.title.toLowerCase().includes(q) || (tr.artist ?? '').toLowerCase().includes(q);
+  });
 
   if (!currentTrack) {
     return (
@@ -258,12 +276,26 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
               <div className="queue-drag-handle" />
               <div className="queue-header-row">
                 <h3>{t('player.queue')} ({queue.length})</h3>
-                <button
-                  className="icon-btn-circle small"
-                  onClick={() => setShowQueue(false)}
-                >
-                  <Icon name="close" size={18} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    style={{ padding: '5px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => {
+                      setQueueSearch('');
+                      setShowAddToQueue(true);
+                    }}
+                  >
+                    <Icon name="plus" size={14} />
+                    <span>افزودن آهنگ</span>
+                  </button>
+                  <button
+                    className="icon-btn-circle small"
+                    onClick={() => setShowQueue(false)}
+                  >
+                    <Icon name="close" size={18} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -297,12 +329,79 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
                       <span className="queue-item-artist">{track.artist || '—'}</span>
                     </div>
                     <span className="queue-item-time">{formatTime(track.durationSeconds)}</span>
+                    <button
+                      type="button"
+                      className="icon-btn-circle small"
+                      title="حذف از صف پخش"
+                      aria-label="حذف از صف پخش"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromQueue(idx);
+                      }}
+                    >
+                      <Icon name="close" size={15} />
+                    </button>
                   </div>
                 );
               })}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Song to Queue Modal */}
+      {showAddToQueue && (
+        <Modal open={showAddToQueue} onClose={() => setShowAddToQueue(false)} title="افزودن آهنگ به صف پخش">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="جستجوی نام آهنگ یا هنرمند..."
+              value={queueSearch}
+              onChange={(e) => setQueueSearch(e.target.value)}
+            />
+            <div style={{ maxHeight: '50vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {catalogTracks.map((tr) => (
+                <div
+                  key={tr.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.04)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <Artwork url={tr.artworkUrl} alt={tr.title} size={40} />
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {tr.title}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#b3b3b3' }}>{tr.artist || '—'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}
+                    onClick={() => {
+                      addToQueue(tr);
+                      notify(`«${tr.title}» به صف پخش اضافه شد`, 'success');
+                    }}
+                  >
+                    + افزودن
+                  </button>
+                </div>
+              ))}
+              {catalogTracks.length === 0 && (
+                <p style={{ textAlign: 'center', color: '#b3b3b3', fontSize: 13 }}>آهنگی یافت نشد.</p>
+              )}
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

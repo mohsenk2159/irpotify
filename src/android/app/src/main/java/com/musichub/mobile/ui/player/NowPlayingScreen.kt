@@ -11,16 +11,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +58,9 @@ fun NowPlayingScreen(container: AppContainer) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val currentTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
+    val allTracks by viewModel.allTracks.collectAsStateWithLifecycle()
+    var showAddToQueue by remember { mutableStateOf(false) }
+    var queueSearchQuery by remember { mutableStateOf("") }
 
     if (!state.connected) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -217,15 +228,27 @@ fun NowPlayingScreen(container: AppContainer) {
             }
 
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.action_queue) + " (${queue.size})",
-                style = MaterialTheme.typography.titleSmall,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.action_queue) + " (${queue.size})",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                TextButton(onClick = {
+                    queueSearchQuery = ""
+                    showAddToQueue = true
+                }) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text(text = stringResource(R.string.playlist_add_songs))
+                }
+            }
             Spacer(Modifier.height(4.dp))
         }
 
-        itemsIndexed(queue, key = { _, item -> item.mediaId }) { index, item ->
+        itemsIndexed(queue, key = { index, item -> "${item.mediaId}-$index" }) { index, item ->
             Surface(
                 onClick = { viewModel.playQueueItem(index) },
                 modifier = Modifier.fillMaxWidth(),
@@ -235,24 +258,106 @@ fun NowPlayingScreen(container: AppContainer) {
                     MaterialTheme.colorScheme.surface
                 },
             ) {
-                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                    Text(
-                        item.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        item.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            item.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            item.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(onClick = { viewModel.removeFromQueue(index) }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove from queue",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
         }
+    }
+
+    if (showAddToQueue) {
+        val filtered = remember(allTracks, queueSearchQuery) {
+            val q = queueSearchQuery.trim()
+            if (q.isEmpty()) allTracks
+            else allTracks.filter {
+                it.title.contains(q, ignoreCase = true) || it.artist.contains(q, ignoreCase = true)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showAddToQueue = false },
+            title = { Text(stringResource(R.string.playlist_add_songs)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = queueSearchQuery,
+                        onValueChange = { queueSearchQuery = it },
+                        placeholder = { Text(stringResource(R.string.search_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(filtered, key = { it.id }) { track ->
+                            Surface(
+                                onClick = { viewModel.addToQueue(track) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = track.artist,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddToQueue = false }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            },
+        )
     }
 }
 

@@ -25,6 +25,8 @@ interface PlayerContextValue {
   favoritesSet: Set<string>;
   playTrack: (track: Track, newQueue?: Track[], autoNavigate?: boolean) => Promise<void>;
   playQueueItem: (index: number) => Promise<void>;
+  addToQueue: (track: Track) => void;
+  removeFromQueue: (index: number) => void;
   togglePlayPause: () => void;
   next: () => void;
   previous: () => void;
@@ -256,6 +258,55 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [queue, loadAndPlay],
   );
 
+  const addToQueue = useCallback(
+    (track: Track) => {
+      if (queue.length === 0 || !currentTrack) {
+        void playTrack(track, [track], false);
+        return;
+      }
+      originalQueueRef.current = [...originalQueueRef.current, track];
+      setQueue((prev) => [...prev, track]);
+    },
+    [queue.length, currentTrack, playTrack],
+  );
+
+  const removeFromQueue = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= queue.length) return;
+      const removed = queue[index];
+      const nextQueue = queue.filter((_, i) => i !== index);
+      if (removed) {
+        const origIdx = originalQueueRef.current.findIndex((t) => t.id === removed.id);
+        if (origIdx >= 0) {
+          originalQueueRef.current = originalQueueRef.current.filter((_, i) => i !== origIdx);
+        }
+      }
+      setQueue(nextQueue);
+
+      if (nextQueue.length === 0) {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+        setCurrentTrack(null);
+        setIsPlaying(false);
+        setQueueIndex(-1);
+        return;
+      }
+
+      if (index < queueIndex) {
+        setQueueIndex(queueIndex - 1);
+      } else if (index === queueIndex) {
+        const nextIdx = Math.min(index, nextQueue.length - 1);
+        setQueueIndex(nextIdx);
+        const nextTrack = nextQueue[nextIdx];
+        if (nextTrack) void loadAndPlay(nextTrack);
+      }
+    },
+    [queue, queueIndex, loadAndPlay],
+  );
+
   const togglePlayPause = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
@@ -394,6 +445,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         favoritesSet,
         playTrack,
         playQueueItem,
+        addToQueue,
+        removeFromQueue,
         togglePlayPause,
         next,
         previous,

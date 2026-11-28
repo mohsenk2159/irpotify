@@ -275,6 +275,54 @@ class PlayerController(
         }
     }
 
+    suspend fun addToQueue(track: TrackEntity) {
+        val player = awaitController() ?: return
+        val count = withContext(Dispatchers.Main) { player.mediaItemCount }
+        if (count == 0) {
+            playTracks(listOf(track), 0)
+            return
+        }
+        val profileId = sessionManager.currentProfile()?.id
+        val item = withContext(Dispatchers.IO) {
+            val local = profileId?.let { downloadRepository.localFile(it, track.id) }
+            val uri = if (local != null) Uri.fromFile(local) else Uri.parse("musichub://track/${track.id}")
+            val metadata = MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.artist)
+                .setAlbumTitle(track.album)
+                .setDurationMs(track.durationMs)
+                .build()
+            MediaItem.Builder()
+                .setMediaId(track.id)
+                .setUri(uri)
+                .setMediaMetadata(metadata)
+                .build()
+        }
+        val updatedIds = withContext(Dispatchers.Main) {
+            player.addMediaItem(item)
+            publish(player)
+            (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+        }
+        withContext(Dispatchers.IO) {
+            val entities = updatedIds.mapNotNull { libraryRepository.track(it) }
+            libraryRepository.saveQueue(entities)
+        }
+    }
+
+    suspend fun removeFromQueue(index: Int) {
+        val player = awaitController() ?: return
+        val updatedIds = withContext(Dispatchers.Main) {
+            if (index !in 0 until player.mediaItemCount) return@withContext null
+            player.removeMediaItem(index)
+            publish(player)
+            (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+        } ?: return
+        withContext(Dispatchers.IO) {
+            val entities = updatedIds.mapNotNull { libraryRepository.track(it) }
+            libraryRepository.saveQueue(entities)
+        }
+    }
+
     suspend fun toggleShuffle() {
         val player = awaitController() ?: return
         withContext(Dispatchers.Main) {

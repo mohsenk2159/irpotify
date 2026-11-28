@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 class NowPlayingViewModel(private val container: AppContainer) : ViewModel() {
     val state: StateFlow<PlayerUiState> = container.playerController.state
     val queue: StateFlow<List<QueueItem>> = container.playerController.queue
+    val allTracks: StateFlow<List<TrackEntity>> = container.libraryRepository.observeTracks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * The cached row for the playing track. Now Playing needs it for two things the MediaSession
@@ -44,6 +46,14 @@ class NowPlayingViewModel(private val container: AppContainer) : ViewModel() {
 
     fun playQueueItem(index: Int) = viewModelScope.launch {
         container.playerController.seekToQueueIndex(index)
+    }
+
+    fun addToQueue(track: TrackEntity) = viewModelScope.launch {
+        container.playerController.addToQueue(track)
+    }
+
+    fun removeFromQueue(index: Int) = viewModelScope.launch {
+        container.playerController.removeFromQueue(index)
     }
 
     fun toggleFavorite() {
