@@ -34,7 +34,8 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
     toggleFavorite,
     isFavorite,
   } = usePlayer();
-  const { t, formatTime } = useUi();
+  const { t, language, formatTime } = useUi();
+  const isFa = language === 'fa';
 
   const playlistsQuery = useQuery({
     queryKey: ['playlists'],
@@ -68,7 +69,7 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
             onClick={() => onSelectTab('search')}
           >
             <Icon name="search" size={18} />
-            <span>چه چیزی می‌خواهید بشنوید؟</span>
+            <span>{isFa ? 'چه چیزی می‌خواهید بشنوید؟' : 'What do you want to play?'}</span>
           </button>
         </div>
 
@@ -119,13 +120,13 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
               onClick={() => onSelectTab('library')}
             >
               <Icon name="playlists" size={22} />
-              <span>کتابخانه شما</span>
+              <span>{t('library.title')}</span>
             </button>
             <button
               className="spotify-sidebar-add-btn"
               onClick={() => onSelectTab('library')}
-              title="مدیریت و ساخت لیست پخش"
-              aria-label="ساخت لیست پخش"
+              title={isFa ? 'مدیریت و ساخت لیست پخش' : 'Create & manage playlists'}
+              aria-label={t('library.createPlaylist')}
             >
               <Icon name="plus" size={18} />
             </button>
@@ -140,8 +141,8 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
                 <Icon name="heart-filled" size={18} />
               </div>
               <div className="spotify-sidebar-item-meta">
-                <span className="spotify-sidebar-item-title">آهنگ‌های مورد علاقه</span>
-                <span className="spotify-sidebar-item-sub">مجموعه شخصی</span>
+                <span className="spotify-sidebar-item-title">{t('library.likedSongs')}</span>
+                <span className="spotify-sidebar-item-sub">{isFa ? 'مجموعه شخصی' : 'Personal collection'}</span>
               </div>
             </button>
 
@@ -156,19 +157,21 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
                 </div>
                 <div className="spotify-sidebar-item-meta">
                   <span className="spotify-sidebar-item-title">{pl.name}</span>
-                  <span className="spotify-sidebar-item-sub">لیست پخش • {pl.trackCount} آهنگ</span>
+                  <span className="spotify-sidebar-item-sub">
+                    {isFa ? `لیست پخش • ${pl.trackCount} آهنگ` : `Playlist • ${pl.trackCount} tracks`}
+                  </span>
                 </div>
               </button>
             ))}
 
             {playlists.length === 0 && (
               <div className="spotify-sidebar-empty">
-                <p>اولین لیست پخش خود را بسازید</p>
+                <p>{isFa ? 'اولین لیست پخش خود را بسازید' : 'Create your first playlist'}</p>
                 <button
                   className="spotify-sidebar-cta"
                   onClick={() => onSelectTab('library')}
                 >
-                  ساخت لیست پخش
+                  {t('library.createPlaylist')}
                 </button>
               </div>
             )}
@@ -212,7 +215,7 @@ export function Layout({ activeTab, onSelectTab, children }: LayoutProps) {
               </button>
             </>
           ) : (
-            <div className="spotify-bar-placeholder">آهنگی در حال پخش نیست</div>
+            <div className="spotify-bar-placeholder">{t('player.noTrack')}</div>
           )}
         </div>
 

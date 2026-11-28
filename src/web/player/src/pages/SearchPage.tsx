@@ -7,7 +7,8 @@ import { TrackListItem } from './HomePage';
 import { ThreeDIcon } from '../ui/ThreeDIcons';
 
 export function SearchPage({ onOpenAlbum: _onOpenAlbum }: { onOpenAlbum?: (id: string) => void }) {
-  const { t } = useUi();
+  const { t, language } = useUi();
+  const isFa = language === 'fa';
   const { playTrack, currentTrack, isPlaying, toggleFavorite, isFavorite } = usePlayer();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -54,13 +55,13 @@ export function SearchPage({ onOpenAlbum: _onOpenAlbum }: { onOpenAlbum?: (id: s
       {debouncedQuery.length === 0 ? (
         <div className="empty-box" style={{ marginTop: 40 }}>
           <ThreeDIcon type="waves" size={60} animated />
-          <h3>جستجوی هوشمند در کل موزیک‌ها</h3>
-          <p>نام آهنگ، خواننده یا آلبوم مورد نظر خود را بنویسید.</p>
+          <h3>{isFa ? 'جستجوی هوشمند در کل موزیک‌ها' : 'Smart Search Across Your Music'}</h3>
+          <p>{isFa ? 'نام آهنگ، خواننده یا آلبوم مورد نظر خود را بنویسید.' : 'Type a song title, artist, or album name.'}</p>
         </div>
       ) : searchResults.isLoading ? (
         <div className="loading-box">
           <ThreeDIcon type="vinyl" size={48} animated />
-          <p>در حال جستجو…</p>
+          <p>{isFa ? 'در حال جستجو…' : 'Searching…'}</p>
         </div>
       ) : tracks.length === 0 ? (
         <div className="empty-box">
@@ -70,7 +71,7 @@ export function SearchPage({ onOpenAlbum: _onOpenAlbum }: { onOpenAlbum?: (id: s
       ) : (
         <div className="vertical-track-list" style={{ marginTop: 16 }}>
           <div className="section-header">
-            <h3>آهنگ‌های یافت‌شده ({tracks.length})</h3>
+            <h3>{isFa ? `آهنگ‌های یافت‌شده (${tracks.length})` : `Found Tracks (${tracks.length})`}</h3>
           </div>
           {tracks.map((track) => (
             <TrackListItem

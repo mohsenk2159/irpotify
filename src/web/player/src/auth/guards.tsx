@@ -8,7 +8,7 @@ export function BootScreen() {
     <div className="boot-screen">
       <ThreeDIcon type="vinyl" size={80} animated />
       <h2 style={{ marginTop: 16, color: '#1ed760', fontWeight: 700 }}>irpotify</h2>
-      <p style={{ opacity: 0.7, fontSize: 14 }}>در حال بارگذاری…</p>
+      <p style={{ opacity: 0.7, fontSize: 14 }}>Loading…</p>
     </div>
   );
 }

@@ -10,9 +10,10 @@ import { Modal } from '../ui/Modal';
 
 interface NowPlayingPageProps {
   onBackToHome?: () => void;
+  onBrowseTracks?: () => void;
 }
 
-export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
+export function NowPlayingPage({ onBackToHome, onBrowseTracks }: NowPlayingPageProps) {
   const {
     currentTrack,
     isPlaying,
@@ -38,7 +39,8 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
     removeFromQueue,
   } = usePlayer();
 
-  const { t, formatTime, notify } = useUi();
+  const { t, language, formatTime, notify } = useUi();
+  const isFa = language === 'fa';
   const [showQueue, setShowQueue] = useState(false);
   const [showAddToQueue, setShowAddToQueue] = useState(false);
   const [queueSearch, setQueueSearch] = useState('');
@@ -64,10 +66,10 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
         </div>
         <h2 className="empty-title">{t('player.noTrack')}</h2>
         <p className="empty-subtitle">{t('player.noTrackHint')}</p>
-        {onBackToHome && (
-          <button className="btn-primary" onClick={onBackToHome}>
+        {(onBrowseTracks || onBackToHome) && (
+          <button className="btn-primary" onClick={onBrowseTracks ?? onBackToHome}>
             <Icon name="music" size={18} />
-            <span>مشاهده و انتخاب آهنگ‌ها</span>
+            <span>{isFa ? 'مشاهده و انتخاب آهنگ‌ها' : 'Browse & Play Tracks'}</span>
           </button>
         )}
       </div>
@@ -287,7 +289,7 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
                     }}
                   >
                     <Icon name="plus" size={14} />
-                    <span>افزودن آهنگ</span>
+                    <span>{isFa ? 'افزودن آهنگ' : 'Add Song'}</span>
                   </button>
                   <button
                     className="icon-btn-circle small"
@@ -332,8 +334,8 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
                     <button
                       type="button"
                       className="icon-btn-circle small"
-                      title="حذف از صف پخش"
-                      aria-label="حذف از صف پخش"
+                      title={isFa ? 'حذف از صف پخش' : 'Remove from queue'}
+                      aria-label={isFa ? 'حذف از صف پخش' : 'Remove from queue'}
                       onClick={(e) => {
                         e.stopPropagation();
                         removeFromQueue(idx);
@@ -351,12 +353,16 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
 
       {/* Add Song to Queue Modal */}
       {showAddToQueue && (
-        <Modal open={showAddToQueue} onClose={() => setShowAddToQueue(false)} title="افزودن آهنگ به صف پخش">
+        <Modal
+          open={showAddToQueue}
+          onClose={() => setShowAddToQueue(false)}
+          title={isFa ? 'افزودن آهنگ به صف پخش' : 'Add Song to Queue'}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input
               type="text"
               className="form-input"
-              placeholder="جستجوی نام آهنگ یا هنرمند..."
+              placeholder={isFa ? 'جستجوی نام آهنگ یا هنرمند...' : 'Search track or artist...'}
               value={queueSearch}
               onChange={(e) => setQueueSearch(e.target.value)}
             />
@@ -389,15 +395,17 @@ export function NowPlayingPage({ onBackToHome }: NowPlayingPageProps) {
                     style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}
                     onClick={() => {
                       addToQueue(tr);
-                      notify(`«${tr.title}» به صف پخش اضافه شد`, 'success');
+                      notify(isFa ? `«${tr.title}» به صف پخش اضافه شد` : `Added "${tr.title}" to queue`, 'success');
                     }}
                   >
-                    + افزودن
+                    {isFa ? '+ افزودن' : '+ Add'}
                   </button>
                 </div>
               ))}
               {catalogTracks.length === 0 && (
-                <p style={{ textAlign: 'center', color: '#b3b3b3', fontSize: 13 }}>آهنگی یافت نشد.</p>
+                <p style={{ textAlign: 'center', color: '#b3b3b3', fontSize: 13 }}>
+                  {isFa ? 'آهنگی یافت نشد.' : 'No tracks found.'}
+                </p>
               )}
             </div>
           </div>

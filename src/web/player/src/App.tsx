@@ -85,7 +85,10 @@ export function App() {
         <LibraryPage />
       )}
       {activeTab === 'nowPlaying' && (
-        <NowPlayingPage onBackToHome={handleBackFromNowPlaying} />
+        <NowPlayingPage
+          onBackToHome={handleBackFromNowPlaying}
+          onBrowseTracks={() => handleSelectTab('home')}
+        />
       )}
       {activeTab === 'settings' && (
         <SettingsPage />

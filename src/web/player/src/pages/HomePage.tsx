@@ -18,12 +18,12 @@ interface DrillState {
   albumTitle: string | null;
 }
 
-function getGreeting(): string {
+function getGreeting(isFa: boolean): string {
   const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'صبح بخیر';
-  if (hour >= 12 && hour < 17) return 'عصر بخیر';
-  if (hour >= 17 && hour < 24) return 'شب بخیر';
-  return 'بامداد بخیر';
+  if (hour >= 5 && hour < 12) return isFa ? 'صبح بخیر' : 'Good morning';
+  if (hour >= 12 && hour < 17) return isFa ? 'عصر بخیر' : 'Good afternoon';
+  if (hour >= 17 && hour < 24) return isFa ? 'شب بخیر' : 'Good evening';
+  return isFa ? 'بامداد بخیر' : 'Good night';
 }
 
 export function HomePage({
@@ -32,7 +32,8 @@ export function HomePage({
   onOpenAlbum?: (albumId: string) => void;
 }) {
   const { playTrack, currentTrack, isPlaying, toggleFavorite, isFavorite } = usePlayer();
-  const { notify } = useUi();
+  const { t, language, notify } = useUi();
+  const isFa = language === 'fa';
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<HomeTab>('all');
@@ -369,10 +370,10 @@ export function HomePage({
       {/* Top Greeting Header */}
       <header className="spotify-greeting-header">
         <div className="spotify-greeting-row">
-          <h1 className="spotify-greeting-title">{getGreeting()}</h1>
-          <div className="spotify-status-indicator" title="متصل به سرور">
+          <h1 className="spotify-greeting-title">{getGreeting(isFa)}</h1>
+          <div className="spotify-status-indicator" title={isFa ? 'متصل به سرور' : 'Connected'}>
             <span className="spotify-status-dot"></span>
-            <span className="spotify-status-text">آنلاین</span>
+            <span className="spotify-status-text">{isFa ? 'آنلاین' : 'Online'}</span>
           </div>
         </div>
 
@@ -383,35 +384,35 @@ export function HomePage({
             className={`spotify-pill${activeTab === 'all' ? ' is-active' : ''}`}
             onClick={() => handleTabChange('all')}
           >
-            همه
+            {t('tab.all')}
           </button>
           <button
             type="button"
             className={`spotify-pill${activeTab === 'tracks' ? ' is-active' : ''}`}
             onClick={() => handleTabChange('tracks')}
           >
-            موسیقی
+            {t('tab.tracks')}
           </button>
           <button
             type="button"
             className={`spotify-pill${activeTab === 'artists' ? ' is-active' : ''}`}
             onClick={() => handleTabChange('artists')}
           >
-            خواننده‌ها
+            {t('tab.artists')}
           </button>
           <button
             type="button"
             className={`spotify-pill${activeTab === 'albums' ? ' is-active' : ''}`}
             onClick={() => handleTabChange('albums')}
           >
-            آلبوم‌ها
+            {t('tab.albums')}
           </button>
           <button
             type="button"
             className={`spotify-pill${activeTab === 'favorites' ? ' is-active' : ''}`}
             onClick={() => handleTabChange('favorites')}
           >
-            علاقه‌مندی‌ها
+            {t('tab.favorites')}
           </button>
         </div>
       </header>

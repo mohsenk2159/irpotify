@@ -152,7 +152,7 @@ export function SettingsPage() {
 
       {/* Preferences Section */}
       <section className="settings-section">
-        <h3 className="section-title">تنظیمات کاربری و ظاهر</h3>
+        <h3 className="section-title">{language === 'fa' ? 'تنظیمات کاربری و ظاهر' : 'Preferences & Appearance'}</h3>
         <div className="settings-card">
           {/* Language Row */}
           <div className="setting-row">
@@ -160,7 +160,7 @@ export function SettingsPage() {
               <Icon name="external" size={20} />
               <div>
                 <span className="setting-title">{t('settings.language')}</span>
-                <span className="setting-subtitle">انتخاب زبان محیط برنامه</span>
+                <span className="setting-subtitle">{language === 'fa' ? 'انتخاب زبان محیط برنامه' : 'Select app language'}</span>
               </div>
             </div>
             <div className="lang-switcher">
@@ -188,13 +188,19 @@ export function SettingsPage() {
               <div>
                 <span className="setting-title">{t('settings.theme')}</span>
                 <span className="setting-subtitle">
-                  {theme === 'dark' ? 'حالت شب (تاریک مدرن)' : 'حالت روز (روشن)'}
+                  {language === 'fa'
+                    ? theme === 'dark' ? 'حالت شب (تاریک مدرن)' : 'حالت روز (روشن)'
+                    : theme === 'dark' ? 'Dark mode' : 'Light mode'}
                 </span>
               </div>
             </div>
             <button className="theme-toggle-btn" onClick={toggleTheme}>
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
-              <span>{theme === 'dark' ? 'تم روشن' : 'تم تیره'}</span>
+              <span>
+                {language === 'fa'
+                  ? theme === 'dark' ? 'تم روشن' : 'تم تیره'
+                  : theme === 'dark' ? 'Light' : 'Dark'}
+              </span>
             </button>
           </div>
         </div>
@@ -202,22 +208,22 @@ export function SettingsPage() {
 
       {/* About App & Connection */}
       <section className="settings-section">
-        <h3 className="section-title">درباره برنامه</h3>
+        <h3 className="section-title">{language === 'fa' ? 'درباره برنامه' : 'About'}</h3>
         <div className="settings-card info-card">
           <div className="info-row">
-            <span className="info-label">نسخه برنامه</span>
+            <span className="info-label">{language === 'fa' ? 'نسخه برنامه' : 'Version'}</span>
             <span className="info-value">irpotify Player v1.0.0</span>
           </div>
           <div className="divider" />
           <div className="info-row">
-            <span className="info-label">وضعیت اتصال</span>
+            <span className="info-label">{language === 'fa' ? 'وضعیت اتصال' : 'Connection'}</span>
             <span className="info-value status-online">
-              <span className="pulse-dot" /> متصل به سرور ابری
+              <span className="pulse-dot" /> {language === 'fa' ? 'متصل به سرور' : 'Connected'}
             </span>
           </div>
           <div className="divider" />
           <div className="info-row">
-            <span className="info-label">نوع کلاینت</span>
+            <span className="info-label">{language === 'fa' ? 'نوع کلاینت' : 'Client Type'}</span>
             <span className="info-value">Standalone PWA Mobile Player</span>
           </div>
         </div>
