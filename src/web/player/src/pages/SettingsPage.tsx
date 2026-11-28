@@ -60,6 +60,13 @@ export function SettingsPage() {
         setShowInstallModal(false);
       }
       setInstallPrompt(null);
+    } else if (typeof window !== 'undefined' && !window.isSecureContext) {
+      notify(
+        language === 'fa'
+          ? 'نصب مستقیم PWA در مرورگرهای اندروید فقط روی HTTPS فعال است. در حالت HTTP از منوی مرورگر (≡ یا ⋮) گزینه «افزودن به صفحه اصلی / Add page to Home screen» را بزنید.'
+          : 'Direct PWA install requires HTTPS on Android. On HTTP, use your browser menu → "Add page to Home screen".',
+        'info'
+      );
     } else {
       notify(
         language === 'fa'
